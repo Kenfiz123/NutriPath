@@ -134,7 +134,7 @@ export function UpgradeModal({ defaultPlan = "vip", onClose }: UpgradeModalProps
 
           {/* CTA */}
           <Link
-            to="/checkout"
+            to={`/checkout?plan=${selected}&billing=monthly`}
             className={`w-full flex items-center justify-center gap-2 py-4 rounded-2xl transition-all shadow-lg mb-3 ${
               isVip
                 ? "bg-gradient-to-r from-green-600 to-emerald-600 text-white hover:from-green-500 hover:to-emerald-500"

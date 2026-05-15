@@ -31,6 +31,13 @@ function formatDate(date: Date) {
   return date.toLocaleDateString("vi-VN", { weekday: "long", day: "numeric", month: "numeric", year: "numeric" });
 }
 
+function getDayDiffFromToday(date: Date) {
+  const today = new Date();
+  const startOfToday = new Date(today.getFullYear(), today.getMonth(), today.getDate()).getTime();
+  const startOfDate = new Date(date.getFullYear(), date.getMonth(), date.getDate()).getTime();
+  return Math.floor((startOfToday - startOfDate) / (24 * 60 * 60 * 1000));
+}
+
 export function MealTracker() {
   const [mealLog, setMealLog] = useState<MealLog | null>(null);
   const [foods, setFoods] = useState<Food[]>([]);
@@ -66,12 +73,14 @@ export function MealTracker() {
 
   const totals = mealLog?.summary.totals ?? { calories: 0, protein: 0, carbs: 0, fat: 0 };
   const targets = mealLog?.summary.targets ?? { calories: 1800, protein: 120, carbs: 220, fat: 60, waterGlasses: 8 };
+  const trackerAccess = mealLog?.access;
   const caloriePct = Math.min(Math.round((totals.calories / targets.calories) * 100), 100);
   const macroData = useMemo(() => [
     { name: "Protein", value: Math.round(totals.protein * 4) },
     { name: "Carbs", value: Math.round(totals.carbs * 4) },
     { name: "Chất béo", value: Math.round(totals.fat * 9) },
   ], [totals]);
+  const canGoPrevious = trackerAccess ? getDayDiffFromToday(currentDate) + 1 < trackerAccess.mealHistoryDays : true;
 
   const toggleSection = (id: string) => {
     setOpenSections((prev) => prev.includes(id) ? prev.filter((item) => item !== id) : [...prev, id]);
@@ -158,10 +167,36 @@ export function MealTracker() {
           </div>
         </div>
 
+        {trackerAccess && (
+          <div className="mb-6 rounded-2xl border border-amber-200 bg-amber-50 p-4">
+            <div className="flex flex-wrap items-start justify-between gap-4">
+              <div>
+                <p className="text-amber-900" style={{ fontSize: "0.92rem", fontWeight: 800 }}>
+                  Gói {trackerAccess.tier.toUpperCase()} đang mở Meal Tracker trong {trackerAccess.mealHistoryDays} ngày gần nhất
+                </p>
+                <p className="mt-1 text-amber-800" style={{ fontSize: "0.82rem", lineHeight: 1.6 }}>
+                  Tối đa {trackerAccess.mealItemsPerDay} món mỗi ngày, báo cáo dinh dưỡng {trackerAccess.analyticsWindowDays} ngày
+                  {trackerAccess.reportExports ? " và xuất báo cáo." : "."}
+                </p>
+              </div>
+              <div className="rounded-xl border border-amber-200 bg-white px-4 py-3 text-right">
+                <p className="text-amber-900" style={{ fontSize: "1rem", fontWeight: 800 }}>
+                  {trackerAccess.itemCount}/{trackerAccess.mealItemsPerDay}
+                </p>
+                <p className="text-amber-700" style={{ fontSize: "0.75rem" }}>món đã dùng hôm nay</p>
+              </div>
+            </div>
+          </div>
+        )}
+
         <div className="bg-white rounded-2xl p-5 shadow-sm border border-gray-100 mb-6">
           <div className="flex items-center justify-between mb-4 flex-wrap gap-4">
             <div className="flex items-center gap-3">
-              <button onClick={() => changeDate(-1)} className="p-2 rounded-xl bg-gray-100 hover:bg-gray-200 transition-colors">
+              <button
+                onClick={() => changeDate(-1)}
+                disabled={!canGoPrevious}
+                className={`p-2 rounded-xl transition-colors ${canGoPrevious ? "bg-gray-100 hover:bg-gray-200" : "bg-gray-100 text-gray-300 cursor-not-allowed"}`}
+              >
                 <ChevronLeft className="w-4 h-4 text-gray-600" />
               </button>
               <div className="bg-green-50 px-5 py-2 rounded-xl border border-green-100">
@@ -253,7 +288,16 @@ export function MealTracker() {
                           ))}
                         </div>
                       )}
-                      <button onClick={() => { setActiveMealId(meal.id); setShowFoodSearch(true); }} className={`w-full flex items-center justify-center gap-2 py-2.5 rounded-xl border-2 border-dashed ${style.borderColor} ${style.color} hover:bg-gray-50 transition-colors`} style={{ fontSize: "0.875rem", fontWeight: 600 }}>
+                      <button
+                        onClick={() => { setActiveMealId(meal.id); setShowFoodSearch(true); }}
+                        disabled={(trackerAccess?.remainingItemsForDay ?? 1) <= 0}
+                        className={`w-full flex items-center justify-center gap-2 py-2.5 rounded-xl border-2 border-dashed transition-colors ${
+                          (trackerAccess?.remainingItemsForDay ?? 1) > 0
+                            ? `${style.borderColor} ${style.color} hover:bg-gray-50`
+                            : "border-gray-200 bg-gray-50 text-gray-400 cursor-not-allowed"
+                        }`}
+                        style={{ fontSize: "0.875rem", fontWeight: 600 }}
+                      >
                         <Plus className="w-4 h-4" />
                         Thêm món ăn
                       </button>
@@ -312,7 +356,7 @@ export function MealTracker() {
               </div>
               <div className="bg-blue-50 rounded-xl p-3 text-center border border-blue-100">
                 <p className="text-blue-700" style={{ fontSize: "1.2rem", fontWeight: 800 }}>{mealLog.waterGlasses * 250}ml</p>
-                <p className="text-blue-500" style={{ fontSize: "0.78rem" }}>{mealLog.waterGlasses}/{targets.waterGlasses} ly · còn {(targets.waterGlasses - mealLog.waterGlasses) * 250}ml</p>
+                <p className="text-blue-500" style={{ fontSize: "0.78rem" }}>{mealLog.waterGlasses}/{targets.waterGlasses} ly • còn {(targets.waterGlasses - mealLog.waterGlasses) * 250}ml</p>
               </div>
             </div>
 
@@ -345,7 +389,7 @@ export function MealTracker() {
             <div className="p-6 border-b border-gray-100">
               <div className="flex items-center justify-between mb-4">
                 <h3 className="text-gray-900" style={{ fontSize: "1.1rem", fontWeight: 700 }}>
-                  Thêm món ăn — {mealLog.meals.find((meal) => meal.id === activeMealId)?.name}
+                  Thêm món ăn - {mealLog.meals.find((meal) => meal.id === activeMealId)?.name}
                 </h3>
                 <button onClick={() => setShowFoodSearch(false)} className="p-2 rounded-xl hover:bg-gray-100 transition-colors">
                   <X className="w-5 h-5 text-gray-500" />

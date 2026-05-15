@@ -34,6 +34,7 @@ DROP TABLE IF EXISTS dbo.Goals;
 DROP TABLE IF EXISTS dbo.MealItems;
 DROP TABLE IF EXISTS dbo.MealSections;
 DROP TABLE IF EXISTS dbo.MealLogs;
+DROP TABLE IF EXISTS dbo.MemberNutritionProfiles;
 DROP TABLE IF EXISTS dbo.Foods;
 DROP TABLE IF EXISTS dbo.Subscriptions;
 DROP TABLE IF EXISTS dbo.Members;
@@ -100,6 +101,40 @@ CREATE TABLE dbo.Members (
   streak_days INT NOT NULL DEFAULT 0,
   CONSTRAINT FK_Members_ActivityLevels FOREIGN KEY (activity_level_id) REFERENCES dbo.ActivityLevels(id),
   CONSTRAINT FK_Members_Plans FOREIGN KEY (tier) REFERENCES dbo.Plans(id)
+);
+
+CREATE TABLE dbo.MemberNutritionProfiles (
+  member_id NVARCHAR(40) NOT NULL PRIMARY KEY,
+  updated_at DATETIME2 NOT NULL,
+  age INT NOT NULL,
+  weight_kg DECIMAL(6, 2) NOT NULL,
+  height_cm DECIMAL(6, 2) NOT NULL,
+  gender NVARCHAR(20) NOT NULL,
+  activity_level_id NVARCHAR(30) NOT NULL,
+  goal NVARCHAR(30) NOT NULL,
+  exercise_type_id NVARCHAR(30) NOT NULL,
+  duration_minutes INT NOT NULL,
+  bmr INT NOT NULL,
+  tdee INT NOT NULL,
+  calorie_goal INT NOT NULL,
+  goal_delta INT NOT NULL,
+  bmi_value DECIMAL(6, 2) NOT NULL,
+  bmi_label NVARCHAR(50) NOT NULL,
+  protein_grams INT NOT NULL,
+  protein_calories INT NOT NULL,
+  protein_pct INT NOT NULL,
+  carbs_grams INT NOT NULL,
+  carbs_calories INT NOT NULL,
+  carbs_pct INT NOT NULL,
+  fat_grams INT NOT NULL,
+  fat_calories INT NOT NULL,
+  fat_pct INT NOT NULL,
+  exercise_label NVARCHAR(100) NOT NULL,
+  burned_calories INT NOT NULL,
+  fat_equivalent_grams INT NOT NULL,
+  CONSTRAINT FK_MemberNutritionProfiles_Members FOREIGN KEY (member_id) REFERENCES dbo.Members(id),
+  CONSTRAINT FK_MemberNutritionProfiles_ActivityLevels FOREIGN KEY (activity_level_id) REFERENCES dbo.ActivityLevels(id),
+  CONSTRAINT FK_MemberNutritionProfiles_ExerciseTypes FOREIGN KEY (exercise_type_id) REFERENCES dbo.ExerciseTypes(id)
 );
 
 CREATE TABLE dbo.Subscriptions (
@@ -358,6 +393,18 @@ INSERT INTO dbo.Members (
 
 INSERT INTO dbo.Subscriptions (member_id, plan_id, billing, status, started_at, renews_at, days_total, days_remaining) VALUES
 (N'mem-001', N'svip', N'annual', N'active', '2025-12-13', '2027-03-13', 730, 365);
+
+INSERT INTO dbo.MemberNutritionProfiles (
+  member_id, updated_at, age, weight_kg, height_cm, gender, activity_level_id, goal,
+  exercise_type_id, duration_minutes, bmr, tdee, calorie_goal, goal_delta, bmi_value, bmi_label,
+  protein_grams, protein_calories, protein_pct, carbs_grams, carbs_calories, carbs_pct,
+  fat_grams, fat_calories, fat_pct, exercise_label, burned_calories, fat_equivalent_grams
+) VALUES (
+  N'mem-001', '2026-03-13T07:30:00', 25, 65, 168, N'female', N'light', N'lose',
+  N'walking', 30, 1394, 1917, 1417, -500, 23.0, N'Bình thường',
+  117, 468, 33, 124, 496, 35,
+  39, 351, 25, N'Đi bộ', 139, 15
+);
 
 INSERT INTO dbo.Foods (id, name, category, calories, protein, carbs, fat, portion) VALUES
 (N'food-001', N'Phở bò tái tô nhỏ', N'Súp & Cháo', 320, 22, 48, 5, N'1 tô nhỏ (400ml)'),

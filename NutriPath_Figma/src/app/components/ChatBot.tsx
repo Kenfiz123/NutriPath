@@ -1,5 +1,5 @@
-import { useState, useRef, useEffect } from "react";
-import { MessageCircle, X, Send, Mic, Bot, User } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
+import { Bot, Crown, Lock, MessageCircle, Mic, Send, User, X } from "lucide-react";
 import { getChatHistory, getQuickReplies, getStoredSession, sendChatMessage, setStoredSession } from "../api";
 
 interface Message {
@@ -13,22 +13,22 @@ const initialMessages: Message[] = [
   {
     id: "welcome",
     sender: "ai",
-    text: "Xin chào! Tôi là NutriBot 🌿 Tôi có thể giúp bạn tính calo, gợi ý công thức nấu ăn và lên kế hoạch dinh dưỡng. Hôm nay bạn cần giúp gì?",
+    text: "Xin chào! Tôi là NutriBot. Tôi có thể giúp bạn tính calo, gợi ý món ăn và xây dựng thói quen ăn uống lành mạnh.",
     time: "09:00",
   },
 ];
 
 function TypingIndicator() {
   return (
-    <div className="flex items-end gap-2 mb-3">
-      <div className="w-7 h-7 rounded-full bg-green-100 flex items-center justify-center flex-shrink-0">
-        <Bot className="w-4 h-4 text-green-600" />
+    <div className="mb-3 flex items-end gap-2">
+      <div className="flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-full bg-green-100">
+        <Bot className="h-4 w-4 text-green-600" />
       </div>
-      <div className="bg-white border border-gray-100 rounded-2xl rounded-bl-sm px-4 py-3 shadow-sm">
-        <div className="flex gap-1 items-center">
-          <span className="w-2 h-2 bg-green-400 rounded-full animate-bounce" style={{ animationDelay: "0ms" }}></span>
-          <span className="w-2 h-2 bg-green-400 rounded-full animate-bounce" style={{ animationDelay: "150ms" }}></span>
-          <span className="w-2 h-2 bg-green-400 rounded-full animate-bounce" style={{ animationDelay: "300ms" }}></span>
+      <div className="rounded-2xl rounded-bl-sm border border-gray-100 bg-white px-4 py-3 shadow-sm">
+        <div className="flex items-center gap-1">
+          <span className="h-2 w-2 animate-bounce rounded-full bg-green-400" style={{ animationDelay: "0ms" }} />
+          <span className="h-2 w-2 animate-bounce rounded-full bg-green-400" style={{ animationDelay: "150ms" }} />
+          <span className="h-2 w-2 animate-bounce rounded-full bg-green-400" style={{ animationDelay: "300ms" }} />
         </div>
       </div>
     </div>
@@ -47,6 +47,8 @@ export function ChatBot() {
   const [quickReplies, setQuickReplies] = useState<string[]>([]);
   const [inputText, setInputText] = useState("");
   const [isTyping, setIsTyping] = useState(false);
+  const [chatMode, setChatMode] = useState<"assistant" | "coach">("assistant");
+  const [memberAccess, setMemberAccess] = useState(getStoredSession()?.member.access ?? null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   const scrollToBottom = () => {
@@ -66,13 +68,24 @@ export function ChatBot() {
       .then((data) => {
         if (data.quickReplies?.length) setQuickReplies(data.quickReplies);
         if (data.messages?.length) {
-          setMessages(data.messages.map((message) => ({
-            ...message,
-            time: formatMessageTime(message.time),
-          })));
+          setMessages(
+            data.messages.map((message) => ({
+              ...message,
+              time: formatMessageTime(message.time),
+            })),
+          );
         }
       })
       .catch(() => undefined);
+  }, []);
+
+  useEffect(() => {
+    const handleMemberUpdated = () => {
+      setMemberAccess(getStoredSession()?.member.access ?? null);
+    };
+
+    window.addEventListener("nutripath:member-updated", handleMemberUpdated);
+    return () => window.removeEventListener("nutripath:member-updated", handleMemberUpdated);
   }, []);
 
   const sendMessage = async (text: string) => {
@@ -84,19 +97,22 @@ export function ChatBot() {
       text,
       time: new Date().toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit" }),
     };
+
     setMessages((prev) => [...prev, userMsg]);
     setInputText("");
     setIsTyping(true);
 
     try {
-      const data = await sendChatMessage(text);
+      const data = await sendChatMessage(text, chatMode);
       if (data.member) {
         const session = getStoredSession();
         if (session) {
           setStoredSession({ ...session, member: data.member });
         }
+        setMemberAccess(data.member.access ?? null);
         window.dispatchEvent(new CustomEvent("nutripath:member-updated", { detail: { member: data.member } }));
       }
+
       const userEcho = data.messages.find((message) => message.sender === "user");
       const ai = data.messages.find((message) => message.sender === "ai");
       const aiMsg: Message = {
@@ -105,20 +121,27 @@ export function ChatBot() {
         text: ai?.text ?? "Tôi chưa nhận được phản hồi từ hệ thống.",
         time: formatMessageTime(ai?.time ?? new Date().toISOString()),
       };
+
       setIsTyping(false);
       setMessages((prev) => [
         ...prev.map((message) => (message.id === userMsg.id && userEcho ? { ...message, text: userEcho.text } : message)),
         aiMsg,
       ]);
+      if (data.quickReplies?.length) {
+        setQuickReplies(data.quickReplies);
+      }
     } catch (error) {
       setIsTyping(false);
       const message = error instanceof Error ? error.message : "Mình chưa kết nối được NutriBot API. Bạn kiểm tra backend ở cổng 8080 nhé.";
-      setMessages((prev) => [...prev, {
-        id: `ai-error-${Date.now()}`,
-        sender: "ai",
-        text: message,
-        time: new Date().toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit" }),
-      }]);
+      setMessages((prev) => [
+        ...prev,
+        {
+          id: `ai-error-${Date.now()}`,
+          sender: "ai",
+          text: message,
+          time: new Date().toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit" }),
+        },
+      ]);
     }
   };
 
@@ -129,66 +152,106 @@ export function ChatBot() {
     }
   };
 
+  const coachUnlocked = Boolean(memberAccess?.aiCoach);
+
   return (
     <>
-      {/* Chat Panel */}
       {isOpen && (
         <div
-          className="fixed bottom-24 right-6 z-50 flex flex-col bg-white rounded-2xl shadow-2xl border border-gray-100 overflow-hidden"
+          className="fixed bottom-24 right-6 z-50 flex flex-col overflow-hidden rounded-2xl border border-gray-100 bg-white shadow-2xl"
           style={{ width: "min(380px, calc(100vw - 32px))", height: "min(560px, calc(100vh - 120px))" }}
         >
-          {/* Header */}
-          <div className="bg-gradient-to-r from-green-600 to-emerald-500 px-4 py-3 flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <div className="w-9 h-9 rounded-full bg-white/20 flex items-center justify-center">
-                <Bot className="w-5 h-5 text-white" />
-              </div>
-              <div>
-                <p className="text-white" style={{ fontSize: "0.9rem", fontWeight: 700 }}>NutriBot AI</p>
-                <div className="flex items-center gap-1.5">
-                  <span className="w-2 h-2 bg-green-300 rounded-full"></span>
-                  <span className="text-green-100" style={{ fontSize: "0.75rem" }}>Đang hoạt động</span>
+          <div className="bg-gradient-to-r from-green-600 to-emerald-500 px-4 py-3">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="flex h-9 w-9 items-center justify-center rounded-full bg-white/20">
+                  {chatMode === "coach" ? <Crown className="h-5 w-5 text-white" /> : <Bot className="h-5 w-5 text-white" />}
+                </div>
+                <div>
+                  <p className="text-white" style={{ fontSize: "0.9rem", fontWeight: 700 }}>
+                    {chatMode === "coach" ? "NutriBot AI Coach" : "NutriBot AI"}
+                  </p>
+                  <div className="flex items-center gap-1.5">
+                    <span className="h-2 w-2 rounded-full bg-green-300" />
+                    <span className="text-green-100" style={{ fontSize: "0.75rem" }}>
+                      {chatMode === "coach" ? "Cá nhân hóa theo hồ sơ" : "Đang hoạt động"}
+                    </span>
+                  </div>
                 </div>
               </div>
+
+              <button
+                onClick={() => setIsOpen(false)}
+                aria-label="Đóng NutriBot"
+                className="rounded-full p-1.5 text-white transition-colors hover:bg-white/20"
+              >
+                <X className="h-5 w-5" />
+              </button>
             </div>
-            <button
-              onClick={() => setIsOpen(false)}
-              aria-label="Đóng NutriBot"
-              className="p-1.5 rounded-full hover:bg-white/20 text-white transition-colors"
-            >
-              <X className="w-5 h-5" />
-            </button>
+
+            <div className="mt-3 flex gap-2">
+              <button
+                onClick={() => setChatMode("assistant")}
+                className={`rounded-full px-3 py-1.5 transition-all ${
+                  chatMode === "assistant" ? "bg-white text-green-700" : "bg-white/10 text-white"
+                }`}
+                style={{ fontSize: "0.75rem", fontWeight: 700 }}
+              >
+                NutriBot thường
+              </button>
+              <button
+                onClick={() => coachUnlocked && setChatMode("coach")}
+                disabled={!coachUnlocked}
+                className={`flex items-center gap-1.5 rounded-full px-3 py-1.5 transition-all ${
+                  chatMode === "coach"
+                    ? "bg-amber-300 text-slate-950"
+                    : coachUnlocked
+                      ? "bg-white/10 text-white"
+                      : "bg-white/10 text-white/70"
+                }`}
+                style={{ fontSize: "0.75rem", fontWeight: 700 }}
+              >
+                {coachUnlocked ? <Crown className="h-3.5 w-3.5" /> : <Lock className="h-3.5 w-3.5" />}
+                AI Coach
+              </button>
+            </div>
+
+            {!coachUnlocked && (
+              <button
+                onClick={() => window.location.assign("/svip")}
+                className="mt-2 text-left text-green-50/95 transition-colors hover:text-white"
+                style={{ fontSize: "0.72rem", fontWeight: 600 }}
+              >
+                SVIP mở AI Coach cá nhân hóa theo hồ sơ, nhật ký bữa ăn và mục tiêu của bạn.
+              </button>
+            )}
           </div>
 
-          {/* Messages */}
-          <div className="flex-1 overflow-y-auto px-4 py-4 bg-gray-50/50">
+          <div className="flex-1 overflow-y-auto bg-gray-50/50 px-4 py-4">
             {messages.map((msg) => (
-              <div
-                key={msg.id}
-                className={`flex items-end gap-2 mb-3 ${msg.sender === "user" ? "flex-row-reverse" : ""}`}
-              >
+              <div key={msg.id} className={`mb-3 flex items-end gap-2 ${msg.sender === "user" ? "flex-row-reverse" : ""}`}>
                 {msg.sender === "ai" && (
-                  <div className="w-7 h-7 rounded-full bg-green-100 flex items-center justify-center flex-shrink-0">
-                    <Bot className="w-4 h-4 text-green-600" />
+                  <div className="flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-full bg-green-100">
+                    <Bot className="h-4 w-4 text-green-600" />
                   </div>
                 )}
                 {msg.sender === "user" && (
-                  <div className="w-7 h-7 rounded-full bg-green-600 flex items-center justify-center flex-shrink-0">
-                    <User className="w-4 h-4 text-white" />
+                  <div className="flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-full bg-green-600">
+                    <User className="h-4 w-4 text-white" />
                   </div>
                 )}
-                <div className={`max-w-[80%] ${msg.sender === "user" ? "items-end" : "items-start"} flex flex-col`}>
+                <div className={`flex max-w-[80%] flex-col ${msg.sender === "user" ? "items-end" : "items-start"}`}>
                   <div
                     className={`px-3.5 py-2.5 shadow-sm ${
                       msg.sender === "user"
-                        ? "bg-green-600 text-white rounded-2xl rounded-br-sm"
-                        : "bg-white border border-gray-100 text-gray-800 rounded-2xl rounded-bl-sm"
+                        ? "rounded-2xl rounded-br-sm bg-green-600 text-white"
+                        : "rounded-2xl rounded-bl-sm border border-gray-100 bg-white text-gray-800"
                     }`}
                     style={{ fontSize: "0.85rem", lineHeight: 1.5, whiteSpace: "pre-line" }}
                   >
                     {msg.text}
                   </div>
-                  <span className="text-gray-400 mt-1 px-1" style={{ fontSize: "0.7rem" }}>{msg.time}</span>
+                  <span className="mt-1 px-1 text-gray-400" style={{ fontSize: "0.7rem" }}>{msg.time}</span>
                 </div>
               </div>
             ))}
@@ -196,13 +259,12 @@ export function ChatBot() {
             <div ref={messagesEndRef} />
           </div>
 
-          {/* Quick Replies */}
-          <div className="px-3 py-2 bg-white border-t border-gray-100 flex gap-2 overflow-x-auto">
+          <div className="flex gap-2 overflow-x-auto border-t border-gray-100 bg-white px-3 py-2">
             {quickReplies.map((reply) => (
               <button
                 key={reply}
                 onClick={() => sendMessage(reply)}
-                className="flex-shrink-0 bg-green-50 text-green-700 border border-green-200 rounded-full px-3 py-1 hover:bg-green-100 transition-colors whitespace-nowrap"
+                className="flex-shrink-0 whitespace-nowrap rounded-full border border-green-200 bg-green-50 px-3 py-1 text-green-700 transition-colors hover:bg-green-100"
                 style={{ fontSize: "0.75rem" }}
               >
                 {reply}
@@ -210,49 +272,46 @@ export function ChatBot() {
             ))}
           </div>
 
-          {/* Input */}
-          <div className="px-3 py-3 bg-white border-t border-gray-100 flex items-center gap-2">
-            <div className="flex-1 flex items-center gap-2 bg-gray-100 rounded-full px-4 py-2">
+          <div className="flex items-center gap-2 border-t border-gray-100 bg-white px-3 py-3">
+            <div className="flex flex-1 items-center gap-2 rounded-full bg-gray-100 px-4 py-2">
               <input
                 type="text"
                 value={inputText}
                 onChange={(e) => setInputText(e.target.value)}
                 onKeyDown={handleKeyDown}
-                placeholder="Nhắn tin cho NutriBot..."
-                className="flex-1 bg-transparent outline-none text-gray-700 placeholder-gray-400"
+                placeholder={chatMode === "coach" ? "Nhắn mục tiêu hoặc vấn đề dinh dưỡng của bạn..." : "Nhắn tin cho NutriBot..."}
+                className="flex-1 bg-transparent text-gray-700 outline-none placeholder-gray-400"
                 style={{ fontSize: "0.875rem" }}
               />
-              <button className="text-gray-400 hover:text-green-600 transition-colors" aria-label="Ghi âm">
-                <Mic className="w-4 h-4" />
+              <button className="text-gray-400 transition-colors hover:text-green-600" aria-label="Ghi âm">
+                <Mic className="h-4 w-4" />
               </button>
             </div>
             <button
               onClick={() => sendMessage(inputText)}
               disabled={!inputText.trim()}
               aria-label="Gửi tin nhắn"
-              className="w-9 h-9 rounded-full bg-green-600 text-white flex items-center justify-center hover:bg-green-700 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+              className="flex h-9 w-9 items-center justify-center rounded-full bg-green-600 text-white transition-colors hover:bg-green-700 disabled:cursor-not-allowed disabled:opacity-40"
             >
-              <Send className="w-4 h-4" />
+              <Send className="h-4 w-4" />
             </button>
           </div>
         </div>
       )}
 
-      {/* FAB Button */}
       <button
         onClick={() => setIsOpen(!isOpen)}
         aria-label={isOpen ? "Đóng NutriBot" : "Mở NutriBot"}
-        className={`fixed bottom-6 right-6 z-50 w-14 h-14 rounded-full shadow-lg flex items-center justify-center transition-all hover:scale-110 ${
+        className={`fixed bottom-6 right-6 z-50 flex h-14 w-14 items-center justify-center rounded-full shadow-lg transition-all hover:scale-110 ${
           isOpen ? "bg-gray-700" : "bg-gradient-to-br from-green-500 to-emerald-600"
         }`}
       >
-        {isOpen ? (
-          <X className="w-6 h-6 text-white" />
-        ) : (
-          <MessageCircle className="w-6 h-6 text-white" />
-        )}
+        {isOpen ? <X className="h-6 w-6 text-white" /> : <MessageCircle className="h-6 w-6 text-white" />}
         {!isOpen && (
-          <span className="absolute -top-1 -right-1 w-4 h-4 bg-red-500 rounded-full flex items-center justify-center text-white" style={{ fontSize: "0.6rem", fontWeight: 700 }}>
+          <span
+            className="absolute -right-1 -top-1 flex h-4 w-4 items-center justify-center rounded-full bg-red-500 text-white"
+            style={{ fontSize: "0.6rem", fontWeight: 700 }}
+          >
             1
           </span>
         )}

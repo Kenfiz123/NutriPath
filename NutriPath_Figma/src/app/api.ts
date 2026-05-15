@@ -51,6 +51,15 @@ export function clearStoredSession() {
   window.localStorage.removeItem(SESSION_KEY);
 }
 
+export function syncStoredMember(member: Member) {
+  if (typeof window === "undefined") return;
+  const current = getStoredSession();
+  if (!current) return;
+  const nextSession = { ...current, member };
+  setStoredSession(nextSession);
+  window.dispatchEvent(new CustomEvent("nutripath:member-updated", { detail: { member } }));
+}
+
 export function getCurrentMemberId() {
   const memberId = getStoredSession()?.member.id;
   if (!memberId) throw new Error("Bạn cần đăng nhập để xem dữ liệu cá nhân.");
@@ -96,6 +105,23 @@ export interface Member {
     fat: number;
   };
   waterTargetGlasses: number;
+  gender?: "male" | "female";
+  age?: number;
+  weightKg?: number;
+  heightCm?: number;
+  activityLevel?: string;
+  goal?: "lose" | "maintain" | "gain";
+  nutritionProfile?: NutritionProfile | null;
+  access?: {
+    tier: "free" | "vip" | "svip";
+    recipeLimit: number | null;
+    advancedAiContext: boolean;
+    aiCoach: boolean;
+    mealHistoryDays: number;
+    mealItemsPerDay: number;
+    analyticsWindowDays: number;
+    reportExports: boolean;
+  };
   subscription?: {
     planId: string;
     billing: string;
@@ -112,6 +138,57 @@ export interface Member {
     trackedCalories: number;
     streakDays: number;
   };
+}
+
+export interface NutritionProfile {
+  updatedAt: string;
+  input: {
+    age: number;
+    weightKg: number;
+    heightCm: number;
+    gender: "male" | "female";
+    activityLevel: string;
+    goal: "lose" | "maintain" | "gain";
+    exerciseType: string;
+    durationMinutes: number;
+  };
+  results: {
+    bmr: number;
+    tdee: number;
+    calorieGoal: number;
+    goalDelta: number;
+    bmi: {
+      value: number;
+      label: string;
+    };
+    macros: Array<{
+      name: string;
+      grams: number;
+      calories: number;
+      pct: number;
+    }>;
+    exercise: {
+      label: string;
+      burnedCalories: number;
+      fatEquivalentGrams: number;
+    };
+  };
+}
+
+export interface CalorieCalculationInput {
+  age: number;
+  weightKg: number;
+  heightCm: number;
+  gender: "male" | "female";
+  activityLevel: string;
+  goal: "lose" | "maintain" | "gain";
+  exerciseType?: string;
+  durationMinutes?: number;
+}
+
+export interface CalorieCalculation {
+  input: NutritionProfile["input"];
+  results: NutritionProfile["results"];
 }
 
 export interface Food {
@@ -144,6 +221,18 @@ export interface MealLog {
   id: string;
   memberId: string;
   date: string;
+  access?: {
+    tier: "free" | "vip" | "svip";
+    recipeLimit: number | null;
+    advancedAiContext: boolean;
+    aiCoach: boolean;
+    mealHistoryDays: number;
+    mealItemsPerDay: number;
+    analyticsWindowDays: number;
+    reportExports: boolean;
+    itemCount: number;
+    remainingItemsForDay: number;
+  };
   waterGlasses: number;
   activity: {
     steps: number;
@@ -201,6 +290,15 @@ export interface Recipe {
   };
 }
 
+export interface RecipeCollectionMeta {
+  access?: {
+    tier: "free" | "vip" | "svip";
+    recipeLimit: number | null;
+    totalAvailable: number;
+    upgradeRequired: boolean;
+  };
+}
+
 export interface Plan {
   id: "free" | "vip" | "svip";
   name: string;
@@ -225,10 +323,33 @@ export interface Payment {
   invoice: string;
   planId: string;
   billing: string;
+  paymentMethod?: string;
   amount: number;
   currency: string;
   status: string;
   paidAt: string;
+}
+
+export interface CheckoutQuote {
+  planId: string;
+  planName: string;
+  billing: "monthly" | "annual";
+  months: number;
+  currency: string;
+  monthlyPrice: number;
+  subtotal: number;
+  vat: number;
+  discountCode: string | null;
+  discountAmount: number;
+  total: number;
+}
+
+export interface PaymentPayload {
+  memberId: string;
+  planId: "vip" | "svip";
+  billing: "monthly" | "annual";
+  paymentMethod: "card" | "momo" | "zalopay" | "bank";
+  discountCode?: string;
 }
 
 export interface ChatMessage {
@@ -241,6 +362,7 @@ export interface ChatMessage {
 export interface ChatResponse {
   messages: ChatMessage[];
   quickReplies: string[];
+  mode?: "assistant" | "coach";
   adminOverride?: boolean;
   intent?: "set_calorie_goal" | "reject_calorie_goal";
   dailyCalorieGoal?: number;
@@ -273,6 +395,24 @@ export function logout() {
 
 export function getDashboard(date = getLocalDateString()) {
   return apiFetch<DashboardData>(`/api/members/${getCurrentMemberId()}/dashboard?date=${encodeURIComponent(date)}`);
+}
+
+export function calculateCalories(payload: CalorieCalculationInput) {
+  return apiFetch<CalorieCalculation>("/api/calculations/calorie", {
+    method: "POST",
+    body: payload,
+    auth: false,
+  });
+}
+
+export function saveNutritionProfile(payload: CalorieCalculationInput) {
+  return apiFetch<{ saved: boolean; member: Member; calculation: CalorieCalculation }>(
+    `/api/members/${getCurrentMemberId()}/nutrition-profile`,
+    {
+      method: "POST",
+      body: payload,
+    },
+  );
 }
 
 export function getMealLog(date: string) {
@@ -308,11 +448,25 @@ export function getRecipes(search = "", tag = "Tất cả") {
   if (search) params.set("search", search);
   if (tag && tag !== "Tất cả") params.set("tag", tag);
   const query = params.toString();
-  return apiFetch<{ _embedded: { recipes: Recipe[] }; tags: string[] }>(`/api/recipes${query ? `?${query}` : ""}`);
+  return apiFetch<{ _embedded: { recipes: Recipe[] }; tags: string[]; access?: RecipeCollectionMeta["access"] }>(`/api/recipes${query ? `?${query}` : ""}`);
 }
 
 export function getPlans(billing: "monthly" | "annual") {
   return apiFetch<{ _embedded: { plans: Plan[] } }>(`/api/plans?billing=${billing}`);
+}
+
+export function getCheckoutQuote(planId: "vip" | "svip", billing: "monthly" | "annual", discountCode = "") {
+  return apiFetch<{ quote: CheckoutQuote }>("/api/checkout/quote", {
+    method: "POST",
+    body: { planId, billing, discountCode },
+  });
+}
+
+export function createPayment(payload: PaymentPayload) {
+  return apiFetch<{ payment: Payment; member: Member; quote: CheckoutQuote; note: string }>("/api/payments", {
+    method: "POST",
+    body: payload,
+  });
 }
 
 export function getFaqs() {
@@ -323,11 +477,11 @@ export function getProfile() {
   return apiFetch<{ member: Member; plan: Plan | null; benefits: Plan["features"]; billingHistory: Payment[] }>(`/api/members/${getCurrentMemberId()}/profile`);
 }
 
-export function sendChatMessage(text: string) {
+export function sendChatMessage(text: string, mode: "assistant" | "coach" = "assistant") {
   const memberId = getStoredSession()?.member.id;
   return apiFetch<ChatResponse>("/api/chat/messages", {
     method: "POST",
-    body: memberId ? { memberId, text } : { text },
+    body: memberId ? { memberId, text, mode } : { text, mode },
   });
 }
 

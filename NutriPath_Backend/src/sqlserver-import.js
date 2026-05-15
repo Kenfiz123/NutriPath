@@ -126,6 +126,106 @@ WHERE id = ${sqlLiteral(memberId)};
 `);
 }
 
+export async function saveSqlServerMemberNutritionProfile(member, nutritionProfile) {
+  const database = process.env.NUTRIPATH_SQL_DATABASE || "NutriPath";
+  const macros = nutritionProfile?.results?.macros || [];
+  const protein = macros.find((item) => item.name === "Protein") || { grams: 0, calories: 0, pct: 0 };
+  const carbs = macros.find((item) => item.name === "Carbs") || { grams: 0, calories: 0, pct: 0 };
+  const fat = macros.find((item) => item.name === "Chất béo") || { grams: 0, calories: 0, pct: 0 };
+
+  await execSql(database, `
+BEGIN TRANSACTION;
+
+UPDATE dbo.Members
+SET age = ${sqlLiteral(member.age)},
+  weight_kg = ${sqlLiteral(member.weightKg)},
+  height_cm = ${sqlLiteral(member.heightCm)},
+  gender = ${sqlLiteral(member.gender)},
+  activity_level_id = ${sqlLiteral(member.activityLevel)},
+  goal = ${sqlLiteral(member.goal)},
+  calorie_target = ${sqlLiteral(member.calorieTarget)},
+  protein_target = ${sqlLiteral(member.macroTargets?.protein || 0)},
+  carbs_target = ${sqlLiteral(member.macroTargets?.carbs || 0)},
+  fat_target = ${sqlLiteral(member.macroTargets?.fat || 0)}
+WHERE id = ${sqlLiteral(member.id)};
+
+MERGE dbo.MemberNutritionProfiles AS target
+USING (
+  SELECT
+    ${sqlLiteral(member.id)} AS member_id,
+    ${sqlLiteral(nutritionProfile.updatedAt)} AS updated_at,
+    ${sqlLiteral(nutritionProfile.input.age)} AS age,
+    ${sqlLiteral(nutritionProfile.input.weightKg)} AS weight_kg,
+    ${sqlLiteral(nutritionProfile.input.heightCm)} AS height_cm,
+    ${sqlLiteral(nutritionProfile.input.gender)} AS gender,
+    ${sqlLiteral(nutritionProfile.input.activityLevel)} AS activity_level_id,
+    ${sqlLiteral(nutritionProfile.input.goal)} AS goal,
+    ${sqlLiteral(nutritionProfile.input.exerciseType)} AS exercise_type_id,
+    ${sqlLiteral(nutritionProfile.input.durationMinutes)} AS duration_minutes,
+    ${sqlLiteral(nutritionProfile.results.bmr)} AS bmr,
+    ${sqlLiteral(nutritionProfile.results.tdee)} AS tdee,
+    ${sqlLiteral(nutritionProfile.results.calorieGoal)} AS calorie_goal,
+    ${sqlLiteral(nutritionProfile.results.goalDelta)} AS goal_delta,
+    ${sqlLiteral(nutritionProfile.results.bmi.value)} AS bmi_value,
+    ${sqlLiteral(nutritionProfile.results.bmi.label)} AS bmi_label,
+    ${sqlLiteral(protein.grams)} AS protein_grams,
+    ${sqlLiteral(protein.calories)} AS protein_calories,
+    ${sqlLiteral(protein.pct)} AS protein_pct,
+    ${sqlLiteral(carbs.grams)} AS carbs_grams,
+    ${sqlLiteral(carbs.calories)} AS carbs_calories,
+    ${sqlLiteral(carbs.pct)} AS carbs_pct,
+    ${sqlLiteral(fat.grams)} AS fat_grams,
+    ${sqlLiteral(fat.calories)} AS fat_calories,
+    ${sqlLiteral(fat.pct)} AS fat_pct,
+    ${sqlLiteral(nutritionProfile.results.exercise.label)} AS exercise_label,
+    ${sqlLiteral(nutritionProfile.results.exercise.burnedCalories)} AS burned_calories,
+    ${sqlLiteral(nutritionProfile.results.exercise.fatEquivalentGrams)} AS fat_equivalent_grams
+) AS source
+ON target.member_id = source.member_id
+WHEN MATCHED THEN UPDATE SET
+  updated_at = source.updated_at,
+  age = source.age,
+  weight_kg = source.weight_kg,
+  height_cm = source.height_cm,
+  gender = source.gender,
+  activity_level_id = source.activity_level_id,
+  goal = source.goal,
+  exercise_type_id = source.exercise_type_id,
+  duration_minutes = source.duration_minutes,
+  bmr = source.bmr,
+  tdee = source.tdee,
+  calorie_goal = source.calorie_goal,
+  goal_delta = source.goal_delta,
+  bmi_value = source.bmi_value,
+  bmi_label = source.bmi_label,
+  protein_grams = source.protein_grams,
+  protein_calories = source.protein_calories,
+  protein_pct = source.protein_pct,
+  carbs_grams = source.carbs_grams,
+  carbs_calories = source.carbs_calories,
+  carbs_pct = source.carbs_pct,
+  fat_grams = source.fat_grams,
+  fat_calories = source.fat_calories,
+  fat_pct = source.fat_pct,
+  exercise_label = source.exercise_label,
+  burned_calories = source.burned_calories,
+  fat_equivalent_grams = source.fat_equivalent_grams
+WHEN NOT MATCHED THEN INSERT (
+  member_id, updated_at, age, weight_kg, height_cm, gender, activity_level_id, goal,
+  exercise_type_id, duration_minutes, bmr, tdee, calorie_goal, goal_delta, bmi_value, bmi_label,
+  protein_grams, protein_calories, protein_pct, carbs_grams, carbs_calories, carbs_pct,
+  fat_grams, fat_calories, fat_pct, exercise_label, burned_calories, fat_equivalent_grams
+) VALUES (
+  source.member_id, source.updated_at, source.age, source.weight_kg, source.height_cm, source.gender, source.activity_level_id, source.goal,
+  source.exercise_type_id, source.duration_minutes, source.bmr, source.tdee, source.calorie_goal, source.goal_delta, source.bmi_value, source.bmi_label,
+  source.protein_grams, source.protein_calories, source.protein_pct, source.carbs_grams, source.carbs_calories, source.carbs_pct,
+  source.fat_grams, source.fat_calories, source.fat_pct, source.exercise_label, source.burned_calories, source.fat_equivalent_grams
+);
+
+COMMIT TRANSACTION;
+`);
+}
+
 function sqlTimeLiteral(value) {
   return sqlLiteral(value || "00:00");
 }
@@ -178,6 +278,58 @@ COMMIT TRANSACTION;
 `);
 }
 
+export async function saveSqlServerPaymentAndSubscription(member, payment, subscription) {
+  const database = process.env.NUTRIPATH_SQL_DATABASE || "NutriPath";
+  await execSql(database, `
+BEGIN TRANSACTION;
+
+UPDATE dbo.Members
+SET tier = ${sqlLiteral(member.tier)}
+WHERE id = ${sqlLiteral(member.id)};
+
+MERGE dbo.Subscriptions AS target
+USING (
+  SELECT
+    ${sqlLiteral(member.id)} AS member_id,
+    ${sqlLiteral(subscription.planId)} AS plan_id,
+    ${sqlLiteral(subscription.billing)} AS billing,
+    ${sqlLiteral(subscription.status)} AS status,
+    ${sqlLiteral(subscription.startedAt)} AS started_at,
+    ${sqlLiteral(subscription.renewsAt)} AS renews_at,
+    ${sqlLiteral(subscription.daysTotal)} AS days_total,
+    ${sqlLiteral(subscription.daysRemaining)} AS days_remaining
+) AS source
+ON target.member_id = source.member_id
+WHEN MATCHED THEN UPDATE SET
+  plan_id = source.plan_id,
+  billing = source.billing,
+  status = source.status,
+  started_at = source.started_at,
+  renews_at = source.renews_at,
+  days_total = source.days_total,
+  days_remaining = source.days_remaining
+WHEN NOT MATCHED THEN
+  INSERT (member_id, plan_id, billing, status, started_at, renews_at, days_total, days_remaining)
+  VALUES (source.member_id, source.plan_id, source.billing, source.status, source.started_at, source.renews_at, source.days_total, source.days_remaining);
+
+INSERT INTO dbo.Payments (id, member_id, invoice, plan_id, billing, payment_method, amount, currency, status, paid_at)
+VALUES (
+  ${sqlLiteral(payment.id)},
+  ${sqlLiteral(payment.memberId)},
+  ${sqlLiteral(payment.invoice)},
+  ${sqlLiteral(payment.planId)},
+  ${sqlLiteral(payment.billing)},
+  ${sqlLiteral(payment.paymentMethod)},
+  ${sqlLiteral(payment.amount)},
+  ${sqlLiteral(payment.currency)},
+  ${sqlLiteral(payment.status)},
+  ${sqlLiteral(payment.paidAt)}
+);
+
+COMMIT TRANSACTION;
+`);
+}
+
 function byId(items) {
   return new Map(items.map((item) => [item.id, item]));
 }
@@ -214,6 +366,7 @@ export async function loadSqlServerData() {
     securityRows,
     loginActivity,
     authCredentialsRaw,
+    nutritionProfilesRaw,
   ] = await Promise.all([
     queryJson(database, "SELECT id, label, description, multiplier FROM dbo.ActivityLevels FOR JSON PATH;"),
     queryJson(database, "SELECT id, label, calories_per_minute AS caloriesPerMinute FROM dbo.ExerciseTypes FOR JSON PATH;"),
@@ -263,6 +416,15 @@ export async function loadSqlServerData() {
       CAST(require_number AS bit) AS requireNumber FROM dbo.AdminSecuritySettings WHERE id = 1 FOR JSON PATH;`),
     queryJson(database, "SELECT ip, device, location, CONVERT(varchar(33), login_time, 126) AS time, status FROM dbo.LoginActivity FOR JSON PATH;"),
     queryJson(database, "SELECT id, member_id AS memberId, email, password_hash AS passwordHash, password_salt AS passwordSalt, CONVERT(varchar(33), created_at, 126) AS createdAt FROM dbo.AuthCredentials FOR JSON PATH;"),
+    queryJson(database, `SELECT member_id AS memberId, CONVERT(varchar(33), updated_at, 126) AS updatedAt,
+      age, weight_kg AS weightKg, height_cm AS heightCm, gender, activity_level_id AS activityLevel, goal,
+      exercise_type_id AS exerciseType, duration_minutes AS durationMinutes, bmr, tdee, calorie_goal AS calorieGoal,
+      goal_delta AS goalDelta, bmi_value AS bmiValue, bmi_label AS bmiLabel, protein_grams AS proteinGrams,
+      protein_calories AS proteinCalories, protein_pct AS proteinPct, carbs_grams AS carbsGrams,
+      carbs_calories AS carbsCalories, carbs_pct AS carbsPct, fat_grams AS fatGrams,
+      fat_calories AS fatCalories, fat_pct AS fatPct, exercise_label AS exerciseLabel,
+      burned_calories AS burnedCalories, fat_equivalent_grams AS fatEquivalentGrams
+      FROM dbo.MemberNutritionProfiles FOR JSON PATH;`),
   ]);
 
   const planMap = byId(plans);
@@ -296,6 +458,42 @@ export async function loadSqlServerData() {
       fat: Number(member.fatTarget),
     },
     waterTargetGlasses: member.waterTargetGlasses,
+    nutritionProfile: nutritionProfilesRaw
+      .filter((item) => item.memberId === member.id)
+      .map((item) => ({
+        updatedAt: item.updatedAt,
+        input: {
+          age: Number(item.age),
+          weightKg: Number(item.weightKg),
+          heightCm: Number(item.heightCm),
+          gender: item.gender,
+          activityLevel: item.activityLevel,
+          goal: item.goal,
+          exerciseType: item.exerciseType,
+          durationMinutes: Number(item.durationMinutes),
+        },
+        results: {
+          bmr: Number(item.bmr),
+          tdee: Number(item.tdee),
+          calorieGoal: Number(item.calorieGoal),
+          goalDelta: Number(item.goalDelta),
+          bmi: {
+            value: Number(item.bmiValue),
+            label: item.bmiLabel,
+          },
+          macros: [
+            { name: "Protein", grams: Number(item.proteinGrams), calories: Number(item.proteinCalories), pct: Number(item.proteinPct) },
+            { name: "Carbs", grams: Number(item.carbsGrams), calories: Number(item.carbsCalories), pct: Number(item.carbsPct) },
+            { name: "Chất béo", grams: Number(item.fatGrams), calories: Number(item.fatCalories), pct: Number(item.fatPct) },
+          ],
+          exercise: {
+            label: item.exerciseLabel,
+            burnedCalories: Number(item.burnedCalories),
+            fatEquivalentGrams: Number(item.fatEquivalentGrams),
+          },
+        },
+      }))
+      .at(0) || null,
     subscription: subscriptions.find((subscription) => subscription.memberId === member.id) ?? null,
     stats: {
       memberDays: member.memberDays,

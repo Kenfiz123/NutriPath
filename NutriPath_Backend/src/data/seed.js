@@ -40,6 +40,39 @@ export const seedData = {
       calorieTarget: 1800,
       macroTargets: { protein: 120, carbs: 220, fat: 60 },
       waterTargetGlasses: 8,
+      nutritionProfile: {
+        updatedAt: "2026-03-13T07:30:00.000Z",
+        input: {
+          age: 25,
+          weightKg: 65,
+          heightCm: 168,
+          gender: "female",
+          activityLevel: "light",
+          goal: "lose",
+          exerciseType: "walking",
+          durationMinutes: 30,
+        },
+        results: {
+          bmr: 1394,
+          tdee: 1917,
+          calorieGoal: 1417,
+          goalDelta: -500,
+          bmi: {
+            value: 23,
+            label: "Bình thường",
+          },
+          macros: [
+            { name: "Protein", grams: 117, calories: 468, pct: 33 },
+            { name: "Carbs", grams: 124, calories: 496, pct: 35 },
+            { name: "Chất béo", grams: 39, calories: 351, pct: 25 },
+          ],
+          exercise: {
+            label: "Đi bộ",
+            burnedCalories: 139,
+            fatEquivalentGrams: 15,
+          },
+        },
+      },
       subscription: {
         planId: "svip",
         billing: "annual",

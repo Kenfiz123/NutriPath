@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { Link } from "react-router";
 import { Search, X, Clock, Flame, Star, Filter, BookOpen, Users } from "lucide-react";
 import { getRecipes, type Recipe } from "../api";
 
@@ -12,12 +13,14 @@ export function Recipes() {
   const [selectedRecipe, setSelectedRecipe] = useState<Recipe | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [recipeAccess, setRecipeAccess] = useState<{ tier: string; recipeLimit: number | null; totalAvailable: number; upgradeRequired: boolean } | null>(null);
 
   useEffect(() => {
     setLoading(true);
     getRecipes(search, activeTag)
       .then((data) => {
         setRecipes(data._embedded.recipes);
+        setRecipeAccess(data.access ?? null);
         setTags(["Tất cả", ...data.tags]);
         setError(null);
       })
@@ -79,6 +82,25 @@ export function Recipes() {
         {error && (
           <div className="bg-red-50 text-red-600 border border-red-100 rounded-2xl p-5 mb-8">
             {error}
+          </div>
+        )}
+
+        {recipeAccess?.upgradeRequired && (
+          <div className="mb-8 rounded-2xl border border-amber-200 bg-amber-50 p-5">
+            <p className="text-amber-800" style={{ fontSize: "0.95rem", fontWeight: 700 }}>
+              Gói Free chỉ xem {recipeAccess.recipeLimit} công thức đầu tiên.
+            </p>
+            <p className="mt-1 text-amber-700" style={{ fontSize: "0.86rem", lineHeight: 1.6 }}>
+              Hiện có {recipeAccess.totalAvailable} công thức phù hợp với bộ lọc. Nâng cấp VIP hoặc SVIP để mở toàn bộ kho công thức.
+            </p>
+            <div className="mt-4 flex gap-3">
+              <Link to="/pricing" className="rounded-xl bg-amber-500 px-4 py-2.5 text-white hover:bg-amber-600" style={{ fontSize: "0.85rem", fontWeight: 700 }}>
+                Xem gói thành viên
+              </Link>
+              <Link to="/checkout?plan=vip&billing=monthly" className="rounded-xl border border-amber-300 px-4 py-2.5 text-amber-700 hover:bg-amber-100" style={{ fontSize: "0.85rem", fontWeight: 700 }}>
+                Mở khóa VIP
+              </Link>
+            </div>
           </div>
         )}
 

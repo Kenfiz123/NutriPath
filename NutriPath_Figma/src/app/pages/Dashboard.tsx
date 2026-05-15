@@ -89,6 +89,7 @@ export function Dashboard() {
   const remainingCalories = dashboard.nutrition.remainingCalories;
   const waterTarget = dashboard.nutrition.targets.waterGlasses;
   const weeklyData = dashboard.weeklyProgress;
+  const membershipAccess = dashboard.member.access;
   const meals = dashboard.mealLog.meals
     .filter((meal) => meal.items.length > 0)
     .map((meal) => ({
@@ -343,6 +344,17 @@ export function Dashboard() {
                   <span className="text-gray-500" style={{ fontSize: "0.72rem" }}>Mục tiêu</span>
                 </div>
               </div>
+              {membershipAccess && (
+                <div className="mt-4 rounded-xl border border-amber-200 bg-amber-50 px-3 py-3">
+                  <p className="text-amber-900" style={{ fontSize: "0.78rem", fontWeight: 800 }}>
+                    Báo cáo theo gói {membershipAccess.tier.toUpperCase()}
+                  </p>
+                  <p className="mt-1 text-amber-800" style={{ fontSize: "0.74rem", lineHeight: 1.6 }}>
+                    Mở lịch sử và phân tích trong {membershipAccess.analyticsWindowDays} ngày
+                    {membershipAccess.reportExports ? ", có xuất báo cáo." : "."}
+                  </p>
+                </div>
+              )}
             </div>
 
             {/* Streak & Achievement */}

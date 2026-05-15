@@ -1,7 +1,7 @@
 /*
   NutriPath SQL Server schema + seed data
   Run with SQL Server Management Studio or:
-  sqlcmd -S localhost -E -i NutriPath_Database.sql
+  sqlcmd -S localhost -E -i nutripath_sqlserver_seed.sql
 */
 
 IF DB_ID(N'NutriPath') IS NULL
@@ -17,7 +17,6 @@ SET NOCOUNT ON;
 GO
 
 DROP TABLE IF EXISTS dbo.LoginActivity;
-DROP TABLE IF EXISTS dbo.AuthCredentials;
 DROP TABLE IF EXISTS dbo.AdminSecuritySettings;
 DROP TABLE IF EXISTS dbo.AdminAiSettings;
 DROP TABLE IF EXISTS dbo.AdminSystemServices;
@@ -35,6 +34,7 @@ DROP TABLE IF EXISTS dbo.Goals;
 DROP TABLE IF EXISTS dbo.MealItems;
 DROP TABLE IF EXISTS dbo.MealSections;
 DROP TABLE IF EXISTS dbo.MealLogs;
+DROP TABLE IF EXISTS dbo.MemberNutritionProfiles;
 DROP TABLE IF EXISTS dbo.Foods;
 DROP TABLE IF EXISTS dbo.Subscriptions;
 DROP TABLE IF EXISTS dbo.Members;
@@ -103,14 +103,38 @@ CREATE TABLE dbo.Members (
   CONSTRAINT FK_Members_Plans FOREIGN KEY (tier) REFERENCES dbo.Plans(id)
 );
 
-CREATE TABLE dbo.AuthCredentials (
-  id NVARCHAR(60) NOT NULL PRIMARY KEY,
-  member_id NVARCHAR(40) NOT NULL,
-  email NVARCHAR(255) NOT NULL UNIQUE,
-  password_hash NVARCHAR(255) NOT NULL,
-  password_salt NVARCHAR(255) NOT NULL,
-  created_at DATETIME2 NOT NULL DEFAULT SYSUTCDATETIME(),
-  CONSTRAINT FK_AuthCredentials_Members FOREIGN KEY (member_id) REFERENCES dbo.Members(id)
+CREATE TABLE dbo.MemberNutritionProfiles (
+  member_id NVARCHAR(40) NOT NULL PRIMARY KEY,
+  updated_at DATETIME2 NOT NULL,
+  age INT NOT NULL,
+  weight_kg DECIMAL(6, 2) NOT NULL,
+  height_cm DECIMAL(6, 2) NOT NULL,
+  gender NVARCHAR(20) NOT NULL,
+  activity_level_id NVARCHAR(30) NOT NULL,
+  goal NVARCHAR(30) NOT NULL,
+  exercise_type_id NVARCHAR(30) NOT NULL,
+  duration_minutes INT NOT NULL,
+  bmr INT NOT NULL,
+  tdee INT NOT NULL,
+  calorie_goal INT NOT NULL,
+  goal_delta INT NOT NULL,
+  bmi_value DECIMAL(6, 2) NOT NULL,
+  bmi_label NVARCHAR(50) NOT NULL,
+  protein_grams INT NOT NULL,
+  protein_calories INT NOT NULL,
+  protein_pct INT NOT NULL,
+  carbs_grams INT NOT NULL,
+  carbs_calories INT NOT NULL,
+  carbs_pct INT NOT NULL,
+  fat_grams INT NOT NULL,
+  fat_calories INT NOT NULL,
+  fat_pct INT NOT NULL,
+  exercise_label NVARCHAR(100) NOT NULL,
+  burned_calories INT NOT NULL,
+  fat_equivalent_grams INT NOT NULL,
+  CONSTRAINT FK_MemberNutritionProfiles_Members FOREIGN KEY (member_id) REFERENCES dbo.Members(id),
+  CONSTRAINT FK_MemberNutritionProfiles_ActivityLevels FOREIGN KEY (activity_level_id) REFERENCES dbo.ActivityLevels(id),
+  CONSTRAINT FK_MemberNutritionProfiles_ExerciseTypes FOREIGN KEY (exercise_type_id) REFERENCES dbo.ExerciseTypes(id)
 );
 
 CREATE TABLE dbo.Subscriptions (
@@ -370,6 +394,18 @@ INSERT INTO dbo.Members (
 INSERT INTO dbo.Subscriptions (member_id, plan_id, billing, status, started_at, renews_at, days_total, days_remaining) VALUES
 (N'mem-001', N'svip', N'annual', N'active', '2025-12-13', '2027-03-13', 730, 365);
 
+INSERT INTO dbo.MemberNutritionProfiles (
+  member_id, updated_at, age, weight_kg, height_cm, gender, activity_level_id, goal,
+  exercise_type_id, duration_minutes, bmr, tdee, calorie_goal, goal_delta, bmi_value, bmi_label,
+  protein_grams, protein_calories, protein_pct, carbs_grams, carbs_calories, carbs_pct,
+  fat_grams, fat_calories, fat_pct, exercise_label, burned_calories, fat_equivalent_grams
+) VALUES (
+  N'mem-001', '2026-03-13T07:30:00', 25, 65, 168, N'female', N'light', N'lose',
+  N'walking', 30, 1394, 1917, 1417, -500, 23.0, N'Bình thường',
+  117, 468, 33, 124, 496, 35,
+  39, 351, 25, N'Đi bộ', 139, 15
+);
+
 INSERT INTO dbo.Foods (id, name, category, calories, protein, carbs, fat, portion) VALUES
 (N'food-001', N'Phở bò tái tô nhỏ', N'Súp & Cháo', 320, 22, 48, 5, N'1 tô nhỏ (400ml)'),
 (N'food-002', N'Cháo gà gừng', N'Súp & Cháo', 280, 18, 38, 5, N'1 tô (350g)'),
@@ -422,14 +458,14 @@ INSERT INTO dbo.WeeklyProgress (member_id, progress_date, day_label, consumed, t
 (N'mem-001', '2026-03-15', N'CN', 0, 1800);
 
 INSERT INTO dbo.Recipes (id, name, image_url, time_minutes, calories, difficulty, servings, protein, carbs, fat, fiber) VALUES
-(N'recipe-001', N'Phở Bò Tái Chín Truyền Thống', N'https://images.unsplash.com/photo-1719677775416-1dd6a93f1a73?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&w=400', 30, 380, 2, 2, 28, 48, 6, 2),
-(N'recipe-002', N'Cơm Tấm Sườn Nướng Bì Chả', N'https://images.unsplash.com/photo-1760888549075-0b9727e07735?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&w=400', 40, 520, 3, 2, 34, 58, 18, 2),
-(N'recipe-003', N'Bún Chả Hà Nội Chính Gốc', N'https://images.unsplash.com/photo-1587496579013-90f32e3ea9d5?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&w=400', 35, 420, 2, 2, 30, 52, 12, 4),
-(N'recipe-004', N'Cháo Gà Gừng Hành Bổ Dưỡng', N'https://images.unsplash.com/photo-1650562075965-4940a2cfbfe4?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&w=400', 45, 280, 1, 3, 22, 38, 5, 1),
-(N'recipe-005', N'Gỏi Cuốn Tôm Thịt Sốt Tương', N'https://images.unsplash.com/photo-1734771573616-7cb630b439bc?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&w=400', 25, 220, 2, 3, 18, 30, 4, 3),
-(N'recipe-006', N'Canh Chua Cá Lóc Miền Nam', N'https://images.unsplash.com/photo-1665116582773-51394e546f07?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&w=400', 30, 210, 2, 3, 26, 16, 4, 5),
-(N'recipe-007', N'Rau Muống Xào Tỏi Thơm Giòn', N'https://images.unsplash.com/photo-1594916107106-4837e3ed0e6e?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&w=400', 10, 120, 1, 2, 4, 10, 6, 4),
-(N'recipe-008', N'Đậu Phụ Sốt Cà Chua Hành Lá', N'https://images.unsplash.com/photo-1692296979410-0ef15ccebc62?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&w=400', 20, 195, 1, 2, 14, 12, 10, 3);
+(N'recipe-001', N'Phở Bò Tái Chín Truyền Thống', N'https://images.unsplash.com/photo-1719677775416-1dd6a93f1a73?w=400', 30, 380, 2, 2, 28, 48, 6, 2),
+(N'recipe-002', N'Cơm Tấm Sườn Nướng Bì Chả', N'https://images.unsplash.com/photo-1760888549075-0b9727e07735?w=400', 40, 520, 3, 2, 34, 58, 18, 2),
+(N'recipe-003', N'Bún Chả Hà Nội Chính Gốc', N'https://images.unsplash.com/photo-1587496579013-90f32e3ea9d5?w=400', 35, 420, 2, 2, 30, 52, 12, 4),
+(N'recipe-004', N'Cháo Gà Gừng Hành Bổ Dưỡng', N'https://images.unsplash.com/photo-1650562075965-4940a2cfbfe4?w=400', 45, 280, 1, 3, 22, 38, 5, 1),
+(N'recipe-005', N'Gỏi Cuốn Tôm Thịt Sốt Tương', N'https://images.unsplash.com/photo-1734771573616-7cb630b439bc?w=400', 25, 220, 2, 3, 18, 30, 4, 3),
+(N'recipe-006', N'Canh Chua Cá Lóc Miền Nam', N'https://images.unsplash.com/photo-1665116582773-51394e546f07?w=400', 30, 210, 2, 3, 26, 16, 4, 5),
+(N'recipe-007', N'Rau Muống Xào Tỏi Thơm Giòn', N'https://images.unsplash.com/photo-1594916107106-4837e3ed0e6e?w=400', 10, 120, 1, 2, 4, 10, 6, 4),
+(N'recipe-008', N'Đậu Phụ Sốt Cà Chua Hành Lá', N'https://images.unsplash.com/photo-1692296979410-0ef15ccebc62?w=400', 20, 195, 1, 2, 14, 12, 10, 3);
 
 INSERT INTO dbo.RecipeTags (recipe_id, tag) VALUES
 (N'recipe-001', N'High-protein'), (N'recipe-001', N'<30 mins'),

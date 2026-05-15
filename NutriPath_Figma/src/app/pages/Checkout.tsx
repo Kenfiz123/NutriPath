@@ -1,93 +1,189 @@
-import { useState } from "react";
-import { Link } from "react-router";
+import { useEffect, useMemo, useState } from "react";
+import { Link, useSearchParams } from "react-router";
 import {
-  Crown, Star, Shield, Check, CreditCard, Smartphone, Building2,
-  Tag, ChevronDown, Lock, RotateCcw, Leaf, ArrowRight, CheckCircle
+  ArrowRight,
+  Building2,
+  CheckCircle,
+  CreditCard,
+  Crown,
+  Leaf,
+  Lock,
+  RotateCcw,
+  Shield,
+  Smartphone,
+  Star,
+  Tag,
 } from "lucide-react";
+import {
+  createPayment,
+  getCheckoutQuote,
+  getCurrentMemberId,
+  getPlans,
+  syncStoredMember,
+  type CheckoutQuote,
+  type Plan,
+} from "../api";
 
 type PlanId = "vip" | "svip";
 type PaymentMethod = "card" | "momo" | "zalopay" | "bank";
 type Billing = "monthly" | "annual";
 
-const plans: Record<PlanId, { name: string; monthlyPrice: number; icon: typeof Star; color: string; badgeColor: string }> = {
-  vip: { name: "VIP", monthlyPrice: 99000, icon: Star, color: "text-green-600", badgeColor: "bg-green-100 text-green-700 border-green-200" },
-  svip: { name: "SVIP", monthlyPrice: 199000, icon: Crown, color: "text-amber-600", badgeColor: "bg-amber-100 text-amber-700 border-amber-200" },
-};
-
-const paymentMethods: { id: PaymentMethod; label: string; icon: typeof CreditCard }[] = [
+const paymentMethods: Array<{ id: PaymentMethod; label: string; icon: typeof CreditCard }> = [
   { id: "card", label: "Thẻ tín dụng", icon: CreditCard },
   { id: "momo", label: "MoMo", icon: Smartphone },
   { id: "zalopay", label: "ZaloPay", icon: Smartphone },
   { id: "bank", label: "Ngân hàng", icon: Building2 },
 ];
 
-const vipFeatures = [
-  "Theo dõi calo không giới hạn",
-  "Toàn bộ kho công thức Việt",
-  "50 tin nhắn AI mỗi ngày",
-  "Lập kế hoạch bữa ăn",
-  "Không quảng cáo",
-];
+const planColors: Record<PlanId, { icon: typeof Star; badge: string; accent: string; subtle: string }> = {
+  vip: {
+    icon: Star,
+    badge: "bg-green-100 text-green-700 border-green-200",
+    accent: "text-green-600",
+    subtle: "bg-green-50 border-green-200",
+  },
+  svip: {
+    icon: Crown,
+    badge: "bg-amber-100 text-amber-700 border-amber-200",
+    accent: "text-amber-600",
+    subtle: "bg-amber-50 border-amber-200",
+  },
+};
 
-const svipFeatures = [
-  "Tất cả tính năng VIP",
-  "AI Coach dinh dưỡng cá nhân",
-  "Thực đơn tùy chỉnh hoàn toàn",
-  "Tin nhắn AI không giới hạn",
-  "Hỗ trợ ưu tiên 24/7",
-  "Phân tích thành phần cơ thể",
-];
+function formatMoney(amount: number, currency = "VND") {
+  return `${amount.toLocaleString("vi-VN")}${currency === "VND" ? "đ" : ` ${currency}`}`;
+}
+
+function formatCard(value: string) {
+  const digits = value.replace(/\D/g, "").slice(0, 16);
+  return digits.replace(/(.{4})/g, "$1 ").trim();
+}
+
+function formatExpiry(value: string) {
+  const digits = value.replace(/\D/g, "").slice(0, 4);
+  if (digits.length <= 2) return digits;
+  return `${digits.slice(0, 2)}/${digits.slice(2)}`;
+}
 
 export function Checkout() {
-  const [selectedPlan, setSelectedPlan] = useState<PlanId>("vip");
-  const [billing, setBilling] = useState<Billing>("monthly");
+  const [searchParams, setSearchParams] = useSearchParams();
+  const initialPlan = searchParams.get("plan") === "svip" ? "svip" : "vip";
+  const initialBilling = searchParams.get("billing") === "annual" ? "annual" : "monthly";
+
+  const [selectedPlan, setSelectedPlan] = useState<PlanId>(initialPlan);
+  const [billing, setBilling] = useState<Billing>(initialBilling);
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>("card");
-  const [discountCode, setDiscountCode] = useState("");
-  const [discountApplied, setDiscountApplied] = useState(false);
+  const [discountInput, setDiscountInput] = useState("");
+  const [appliedDiscountCode, setAppliedDiscountCode] = useState("");
+  const [plans, setPlans] = useState<Plan[]>([]);
+  const [quote, setQuote] = useState<CheckoutQuote | null>(null);
+  const [loadingQuote, setLoadingQuote] = useState(true);
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [completed, setCompleted] = useState<{
+    planName: string;
+    quote: CheckoutQuote;
+  } | null>(null);
+
   const [cardNumber, setCardNumber] = useState("");
   const [expiry, setExpiry] = useState("");
   const [cvv, setCvv] = useState("");
   const [cardName, setCardName] = useState("");
-  const [completed, setCompleted] = useState(false);
 
-  const plan = plans[selectedPlan];
-  const PlanIcon = plan.icon;
-  const discount = billing === "annual" ? 0.8 : 1;
-  const basePrice = Math.round(plan.monthlyPrice * discount);
-  const vat = Math.round(basePrice * (billing === "annual" ? 12 : 1) * 0.1);
-  const subtotal = basePrice * (billing === "annual" ? 12 : 1);
-  const discountAmount = discountApplied ? Math.round(subtotal * 0.1) : 0;
-  const total = subtotal + vat - discountAmount;
-  const features = selectedPlan === "vip" ? vipFeatures : svipFeatures;
+  useEffect(() => {
+    getPlans(billing)
+      .then((data) => setPlans(data._embedded.plans.filter((plan) => plan.id !== "free")))
+      .catch((err) => setError(err instanceof Error ? err.message : "Không tải được dữ liệu gói."));
+  }, [billing]);
 
-  const formatCard = (val: string) => {
-    const v = val.replace(/\D/g, "").slice(0, 16);
-    return v.replace(/(.{4})/g, "$1 ").trim();
-  };
-  const formatExpiry = (val: string) => {
-    const v = val.replace(/\D/g, "").slice(0, 4);
-    if (v.length >= 2) return v.slice(0, 2) + "/" + v.slice(2);
-    return v;
-  };
+  useEffect(() => {
+    setSearchParams({ plan: selectedPlan, billing });
+  }, [selectedPlan, billing, setSearchParams]);
+
+  useEffect(() => {
+    let active = true;
+    setLoadingQuote(true);
+    getCheckoutQuote(selectedPlan, billing, appliedDiscountCode)
+      .then((data) => {
+        if (!active) return;
+        setQuote(data.quote);
+        setError(null);
+      })
+      .catch((err) => {
+        if (!active) return;
+        setError(err instanceof Error ? err.message : "Không lấy được báo giá.");
+      })
+      .finally(() => {
+        if (active) setLoadingQuote(false);
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [selectedPlan, billing, appliedDiscountCode]);
+
+  const selectedPlanData = useMemo(
+    () => plans.find((plan) => plan.id === selectedPlan) ?? null,
+    [plans, selectedPlan],
+  );
+
+  const palette = planColors[selectedPlan];
+  const PlanIcon = palette.icon;
+
+  async function handleCheckout() {
+    if (!quote) return;
+    if (paymentMethod === "card" && (!cardNumber || !expiry || cvv.length < 3 || !cardName.trim())) {
+      setError("Vui lòng nhập đầy đủ thông tin thẻ để tiếp tục.");
+      return;
+    }
+
+    setSubmitting(true);
+    setError(null);
+
+    try {
+      const memberId = getCurrentMemberId();
+      const data = await createPayment({
+        memberId,
+        planId: selectedPlan,
+        billing,
+        paymentMethod,
+        discountCode: appliedDiscountCode,
+      });
+      syncStoredMember(data.member);
+      setCompleted({
+        planName: data.member.subscription?.planId?.toUpperCase() ?? selectedPlan.toUpperCase(),
+        quote: data.quote,
+      });
+    } catch (checkoutError) {
+      setError(checkoutError instanceof Error ? checkoutError.message : "Thanh toán chưa hoàn tất.");
+    } finally {
+      setSubmitting(false);
+    }
+  }
 
   if (completed) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center p-8">
-        <div className="bg-white rounded-3xl shadow-xl p-12 text-center max-w-md w-full">
-          <div className="w-20 h-20 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-6">
-            <CheckCircle className="w-10 h-10 text-green-600" />
+        <div className="w-full max-w-md rounded-3xl border border-gray-100 bg-white p-10 text-center shadow-xl">
+          <div className="mx-auto mb-6 flex h-20 w-20 items-center justify-center rounded-full bg-green-100">
+            <CheckCircle className="h-10 w-10 text-green-600" />
           </div>
-          <h2 className="text-gray-900 mb-3" style={{ fontSize: "1.8rem", fontWeight: 800 }}>Thanh toán thành công!</h2>
-          <p className="text-gray-500 mb-8" style={{ fontSize: "0.95rem", lineHeight: 1.7 }}>
-            Chào mừng bạn trở thành thành viên <strong>{plan.name}</strong> của NutriPath. Tài khoản của bạn đã được nâng cấp.
+          <h1 className="text-gray-900" style={{ fontSize: "1.8rem", fontWeight: 800 }}>Kích hoạt gói thành công</h1>
+          <p className="mt-3 text-gray-500" style={{ fontSize: "0.95rem", lineHeight: 1.7 }}>
+            Tài khoản của bạn đã được nâng cấp lên <strong>{completed.planName}</strong>. Quyền mới đã được bật ngay trên dashboard, hồ sơ thành viên và các tính năng liên quan.
           </p>
-          <Link to="/member" className="w-full flex items-center justify-center gap-2 bg-green-600 text-white py-4 rounded-2xl hover:bg-green-700 transition-all"
-            style={{ fontSize: "1rem", fontWeight: 700 }}>
-            Xem tài khoản của tôi <ArrowRight className="w-5 h-5" />
-          </Link>
-          <Link to="/dashboard" className="block mt-3 text-gray-500 hover:text-gray-700" style={{ fontSize: "0.875rem" }}>
-            Về trang Dashboard
-          </Link>
+          <div className="mt-6 rounded-2xl border border-green-100 bg-green-50 px-5 py-4 text-left">
+            <p className="text-green-700" style={{ fontSize: "0.82rem", fontWeight: 700 }}>Tổng thanh toán</p>
+            <p className="mt-1 text-gray-900" style={{ fontSize: "1.35rem", fontWeight: 800 }}>{formatMoney(completed.quote.total, completed.quote.currency)}</p>
+          </div>
+          <div className="mt-8 space-y-3">
+            <Link to="/member" className="flex w-full items-center justify-center gap-2 rounded-2xl bg-green-600 px-4 py-3.5 text-white hover:bg-green-700" style={{ fontWeight: 700 }}>
+              Xem hồ sơ thành viên <ArrowRight className="h-4 w-4" />
+            </Link>
+            <Link to="/dashboard" className="block text-gray-500 hover:text-gray-700" style={{ fontSize: "0.88rem" }}>
+              Quay về dashboard
+            </Link>
+          </div>
         </div>
       </div>
     );
@@ -95,296 +191,257 @@ export function Checkout() {
 
   return (
     <div className="min-h-screen bg-gray-50">
-      {/* Header */}
-      <div className="bg-white border-b border-gray-100 py-4">
-        <div className="max-w-[1440px] mx-auto px-8 flex items-center justify-between">
+      <div className="border-b border-gray-100 bg-white py-4">
+        <div className="mx-auto flex h-10 max-w-[1440px] items-center justify-between px-8">
           <Link to="/" className="flex items-center gap-2">
-            <div className="w-8 h-8 bg-green-600 rounded-xl flex items-center justify-center">
-              <Leaf className="w-5 h-5 text-white" />
+            <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-green-600">
+              <Leaf className="h-5 w-5 text-white" />
             </div>
             <span className="text-gray-900" style={{ fontSize: "1.1rem", fontWeight: 800 }}>NutriPath</span>
           </Link>
-          <div className="flex items-center gap-2 text-gray-400">
-            <Lock className="w-4 h-4 text-green-500" />
-            <span style={{ fontSize: "0.875rem" }}>Thanh toán bảo mật SSL</span>
+          <div className="flex items-center gap-2 text-gray-500">
+            <Lock className="h-4 w-4 text-green-500" />
+            <span style={{ fontSize: "0.875rem" }}>Thanh toán bảo mật</span>
           </div>
         </div>
       </div>
 
-      <div className="max-w-[1440px] mx-auto px-8 py-10">
-        <div className="grid grid-cols-1 lg:grid-cols-5 gap-8">
+      <div className="mx-auto max-w-[1440px] px-8 py-10">
+        {error && (
+          <div className="mb-6 rounded-2xl border border-red-100 bg-red-50 px-5 py-4 text-red-600">
+            {error}
+          </div>
+        )}
 
-          {/* LEFT: Order Summary (60%) */}
-          <div className="lg:col-span-3 space-y-6">
-            <h1 className="text-gray-900" style={{ fontSize: "1.8rem", fontWeight: 800 }}>Tóm tắt đơn hàng</h1>
+        <div className="grid gap-8 lg:grid-cols-5">
+          <div className="space-y-6 lg:col-span-3">
+            <div className="rounded-3xl border border-gray-100 bg-white p-6 shadow-sm">
+              <h1 className="text-gray-900" style={{ fontSize: "1.8rem", fontWeight: 800 }}>Checkout gói thành viên</h1>
+              <p className="mt-2 text-gray-500" style={{ fontSize: "0.92rem" }}>
+                Báo giá và kích hoạt gói được lấy trực tiếp từ backend, không còn là màn demo cứng.
+              </p>
+            </div>
 
-            {/* Plan selector */}
-            <div className="bg-white rounded-3xl p-6 border border-gray-100 shadow-sm">
-              <h3 className="text-gray-700 mb-4" style={{ fontSize: "0.9rem", fontWeight: 700, letterSpacing: "0.05em", textTransform: "uppercase" }}>Chọn gói</h3>
-              <div className="grid grid-cols-2 gap-3">
-                {(["vip", "svip"] as PlanId[]).map((pid) => {
-                  const p = plans[pid];
-                  const Icon = p.icon;
-                  const isActive = selectedPlan === pid;
+            <div className="rounded-3xl border border-gray-100 bg-white p-6 shadow-sm">
+              <h2 className="mb-4 text-gray-700" style={{ fontSize: "0.9rem", fontWeight: 700, letterSpacing: "0.04em", textTransform: "uppercase" }}>Chọn gói</h2>
+              <div className="grid gap-3 md:grid-cols-2">
+                {(["vip", "svip"] as PlanId[]).map((planId) => {
+                  const plan = plans.find((item) => item.id === planId);
+                  const colors = planColors[planId];
+                  const Icon = colors.icon;
+                  const isActive = selectedPlan === planId;
                   return (
                     <button
-                      key={pid}
-                      onClick={() => setSelectedPlan(pid)}
-                      className={`flex items-center gap-3 p-4 rounded-2xl border-2 transition-all ${
-                        isActive
-                          ? pid === "vip" ? "border-green-500 bg-green-50" : "border-amber-500 bg-amber-50"
-                          : "border-gray-200 hover:border-gray-300"
-                      }`}
+                      key={planId}
+                      onClick={() => setSelectedPlan(planId)}
+                      className={`rounded-2xl border-2 p-4 text-left transition-all ${isActive ? colors.subtle : "border-gray-200 hover:border-gray-300"}`}
                     >
-                      <Icon className={`w-5 h-5 ${isActive ? p.color : "text-gray-400"}`} />
-                      <div className="text-left">
-                        <div className="text-gray-900" style={{ fontSize: "0.9rem", fontWeight: 700 }}>{p.name}</div>
-                        <div className="text-gray-500" style={{ fontSize: "0.75rem" }}>{p.monthlyPrice.toLocaleString("vi-VN")}₫/tháng</div>
+                      <div className="flex items-start gap-3">
+                        <div className={`flex h-10 w-10 items-center justify-center rounded-xl ${isActive ? colors.badge : "bg-gray-100 text-gray-500"}`}>
+                          <Icon className="h-5 w-5" />
+                        </div>
+                        <div className="flex-1">
+                          <div className="flex items-center justify-between gap-3">
+                            <p className="text-gray-900" style={{ fontSize: "0.95rem", fontWeight: 800 }}>{plan?.name ?? planId.toUpperCase()}</p>
+                            {isActive && <CheckCircle className={`h-5 w-5 ${colors.accent}`} />}
+                          </div>
+                          <p className="mt-1 text-gray-500" style={{ fontSize: "0.82rem" }}>{plan?.description ?? "Đang tải mô tả gói..."}</p>
+                        </div>
                       </div>
-                      {isActive && <CheckCircle className={`w-5 h-5 ml-auto ${p.color}`} />}
                     </button>
                   );
                 })}
               </div>
             </div>
 
-            {/* Billing period */}
-            <div className="bg-white rounded-3xl p-6 border border-gray-100 shadow-sm">
-              <h3 className="text-gray-700 mb-4" style={{ fontSize: "0.9rem", fontWeight: 700, letterSpacing: "0.05em", textTransform: "uppercase" }}>Chu kỳ thanh toán</h3>
-              <div className="grid grid-cols-2 gap-3">
+            <div className="rounded-3xl border border-gray-100 bg-white p-6 shadow-sm">
+              <h2 className="mb-4 text-gray-700" style={{ fontSize: "0.9rem", fontWeight: 700, letterSpacing: "0.04em", textTransform: "uppercase" }}>Chu kỳ thanh toán</h2>
+              <div className="grid gap-3 md:grid-cols-2">
                 <button
                   onClick={() => setBilling("monthly")}
-                  className={`p-4 rounded-2xl border-2 transition-all text-left ${billing === "monthly" ? "border-green-500 bg-green-50" : "border-gray-200 hover:border-gray-300"}`}
+                  className={`rounded-2xl border-2 p-4 text-left transition-all ${billing === "monthly" ? "border-green-500 bg-green-50" : "border-gray-200 hover:border-gray-300"}`}
                 >
-                  <div className="text-gray-900" style={{ fontSize: "0.9rem", fontWeight: 700 }}>Hàng tháng</div>
-                  <div className="text-gray-500" style={{ fontSize: "0.8rem" }}>{plan.monthlyPrice.toLocaleString("vi-VN")}₫/tháng</div>
+                  <p className="text-gray-900" style={{ fontSize: "0.92rem", fontWeight: 800 }}>Hàng tháng</p>
+                  <p className="mt-1 text-gray-500" style={{ fontSize: "0.82rem" }}>Thanh toán linh hoạt theo tháng</p>
                 </button>
                 <button
                   onClick={() => setBilling("annual")}
-                  className={`p-4 rounded-2xl border-2 transition-all text-left relative ${billing === "annual" ? "border-green-500 bg-green-50" : "border-gray-200 hover:border-gray-300"}`}
+                  className={`relative rounded-2xl border-2 p-4 text-left transition-all ${billing === "annual" ? "border-green-500 bg-green-50" : "border-gray-200 hover:border-gray-300"}`}
                 >
-                  {billing === "annual" && <span className="absolute -top-2 -right-2 bg-green-500 text-white text-xs px-2 py-0.5 rounded-full">2 tháng miễn phí</span>}
-                  <div className="text-gray-900" style={{ fontSize: "0.9rem", fontWeight: 700 }}>Hàng năm</div>
-                  <div className="text-green-600" style={{ fontSize: "0.8rem", fontWeight: 600 }}>{Math.round(plan.monthlyPrice * 0.8).toLocaleString("vi-VN")}₫/tháng</div>
+                  <span className="absolute right-4 top-4 rounded-full bg-green-500 px-2 py-0.5 text-white" style={{ fontSize: "0.7rem", fontWeight: 700 }}>
+                    -20%
+                  </span>
+                  <p className="text-gray-900" style={{ fontSize: "0.92rem", fontWeight: 800 }}>Hàng năm</p>
+                  <p className="mt-1 text-gray-500" style={{ fontSize: "0.82rem" }}>Tiết kiệm hơn với giá theo năm</p>
                 </button>
               </div>
             </div>
 
-            {/* Price breakdown */}
-            <div className="bg-white rounded-3xl p-6 border border-gray-100 shadow-sm">
-              <h3 className="text-gray-700 mb-4" style={{ fontSize: "0.9rem", fontWeight: 700, letterSpacing: "0.05em", textTransform: "uppercase" }}>Chi tiết thanh toán</h3>
-              <div className="space-y-3 mb-4">
-                <div className="flex justify-between">
-                  <span className="text-gray-600" style={{ fontSize: "0.9rem" }}>Gói {plan.name} ({billing === "annual" ? "12 tháng" : "1 tháng"})</span>
-                  <span className="text-gray-900" style={{ fontSize: "0.9rem", fontWeight: 600 }}>{subtotal.toLocaleString("vi-VN")}₫</span>
+            <div className="rounded-3xl border border-gray-100 bg-white p-6 shadow-sm">
+              <h2 className="mb-4 text-gray-700" style={{ fontSize: "0.9rem", fontWeight: 700, letterSpacing: "0.04em", textTransform: "uppercase" }}>Phương thức thanh toán</h2>
+              <div className="grid gap-2 sm:grid-cols-2">
+                {paymentMethods.map(({ id, label, icon: Icon }) => (
+                  <button
+                    key={id}
+                    onClick={() => setPaymentMethod(id)}
+                    className={`flex items-center gap-2 rounded-xl border-2 p-3 transition-all ${paymentMethod === id ? "border-green-500 bg-green-50" : "border-gray-200 hover:border-gray-300"}`}
+                  >
+                    <Icon className={`h-4 w-4 ${paymentMethod === id ? "text-green-600" : "text-gray-400"}`} />
+                    <span className={paymentMethod === id ? "text-green-700" : "text-gray-600"} style={{ fontSize: "0.82rem", fontWeight: 700 }}>{label}</span>
+                  </button>
+                ))}
+              </div>
+
+              {paymentMethod === "card" && (
+                <div className="mt-5 space-y-4">
+                  <label className="block">
+                    <span className="text-gray-700" style={{ fontSize: "0.8rem", fontWeight: 700 }}>Số thẻ</span>
+                    <input
+                      type="text"
+                      value={cardNumber}
+                      onChange={(event) => setCardNumber(formatCard(event.target.value))}
+                      placeholder="1234 5678 9012 3456"
+                      className="mt-2 w-full rounded-xl border border-gray-200 bg-gray-50 px-4 py-3 outline-none focus:border-green-500 focus:ring-2 focus:ring-green-100"
+                    />
+                  </label>
+                  <div className="grid gap-3 sm:grid-cols-2">
+                    <label className="block">
+                      <span className="text-gray-700" style={{ fontSize: "0.8rem", fontWeight: 700 }}>Ngày hết hạn</span>
+                      <input
+                        type="text"
+                        value={expiry}
+                        onChange={(event) => setExpiry(formatExpiry(event.target.value))}
+                        placeholder="MM/YY"
+                        className="mt-2 w-full rounded-xl border border-gray-200 bg-gray-50 px-4 py-3 outline-none focus:border-green-500 focus:ring-2 focus:ring-green-100"
+                      />
+                    </label>
+                    <label className="block">
+                      <span className="text-gray-700" style={{ fontSize: "0.8rem", fontWeight: 700 }}>CVV</span>
+                      <input
+                        type="text"
+                        value={cvv}
+                        onChange={(event) => setCvv(event.target.value.replace(/\D/g, "").slice(0, 3))}
+                        placeholder="123"
+                        className="mt-2 w-full rounded-xl border border-gray-200 bg-gray-50 px-4 py-3 outline-none focus:border-green-500 focus:ring-2 focus:ring-green-100"
+                      />
+                    </label>
+                  </div>
+                  <label className="block">
+                    <span className="text-gray-700" style={{ fontSize: "0.8rem", fontWeight: 700 }}>Tên chủ thẻ</span>
+                    <input
+                      type="text"
+                      value={cardName}
+                      onChange={(event) => setCardName(event.target.value.toUpperCase())}
+                      placeholder="NGUYEN VAN A"
+                      className="mt-2 w-full rounded-xl border border-gray-200 bg-gray-50 px-4 py-3 outline-none focus:border-green-500 focus:ring-2 focus:ring-green-100"
+                    />
+                  </label>
                 </div>
-                {billing === "annual" && (
-                  <div className="flex justify-between text-green-600">
-                    <span style={{ fontSize: "0.9rem" }}>Tiết kiệm (thanh toán năm)</span>
-                    <span style={{ fontSize: "0.9rem", fontWeight: 600 }}>-{(plan.monthlyPrice * 12 - subtotal).toLocaleString("vi-VN")}₫</span>
-                  </div>
-                )}
-                {discountApplied && (
-                  <div className="flex justify-between text-green-600">
-                    <span style={{ fontSize: "0.9rem" }}>Mã giảm giá (NUTRIPATH10)</span>
-                    <span style={{ fontSize: "0.9rem", fontWeight: 600 }}>-{discountAmount.toLocaleString("vi-VN")}₫</span>
-                  </div>
-                )}
-                <div className="flex justify-between text-gray-500">
-                  <span style={{ fontSize: "0.9rem" }}>VAT (10%)</span>
-                  <span style={{ fontSize: "0.9rem" }}>{vat.toLocaleString("vi-VN")}₫</span>
+              )}
+
+              {paymentMethod !== "card" && (
+                <div className="mt-5 rounded-2xl border border-gray-100 bg-gray-50 px-5 py-4 text-gray-600" style={{ fontSize: "0.85rem", lineHeight: 1.7 }}>
+                  Đây là luồng thanh toán mô phỏng an toàn. Sau khi bấm hoàn tất, backend sẽ kích hoạt gói và không lưu dữ liệu thanh toán nhạy cảm.
+                </div>
+              )}
+            </div>
+          </div>
+
+          <div className="space-y-6 lg:col-span-2">
+            <div className="rounded-3xl border border-gray-100 bg-white p-6 shadow-sm">
+              <div className="mb-5 flex items-center gap-3">
+                <div className={`flex h-11 w-11 items-center justify-center rounded-2xl ${palette.badge}`}>
+                  <PlanIcon className="h-5 w-5" />
+                </div>
+                <div>
+                  <p className="text-gray-900" style={{ fontSize: "1.05rem", fontWeight: 800 }}>{selectedPlanData?.name ?? selectedPlan.toUpperCase()}</p>
+                  <p className="text-gray-500" style={{ fontSize: "0.82rem" }}>{selectedPlanData?.description ?? "Đang lấy mô tả gói..."}</p>
                 </div>
               </div>
 
-              {/* Discount code */}
-              <div className="flex gap-2 mb-4">
-                <div className="flex-1 flex items-center gap-2 bg-gray-50 border border-gray-200 rounded-xl px-4 py-2.5 focus-within:border-green-400 focus-within:ring-2 focus-within:ring-green-100">
-                  <Tag className="w-4 h-4 text-gray-400" />
+              <div className="mb-4 flex gap-2">
+                <div className="flex flex-1 items-center gap-2 rounded-xl border border-gray-200 bg-gray-50 px-4 py-3">
+                  <Tag className="h-4 w-4 text-gray-400" />
                   <input
                     type="text"
+                    value={discountInput}
+                    onChange={(event) => setDiscountInput(event.target.value.toUpperCase())}
                     placeholder="Mã giảm giá"
-                    value={discountCode}
-                    onChange={(e) => setDiscountCode(e.target.value.toUpperCase())}
-                    className="flex-1 bg-transparent outline-none text-gray-700"
-                    style={{ fontSize: "0.875rem" }}
+                    className="w-full bg-transparent outline-none text-gray-700"
+                    style={{ fontSize: "0.88rem" }}
                   />
                 </div>
                 <button
-                  onClick={() => { if (discountCode.length > 0) setDiscountApplied(true); }}
-                  className="px-4 py-2.5 bg-gray-900 text-white rounded-xl hover:bg-gray-700 transition-all"
-                  style={{ fontSize: "0.875rem", fontWeight: 600 }}
+                  onClick={() => setAppliedDiscountCode(discountInput.trim())}
+                  className="rounded-xl bg-gray-900 px-4 py-3 text-white hover:bg-gray-700"
+                  style={{ fontSize: "0.85rem", fontWeight: 700 }}
                 >
                   Áp dụng
                 </button>
               </div>
 
-              <div className="border-t border-gray-100 pt-4 flex justify-between items-center">
-                <span className="text-gray-900" style={{ fontSize: "1rem", fontWeight: 700 }}>Tổng cộng</span>
-                <span className="text-green-600" style={{ fontSize: "1.4rem", fontWeight: 800 }}>{total.toLocaleString("vi-VN")}₫</span>
-              </div>
-            </div>
-
-            {/* What you get */}
-            <div className="bg-white rounded-3xl p-6 border border-gray-100 shadow-sm">
-              <h3 className="text-gray-700 mb-4" style={{ fontSize: "0.9rem", fontWeight: 700, letterSpacing: "0.05em", textTransform: "uppercase" }}>Bạn sẽ nhận được</h3>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                {features.map((feat) => (
-                  <div key={feat} className="flex items-center gap-2">
-                    <CheckCircle className="w-4 h-4 text-green-500 flex-shrink-0" />
-                    <span className="text-gray-700" style={{ fontSize: "0.875rem" }}>{feat}</span>
+              {loadingQuote || !quote ? (
+                <div className="rounded-2xl border border-dashed border-gray-200 bg-gray-50 px-5 py-8 text-center text-gray-400">
+                  Đang lấy báo giá từ backend...
+                </div>
+              ) : (
+                <>
+                  <div className="space-y-3">
+                    <div className="flex justify-between text-gray-600">
+                      <span>{quote.planName} ({quote.billing === "annual" ? "12 tháng" : "1 tháng"})</span>
+                      <span className="text-gray-900" style={{ fontWeight: 700 }}>{formatMoney(quote.subtotal, quote.currency)}</span>
+                    </div>
+                    <div className="flex justify-between text-gray-500">
+                      <span>VAT</span>
+                      <span>{formatMoney(quote.vat, quote.currency)}</span>
+                    </div>
+                    {quote.discountAmount > 0 && (
+                      <div className="flex justify-between text-green-600">
+                        <span>Giảm giá {quote.discountCode}</span>
+                        <span>-{formatMoney(quote.discountAmount, quote.currency)}</span>
+                      </div>
+                    )}
                   </div>
-                ))}
-              </div>
-            </div>
-          </div>
 
-          {/* RIGHT: Payment Form (40%) */}
-          <div className="lg:col-span-2 space-y-6">
-            <h2 className="text-gray-900" style={{ fontSize: "1.8rem", fontWeight: 800 }}>Thanh toán</h2>
+                  <div className="mt-5 border-t border-gray-100 pt-5">
+                    <div className="flex items-end justify-between">
+                      <div>
+                        <p className="text-gray-500" style={{ fontSize: "0.8rem" }}>Tổng thanh toán</p>
+                        <p className="mt-1 text-gray-900" style={{ fontSize: "1.6rem", fontWeight: 850 }}>{formatMoney(quote.total, quote.currency)}</p>
+                      </div>
+                      <span className={`rounded-full border px-3 py-1 ${palette.badge}`} style={{ fontSize: "0.74rem", fontWeight: 700 }}>
+                        {billing === "annual" ? "Theo năm" : "Theo tháng"}
+                      </span>
+                    </div>
+                  </div>
 
-            {/* Payment method tabs */}
-            <div className="bg-white rounded-3xl p-6 border border-gray-100 shadow-sm">
-              <h3 className="text-gray-700 mb-4" style={{ fontSize: "0.9rem", fontWeight: 700, letterSpacing: "0.05em", textTransform: "uppercase" }}>Phương thức</h3>
-              <div className="grid grid-cols-2 gap-2 mb-6">
-                {paymentMethods.map(({ id, label, icon: Icon }) => (
                   <button
-                    key={id}
-                    onClick={() => setPaymentMethod(id)}
-                    className={`flex items-center gap-2 p-3 rounded-xl border-2 transition-all ${paymentMethod === id ? "border-green-500 bg-green-50" : "border-gray-200 hover:border-gray-300"}`}
+                    onClick={handleCheckout}
+                    disabled={submitting}
+                    className="mt-6 flex w-full items-center justify-center gap-2 rounded-2xl bg-green-600 px-4 py-4 text-white shadow-lg transition-all hover:bg-green-700 disabled:cursor-not-allowed disabled:opacity-70"
+                    style={{ fontSize: "1rem", fontWeight: 800 }}
                   >
-                    <Icon className={`w-4 h-4 ${paymentMethod === id ? "text-green-600" : "text-gray-400"}`} />
-                    <span className={`${paymentMethod === id ? "text-green-700" : "text-gray-600"}`} style={{ fontSize: "0.8rem", fontWeight: 600 }}>{label}</span>
+                    <Lock className="h-5 w-5" />
+                    {submitting ? "Đang kích hoạt gói..." : "Hoàn tất thanh toán"}
+                    <ArrowRight className="h-5 w-5" />
                   </button>
-                ))}
-              </div>
-
-              {/* Credit card form */}
-              {paymentMethod === "card" && (
-                <div className="space-y-4">
-                  <div>
-                    <label className="block text-gray-700 mb-1.5" style={{ fontSize: "0.8rem", fontWeight: 600 }}>Số thẻ</label>
-                    <div className="flex items-center gap-2 bg-gray-50 border border-gray-200 rounded-xl px-4 py-3 focus-within:border-green-400 focus-within:ring-2 focus-within:ring-green-100">
-                      <CreditCard className="w-4 h-4 text-gray-400" />
-                      <input
-                        type="text"
-                        placeholder="1234 5678 9012 3456"
-                        value={cardNumber}
-                        onChange={(e) => setCardNumber(formatCard(e.target.value))}
-                        className="flex-1 bg-transparent outline-none text-gray-700"
-                        style={{ fontSize: "0.9rem", letterSpacing: "0.1em" }}
-                      />
-                    </div>
-                  </div>
-                  <div className="grid grid-cols-2 gap-3">
-                    <div>
-                      <label className="block text-gray-700 mb-1.5" style={{ fontSize: "0.8rem", fontWeight: 600 }}>Ngày hết hạn</label>
-                      <input
-                        type="text"
-                        placeholder="MM/YY"
-                        value={expiry}
-                        onChange={(e) => setExpiry(formatExpiry(e.target.value))}
-                        className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-3 outline-none focus:border-green-400 focus:ring-2 focus:ring-green-100 text-gray-700"
-                        style={{ fontSize: "0.9rem" }}
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-gray-700 mb-1.5" style={{ fontSize: "0.8rem", fontWeight: 600 }}>CVV</label>
-                      <input
-                        type="text"
-                        placeholder="123"
-                        value={cvv}
-                        onChange={(e) => setCvv(e.target.value.replace(/\D/g, "").slice(0, 3))}
-                        className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-3 outline-none focus:border-green-400 focus:ring-2 focus:ring-green-100 text-gray-700"
-                        style={{ fontSize: "0.9rem" }}
-                      />
-                    </div>
-                  </div>
-                  <div>
-                    <label className="block text-gray-700 mb-1.5" style={{ fontSize: "0.8rem", fontWeight: 600 }}>Tên chủ thẻ</label>
-                    <input
-                      type="text"
-                      placeholder="NGUYEN VAN A"
-                      value={cardName}
-                      onChange={(e) => setCardName(e.target.value.toUpperCase())}
-                      className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-3 outline-none focus:border-green-400 focus:ring-2 focus:ring-green-100 text-gray-700"
-                      style={{ fontSize: "0.9rem", letterSpacing: "0.05em" }}
-                    />
-                  </div>
-                </div>
-              )}
-
-              {/* MoMo */}
-              {paymentMethod === "momo" && (
-                <div className="text-center">
-                  <div className="w-40 h-40 bg-pink-50 border-2 border-pink-200 rounded-2xl flex flex-col items-center justify-center mx-auto mb-4">
-                    <Smartphone className="w-12 h-12 text-pink-500 mb-2" />
-                    <span className="text-pink-600" style={{ fontSize: "0.8rem", fontWeight: 600 }}>QR Code MoMo</span>
-                  </div>
-                  <p className="text-gray-500 mb-4" style={{ fontSize: "0.875rem" }}>Quét mã QR bằng app MoMo để thanh toán</p>
-                  <button className="w-full bg-pink-500 text-white py-3 rounded-xl hover:bg-pink-600 transition-all" style={{ fontSize: "0.9rem", fontWeight: 700 }}>
-                    Mở app MoMo
-                  </button>
-                </div>
-              )}
-
-              {/* ZaloPay */}
-              {paymentMethod === "zalopay" && (
-                <div className="text-center">
-                  <div className="w-40 h-40 bg-blue-50 border-2 border-blue-200 rounded-2xl flex flex-col items-center justify-center mx-auto mb-4">
-                    <Smartphone className="w-12 h-12 text-blue-500 mb-2" />
-                    <span className="text-blue-600" style={{ fontSize: "0.8rem", fontWeight: 600 }}>QR Code ZaloPay</span>
-                  </div>
-                  <p className="text-gray-500 mb-4" style={{ fontSize: "0.875rem" }}>Quét mã QR bằng app ZaloPay để thanh toán</p>
-                  <button className="w-full bg-blue-500 text-white py-3 rounded-xl hover:bg-blue-600 transition-all" style={{ fontSize: "0.9rem", fontWeight: 700 }}>
-                    Mở app ZaloPay
-                  </button>
-                </div>
-              )}
-
-              {/* Bank Transfer */}
-              {paymentMethod === "bank" && (
-                <div className="space-y-3">
-                  {[
-                    { label: "Ngân hàng", value: "Vietcombank" },
-                    { label: "Số tài khoản", value: "1234567890" },
-                    { label: "Chủ tài khoản", value: "NUTRIPATH VIETNAM" },
-                    { label: "Nội dung", value: `NP-${Date.now().toString().slice(-6)}` },
-                  ].map(({ label, value }) => (
-                    <div key={label} className="flex justify-between items-center bg-gray-50 rounded-xl px-4 py-3">
-                      <span className="text-gray-500" style={{ fontSize: "0.8rem" }}>{label}</span>
-                      <span className="text-gray-900" style={{ fontSize: "0.875rem", fontWeight: 600 }}>{value}</span>
-                    </div>
-                  ))}
-                  <p className="text-orange-600 bg-orange-50 rounded-xl px-4 py-3" style={{ fontSize: "0.8rem" }}>
-                    ⚠️ Tài khoản sẽ được kích hoạt trong vòng 2-4 giờ sau khi chuyển khoản
-                  </p>
-                </div>
+                </>
               )}
             </div>
 
-            {/* Submit */}
-            <button
-              onClick={() => setCompleted(true)}
-              className="w-full flex items-center justify-center gap-2 bg-green-600 text-white py-4 rounded-2xl hover:bg-green-700 transition-all shadow-lg"
-              style={{ fontSize: "1.05rem", fontWeight: 700 }}
-            >
-              <Lock className="w-5 h-5" />
-              Hoàn tất thanh toán
-              <ArrowRight className="w-5 h-5" />
-            </button>
-
-            {/* Trust signals */}
-            <div className="bg-white rounded-2xl p-5 border border-gray-100 space-y-3">
-              {[
-                { icon: Lock, text: "Thanh toán mã hóa SSL 256-bit", color: "text-green-500" },
-                { icon: RotateCcw, text: "Hoàn tiền trong vòng 7 ngày nếu không hài lòng", color: "text-blue-500" },
-                { icon: Leaf, text: "Hủy đăng ký bất cứ lúc nào, không phí ẩn", color: "text-emerald-500" },
-              ].map(({ icon: Icon, text, color }) => (
-                <div key={text} className="flex items-center gap-2.5">
-                  <Icon className={`w-4 h-4 flex-shrink-0 ${color}`} />
-                  <span className="text-gray-600" style={{ fontSize: "0.8rem" }}>{text}</span>
-                </div>
-              ))}
+            <div className="rounded-3xl border border-gray-100 bg-white p-5 shadow-sm">
+              <div className="space-y-3">
+                {[
+                  { icon: Shield, text: "Backend không lưu số thẻ, CVV hoặc dữ liệu thanh toán nhạy cảm." },
+                  { icon: Lock, text: "Quyền gói được kích hoạt ngay sau khi backend xác nhận thanh toán." },
+                  { icon: RotateCcw, text: "Có thể nâng cấp lại bất cứ lúc nào bằng luồng checkout thật." },
+                ].map(({ icon: Icon, text }) => (
+                  <div key={text} className="flex items-start gap-2.5">
+                    <Icon className="mt-0.5 h-4 w-4 flex-shrink-0 text-green-500" />
+                    <span className="text-gray-600" style={{ fontSize: "0.84rem", lineHeight: 1.6 }}>{text}</span>
+                  </div>
+                ))}
+              </div>
             </div>
           </div>
         </div>

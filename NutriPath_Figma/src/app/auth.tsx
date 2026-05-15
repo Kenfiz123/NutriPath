@@ -25,6 +25,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [session, setSession] = useState<AuthSession | null>(() => getStoredSession());
 
   useEffect(() => {
+    const handleMemberUpdated = () => {
+      setSession(getStoredSession());
+    };
+
+    window.addEventListener("nutripath:member-updated", handleMemberUpdated);
+    return () => window.removeEventListener("nutripath:member-updated", handleMemberUpdated);
+  }, []);
+
+  useEffect(() => {
     if (!session?.token) return;
     let active = true;
 
@@ -84,7 +93,7 @@ export function RequireAuth({ children }: { children: ReactNode }) {
   const location = useLocation();
 
   if (!session) {
-    return <Navigate to="/login" replace state={{ from: location.pathname }} />;
+    return <Navigate to="/login" replace state={{ from: `${location.pathname}${location.search}` }} />;
   }
 
   return <>{children}</>;
