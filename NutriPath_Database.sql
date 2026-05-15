@@ -1,7 +1,7 @@
 /*
   NutriPath SQL Server schema + seed data
   Run with SQL Server Management Studio or:
-  sqlcmd -S localhost -E -i nutripath_sqlserver_seed.sql
+  sqlcmd -S localhost -E -i NutriPath_Database.sql
 */
 
 IF DB_ID(N'NutriPath') IS NULL
@@ -17,6 +17,7 @@ SET NOCOUNT ON;
 GO
 
 DROP TABLE IF EXISTS dbo.LoginActivity;
+DROP TABLE IF EXISTS dbo.AuthCredentials;
 DROP TABLE IF EXISTS dbo.AdminSecuritySettings;
 DROP TABLE IF EXISTS dbo.AdminAiSettings;
 DROP TABLE IF EXISTS dbo.AdminSystemServices;
@@ -100,6 +101,16 @@ CREATE TABLE dbo.Members (
   streak_days INT NOT NULL DEFAULT 0,
   CONSTRAINT FK_Members_ActivityLevels FOREIGN KEY (activity_level_id) REFERENCES dbo.ActivityLevels(id),
   CONSTRAINT FK_Members_Plans FOREIGN KEY (tier) REFERENCES dbo.Plans(id)
+);
+
+CREATE TABLE dbo.AuthCredentials (
+  id NVARCHAR(60) NOT NULL PRIMARY KEY,
+  member_id NVARCHAR(40) NOT NULL,
+  email NVARCHAR(255) NOT NULL UNIQUE,
+  password_hash NVARCHAR(255) NOT NULL,
+  password_salt NVARCHAR(255) NOT NULL,
+  created_at DATETIME2 NOT NULL DEFAULT SYSUTCDATETIME(),
+  CONSTRAINT FK_AuthCredentials_Members FOREIGN KEY (member_id) REFERENCES dbo.Members(id)
 );
 
 CREATE TABLE dbo.Subscriptions (
@@ -411,14 +422,14 @@ INSERT INTO dbo.WeeklyProgress (member_id, progress_date, day_label, consumed, t
 (N'mem-001', '2026-03-15', N'CN', 0, 1800);
 
 INSERT INTO dbo.Recipes (id, name, image_url, time_minutes, calories, difficulty, servings, protein, carbs, fat, fiber) VALUES
-(N'recipe-001', N'Phở Bò Tái Chín Truyền Thống', N'https://images.unsplash.com/photo-1719677775416-1dd6a93f1a73?w=400', 30, 380, 2, 2, 28, 48, 6, 2),
-(N'recipe-002', N'Cơm Tấm Sườn Nướng Bì Chả', N'https://images.unsplash.com/photo-1760888549075-0b9727e07735?w=400', 40, 520, 3, 2, 34, 58, 18, 2),
-(N'recipe-003', N'Bún Chả Hà Nội Chính Gốc', N'https://images.unsplash.com/photo-1587496579013-90f32e3ea9d5?w=400', 35, 420, 2, 2, 30, 52, 12, 4),
-(N'recipe-004', N'Cháo Gà Gừng Hành Bổ Dưỡng', N'https://images.unsplash.com/photo-1650562075965-4940a2cfbfe4?w=400', 45, 280, 1, 3, 22, 38, 5, 1),
-(N'recipe-005', N'Gỏi Cuốn Tôm Thịt Sốt Tương', N'https://images.unsplash.com/photo-1734771573616-7cb630b439bc?w=400', 25, 220, 2, 3, 18, 30, 4, 3),
-(N'recipe-006', N'Canh Chua Cá Lóc Miền Nam', N'https://images.unsplash.com/photo-1665116582773-51394e546f07?w=400', 30, 210, 2, 3, 26, 16, 4, 5),
-(N'recipe-007', N'Rau Muống Xào Tỏi Thơm Giòn', N'https://images.unsplash.com/photo-1594916107106-4837e3ed0e6e?w=400', 10, 120, 1, 2, 4, 10, 6, 4),
-(N'recipe-008', N'Đậu Phụ Sốt Cà Chua Hành Lá', N'https://images.unsplash.com/photo-1692296979410-0ef15ccebc62?w=400', 20, 195, 1, 2, 14, 12, 10, 3);
+(N'recipe-001', N'Phở Bò Tái Chín Truyền Thống', N'https://images.unsplash.com/photo-1719677775416-1dd6a93f1a73?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&w=400', 30, 380, 2, 2, 28, 48, 6, 2),
+(N'recipe-002', N'Cơm Tấm Sườn Nướng Bì Chả', N'https://images.unsplash.com/photo-1760888549075-0b9727e07735?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&w=400', 40, 520, 3, 2, 34, 58, 18, 2),
+(N'recipe-003', N'Bún Chả Hà Nội Chính Gốc', N'https://images.unsplash.com/photo-1587496579013-90f32e3ea9d5?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&w=400', 35, 420, 2, 2, 30, 52, 12, 4),
+(N'recipe-004', N'Cháo Gà Gừng Hành Bổ Dưỡng', N'https://images.unsplash.com/photo-1650562075965-4940a2cfbfe4?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&w=400', 45, 280, 1, 3, 22, 38, 5, 1),
+(N'recipe-005', N'Gỏi Cuốn Tôm Thịt Sốt Tương', N'https://images.unsplash.com/photo-1734771573616-7cb630b439bc?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&w=400', 25, 220, 2, 3, 18, 30, 4, 3),
+(N'recipe-006', N'Canh Chua Cá Lóc Miền Nam', N'https://images.unsplash.com/photo-1665116582773-51394e546f07?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&w=400', 30, 210, 2, 3, 26, 16, 4, 5),
+(N'recipe-007', N'Rau Muống Xào Tỏi Thơm Giòn', N'https://images.unsplash.com/photo-1594916107106-4837e3ed0e6e?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&w=400', 10, 120, 1, 2, 4, 10, 6, 4),
+(N'recipe-008', N'Đậu Phụ Sốt Cà Chua Hành Lá', N'https://images.unsplash.com/photo-1692296979410-0ef15ccebc62?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&w=400', 20, 195, 1, 2, 14, 12, 10, 3);
 
 INSERT INTO dbo.RecipeTags (recipe_id, tag) VALUES
 (N'recipe-001', N'High-protein'), (N'recipe-001', N'<30 mins'),

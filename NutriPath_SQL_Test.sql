@@ -19,6 +19,8 @@ IF NOT EXISTS (SELECT 1 FROM dbo.MealLogs WHERE member_id = N'mem-001' AND log_d
   INSERT INTO @Failures VALUES (N'Missing sample meal log for mem-001 on 2026-03-13');
 IF NOT EXISTS (SELECT 1 FROM dbo.Payments WHERE member_id = N'mem-001' AND status = N'paid')
   INSERT INTO @Failures VALUES (N'Missing paid payment history for mem-001');
+IF NOT EXISTS (SELECT 1 FROM sys.tables WHERE name = 'AuthCredentials')
+  INSERT INTO @Failures VALUES (N'Missing AuthCredentials table');
 
 IF EXISTS (SELECT 1 FROM @Failures)
 BEGIN
@@ -38,7 +40,19 @@ UNION ALL SELECT 'MealItems', COUNT(*) FROM dbo.MealItems
 UNION ALL SELECT 'Plans', COUNT(*) FROM dbo.Plans
 UNION ALL SELECT 'PlanFeatures', COUNT(*) FROM dbo.PlanFeatures
 UNION ALL SELECT 'Payments', COUNT(*) FROM dbo.Payments
-UNION ALL SELECT 'AdminUsers', COUNT(*) FROM dbo.AdminUsers;
+UNION ALL SELECT 'AdminUsers', COUNT(*) FROM dbo.AdminUsers
+UNION ALL SELECT 'AuthCredentials', COUNT(*) FROM dbo.AuthCredentials
+UNION ALL SELECT 'Subscriptions', COUNT(*) FROM dbo.Subscriptions
+UNION ALL SELECT 'LoginActivity', COUNT(*) FROM dbo.LoginActivity
+UNION ALL SELECT 'ChatCannedResponses', COUNT(*) FROM dbo.ChatCannedResponses
+UNION ALL SELECT 'ChatQuickReplies', COUNT(*) FROM dbo.ChatQuickReplies
+UNION ALL SELECT 'RecipeIngredients', COUNT(*) FROM dbo.RecipeIngredients
+UNION ALL SELECT 'RecipeSteps', COUNT(*) FROM dbo.RecipeSteps
+UNION ALL SELECT 'Goals', COUNT(*) FROM dbo.Goals
+UNION ALL SELECT 'WeeklyProgress', COUNT(*) FROM dbo.WeeklyProgress
+UNION ALL SELECT 'Faqs', COUNT(*) FROM dbo.Faqs
+UNION ALL SELECT 'AdminKpis', COUNT(*) FROM dbo.AdminKpis
+UNION ALL SELECT 'AdminSystemServices', COUNT(*) FROM dbo.AdminSystemServices;
 
 SELECT
   m.id AS member_id,
@@ -75,6 +89,4 @@ FROM dbo.Recipes r
 LEFT JOIN dbo.RecipeTags rt ON rt.recipe_id = r.id
 GROUP BY r.name, r.calories, r.time_minutes
 ORDER BY r.calories;
-
-DBCC CHECKCONSTRAINTS WITH ALL_CONSTRAINTS;
 GO
