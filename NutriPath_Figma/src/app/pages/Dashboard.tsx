@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+﻿import { useEffect, useState } from "react";
 import { Link } from "react-router";
 import {
   Plus, MessageCircle, Search, Droplets, Flame, TrendingUp, Target, Apple,
@@ -10,70 +10,24 @@ import {
 } from "recharts";
 import { getDashboard, updateWater, type DashboardData } from "../api";
 
-const calorieData = [{ name: "Consumed", value: 1340, fill: "#16a34a" }, { name: "Remaining", value: 460, fill: "#dcfce7" }];
-
-const weeklyData = [
-  { day: "T2", consumed: 1620, target: 1800 },
-  { day: "T3", consumed: 1880, target: 1800 },
-  { day: "T4", consumed: 1420, target: 1800 },
-  { day: "T5", consumed: 1750, target: 1800 },
-  { day: "T6", consumed: 1340, target: 1800 },
-  { day: "T7", consumed: 0, target: 1800 },
-  { day: "CN", consumed: 0, target: 1800 },
-];
-
-const meals = [
-  {
-    type: "Bữa sáng",
-    time: "07:30",
-    icon: "🌅",
-    kcal: 450,
-    items: ["Cháo gà gừng 1 tô (280 kcal)", "Trứng luộc 1 quả (80 kcal)", "Dưa cải muối (90 kcal)"],
-    color: "bg-yellow-50",
-    border: "border-yellow-200",
-    iconBg: "bg-yellow-100",
-  },
-  {
-    type: "Bữa trưa",
-    time: "12:00",
-    icon: "☀️",
-    kcal: 620,
-    items: ["Cơm gạo lứt 1 chén (216 kcal)", "Thịt gà luộc 100g (165 kcal)", "Canh rau muống (95 kcal)", "Đậu phụ sốt cà chua (144 kcal)"],
-    color: "bg-green-50",
-    border: "border-green-200",
-    iconBg: "bg-green-100",
-  },
-  {
-    type: "Bữa tối",
-    time: "18:30",
-    icon: "🌙",
-    kcal: 270,
-    items: ["Canh chua cá lóc (210 kcal)", "Rau muống xào tỏi (120 kcal... 1/2 phần)"],
-    color: "bg-blue-50",
-    border: "border-blue-200",
-    iconBg: "bg-blue-100",
-  },
-];
-
-const macros = [
-  { name: "Protein", current: 82, target: 120, color: "#16a34a", unit: "g" },
-  { name: "Carbs", current: 175, target: 220, color: "#3b82f6", unit: "g" },
-  { name: "Chất béo", current: 45, target: 60, color: "#f59e0b", unit: "g" },
-];
-
 const quickActions = [
-  { label: "Thêm Bữa Ăn", icon: Plus, color: "bg-green-600 text-white hover:bg-green-700", link: "/tracker" },
+  { label: "Thêm bữa ăn", icon: Plus, color: "bg-green-600 text-white hover:bg-green-700", link: "/tracker" },
   { label: "Chat với AI", icon: MessageCircle, color: "bg-emerald-50 text-emerald-700 hover:bg-emerald-100 border border-emerald-200", link: "/" },
-  { label: "Tìm Công Thức", icon: Search, color: "bg-orange-50 text-orange-700 hover:bg-orange-100 border border-orange-200", link: "/recipes" },
+  { label: "Tìm công thức", icon: Search, color: "bg-orange-50 text-orange-700 hover:bg-orange-100 border border-orange-200", link: "/recipes" },
 ];
 
-const tips = [
-  "Uống 1 ly nước trước bữa ăn 30 phút để giảm lượng calo nạp vào",
-  "Ăn chậm, nhai kỹ giúp cơ thể nhận tín hiệu no đúng lúc",
-  "Bổ sung rau xanh vào mỗi bữa ăn để tăng chất xơ",
-];
-
-const WATER_TARGET = 8;
+function cleanDashboardText(value: string) {
+  return value
+    .replaceAll("Xin chÃ o", "Xin chào")
+    .replaceAll("Xin chÃ o", "Xin chào")
+    .replaceAll("Dá»¯ liá»‡u Ä‘Æ°á»£c táº£i tá»« backend", "Dữ liệu được tải từ backend")
+    .replaceAll("Báº¯t Ä‘áº§u chuá»—i ghi bá»¯a", "Bắt đầu chuỗi ghi bữa")
+    .replaceAll("ThÃªm bá»¯a Äƒn hÃ´m nay Ä‘á»ƒ táº¡o chuá»—i má»›i", "Thêm bữa ăn hôm nay để tạo chuỗi mới")
+    .replaceAll("ly nÆ°á»›c", "ly nước")
+    .replaceAll("Tiáº¿n Ä‘á»™ nÆ°á»›c hÃ´m nay", "Tiến độ nước hôm nay")
+    .replaceAll("kcal cÃ²n láº¡i", "kcal còn lại")
+    .replaceAll("ChÆ°a cÃ³ calo tá»« bá»¯a Äƒn hÃ´m nay", "Chưa có calo từ bữa ăn hôm nay");
+}
 
 export function Dashboard() {
   const [dashboard, setDashboard] = useState<DashboardData | null>(null);
@@ -82,13 +36,31 @@ export function Dashboard() {
   const [waterGlasses, setWaterGlasses] = useState(5);
 
   useEffect(() => {
-    getDashboard()
+    let active = true;
+    const loadDashboard = () => {
+      setError(null);
+      return getDashboard()
       .then((data) => {
+        if (!active) return;
         setDashboard(data);
         setWaterGlasses(data.mealLog.waterGlasses);
       })
-      .catch((err) => setError(err instanceof Error ? err.message : "Không tải được dữ liệu dashboard"))
-      .finally(() => setLoading(false));
+      .catch((err) => {
+        if (!active) return;
+        setError(err instanceof Error ? err.message : "Không tải được dữ liệu dashboard");
+      })
+      .finally(() => {
+        if (active) setLoading(false);
+      });
+    };
+
+    loadDashboard();
+    window.addEventListener("nutripath:member-updated", loadDashboard);
+
+    return () => {
+      active = false;
+      window.removeEventListener("nutripath:member-updated", loadDashboard);
+    };
   }, []);
 
   if (loading) {
@@ -113,7 +85,9 @@ export function Dashboard() {
   };
   const totalConsumed = dashboard.nutrition.totals.calories;
   const calorieTarget = dashboard.nutrition.targets.calories;
-  const pct = Math.round((totalConsumed / calorieTarget) * 100);
+  const pct = calorieTarget > 0 ? Math.round((totalConsumed / calorieTarget) * 100) : 0;
+  const remainingCalories = dashboard.nutrition.remainingCalories;
+  const waterTarget = dashboard.nutrition.targets.waterGlasses;
   const weeklyData = dashboard.weeklyProgress;
   const meals = dashboard.mealLog.meals
     .filter((meal) => meal.items.length > 0)
@@ -133,6 +107,7 @@ export function Dashboard() {
   const tips = dashboard.tips;
   const activity = dashboard.mealLog.activity;
   const goals = dashboard.mealLog.goals;
+  const greeting = cleanDashboardText(dashboard.greeting);
 
   return (
     <div className="bg-gray-50 min-h-screen">
@@ -140,7 +115,7 @@ export function Dashboard() {
         {/* Page Header */}
         <div className="flex items-center justify-between mb-8">
           <div>
-            <h1 className="text-gray-900" style={{ fontSize: "1.6rem", fontWeight: 800 }}>{dashboard.greeting} 👋</h1>
+            <h1 className="text-gray-900" style={{ fontSize: "1.6rem", fontWeight: 800 }}>{greeting} 👋</h1>
             <p className="text-gray-500 mt-1" style={{ fontSize: "0.9rem" }}>{dashboard.date} • Dữ liệu được tải từ backend</p>
           </div>
           <div className="flex items-center gap-3">
@@ -184,11 +159,11 @@ export function Dashboard() {
               </div>
               <div className="grid grid-cols-2 gap-3 mt-2">
                 <div className="bg-green-50 rounded-xl p-3 text-center">
-                  <p className="text-green-700" style={{ fontSize: "1.1rem", fontWeight: 700 }}>{calorieTarget - totalConsumed}</p>
+                  <p className="text-green-700" style={{ fontSize: "1.1rem", fontWeight: 700 }}>{remainingCalories}</p>
                   <p className="text-gray-500" style={{ fontSize: "0.72rem" }}>kcal còn lại</p>
                 </div>
                 <div className="bg-orange-50 rounded-xl p-3 text-center">
-                  <p className="text-orange-600" style={{ fontSize: "1.1rem", fontWeight: 700 }}>320</p>
+                  <p className="text-orange-600" style={{ fontSize: "1.1rem", fontWeight: 700 }}>{activity.burnedCalories}</p>
                   <p className="text-gray-500" style={{ fontSize: "0.72rem" }}>kcal đã đốt</p>
                 </div>
               </div>
@@ -205,7 +180,7 @@ export function Dashboard() {
                       <span className="text-gray-900" style={{ fontSize: "0.85rem", fontWeight: 600 }}>{m.current}/{m.target}{m.unit}</span>
                     </div>
                     <div className="w-full bg-gray-100 rounded-full h-2">
-                      <div className="h-2 rounded-full transition-all" style={{ width: `${(m.current / m.target) * 100}%`, backgroundColor: m.color }}></div>
+                      <div className="h-2 rounded-full transition-all" style={{ width: `${Math.min(100, (m.current / m.target) * 100)}%`, backgroundColor: m.color }}></div>
                     </div>
                   </div>
                 ))}
@@ -219,7 +194,7 @@ export function Dashboard() {
                 <Droplets className="w-5 h-5 text-blue-500" />
               </div>
               <div className="flex justify-center gap-2 flex-wrap mb-4">
-                {Array.from({ length: WATER_TARGET }).map((_, i) => (
+                {Array.from({ length: waterTarget }).map((_, i) => (
                   <button
                     key={i}
                     onClick={() => {
@@ -238,9 +213,9 @@ export function Dashboard() {
               </div>
               <div className="text-center">
                 <p className="text-gray-900" style={{ fontSize: "1.4rem", fontWeight: 800 }}>
-                  {waterGlasses} <span className="text-gray-400" style={{ fontSize: "1rem", fontWeight: 400 }}>/ {WATER_TARGET} ly</span>
+                  {waterGlasses} <span className="text-gray-400" style={{ fontSize: "1rem", fontWeight: 400 }}>/ {waterTarget} ly</span>
                 </p>
-                <p className="text-blue-500 mt-1" style={{ fontSize: "0.8rem" }}>{waterGlasses * 250}ml / {WATER_TARGET * 250}ml</p>
+                <p className="text-blue-500 mt-1" style={{ fontSize: "0.8rem" }}>{waterGlasses * 250}ml / {waterTarget * 250}ml</p>
               </div>
             </div>
 
@@ -250,7 +225,7 @@ export function Dashboard() {
                 <Zap className="w-4 h-4 text-green-600" />
                 <span className="text-green-700" style={{ fontSize: "0.85rem", fontWeight: 700 }}>Mẹo hôm nay</span>
               </div>
-              <p className="text-gray-700" style={{ fontSize: "0.85rem", lineHeight: 1.6 }}>{tips[0]}</p>
+              <p className="text-gray-700" style={{ fontSize: "0.85rem", lineHeight: 1.6 }}>{cleanDashboardText(tips[0] ?? "")}</p>
             </div>
           </div>
 
@@ -265,6 +240,19 @@ export function Dashboard() {
                 </Link>
               </div>
               <div className="space-y-4">
+                {meals.length === 0 && (
+                  <div className="rounded-2xl border border-dashed border-gray-200 bg-gray-50 p-8 text-center">
+                    <Apple className="mx-auto mb-3 h-8 w-8 text-green-500" />
+                    <p className="text-gray-900" style={{ fontSize: "0.95rem", fontWeight: 700 }}>Hôm nay chưa có bữa ăn nào</p>
+                    <p className="mx-auto mt-2 max-w-sm text-gray-500" style={{ fontSize: "0.86rem", lineHeight: 1.6 }}>
+                      Thêm món ở Meal Tracker để dashboard cập nhật calo, macro và tiến trình tuần theo dữ liệu thật.
+                    </p>
+                    <Link to="/tracker" className="mt-4 inline-flex items-center gap-2 rounded-xl bg-green-600 px-4 py-2.5 text-white hover:bg-green-700" style={{ fontSize: "0.86rem", fontWeight: 700 }}>
+                      <Plus className="h-4 w-4" />
+                      Thêm bữa ăn
+                    </Link>
+                  </div>
+                )}
                 {meals.map((meal) => (
                   <div key={meal.type} className={`${meal.color} border ${meal.border} rounded-2xl p-4`}>
                     <div className="flex items-center justify-between mb-3">
@@ -368,8 +356,8 @@ export function Dashboard() {
                   <div key={achievement.id} className={`flex items-center gap-3 p-3 rounded-xl ${index === 0 ? "bg-yellow-50" : index === 1 ? "bg-green-50" : "bg-blue-50"}`}>
                     <span className="text-2xl">{index === 0 ? "🔥" : index === 1 ? "💧" : "🎯"}</span>
                     <div>
-                      <p className="text-gray-900" style={{ fontSize: "0.9rem", fontWeight: 700 }}>{achievement.label}</p>
-                      <p className="text-gray-500" style={{ fontSize: "0.75rem" }}>{achievement.description}</p>
+                      <p className="text-gray-900" style={{ fontSize: "0.9rem", fontWeight: 700 }}>{cleanDashboardText(achievement.label)}</p>
+                      <p className="text-gray-500" style={{ fontSize: "0.75rem" }}>{cleanDashboardText(achievement.description)}</p>
                     </div>
                   </div>
                 ))}
@@ -388,7 +376,7 @@ export function Dashboard() {
                     <div className={`w-5 h-5 rounded-full flex items-center justify-center flex-shrink-0 ${goal.done ? "bg-white" : "bg-white/20 border-2 border-white/30"}`}>
                       {goal.done && <Check className="w-3 h-3 text-green-600" />}
                     </div>
-                    <span className={goal.done ? "text-white" : "text-green-200"} style={{ fontSize: "0.85rem" }}>{goal.label}</span>
+                    <span className={goal.done ? "text-white" : "text-green-200"} style={{ fontSize: "0.85rem" }}>{cleanDashboardText(goal.label)}</span>
                   </div>
                 ))}
               </div>

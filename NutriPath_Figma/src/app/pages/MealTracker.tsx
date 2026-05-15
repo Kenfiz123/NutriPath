@@ -38,9 +38,10 @@ export function MealTracker() {
   const [showFoodSearch, setShowFoodSearch] = useState(false);
   const [activeMealId, setActiveMealId] = useState("");
   const [searchQuery, setSearchQuery] = useState("");
-  const [currentDate, setCurrentDate] = useState(new Date(2026, 2, 13));
+  const [currentDate, setCurrentDate] = useState(new Date());
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [saveStatus, setSaveStatus] = useState<"idle" | "saving" | "saved" | "error">("idle");
 
   const dateKey = toIsoDate(currentDate);
 
@@ -50,6 +51,7 @@ export function MealTracker() {
       .then((data) => {
         setMealLog(data);
         setError(null);
+        setSaveStatus("saved");
       })
       .catch((err) => setError(err instanceof Error ? err.message : "Không tải được nhật ký bữa ăn"))
       .finally(() => setLoading(false));
@@ -83,22 +85,45 @@ export function MealTracker() {
 
   const handleAddFood = async (food: Food) => {
     if (!activeMealId) return;
-    const updated = await addMealItem(dateKey, activeMealId, food.id);
-    setMealLog(updated);
-    setShowFoodSearch(false);
-    setSearchQuery("");
+    setSaveStatus("saving");
+    try {
+      const updated = await addMealItem(dateKey, activeMealId, food.id);
+      setMealLog(updated);
+      setShowFoodSearch(false);
+      setSearchQuery("");
+      setSaveStatus("saved");
+    } catch (err) {
+      setSaveStatus("error");
+      setError(err instanceof Error ? err.message : "Không lưu được món ăn");
+    }
   };
 
   const handleRemoveFood = async (mealId: string, itemId: string) => {
-    const updated = await deleteMealItem(dateKey, mealId, itemId);
-    setMealLog(updated);
+    setSaveStatus("saving");
+    try {
+      const updated = await deleteMealItem(dateKey, mealId, itemId);
+      setMealLog(updated);
+      setSaveStatus("saved");
+    } catch (err) {
+      setSaveStatus("error");
+      setError(err instanceof Error ? err.message : "Không xóa được món ăn");
+    }
   };
 
   const handleWater = async (next: number) => {
     if (!mealLog) return;
+    const previous = mealLog;
+    setSaveStatus("saving");
     setMealLog({ ...mealLog, waterGlasses: next });
-    const updated = await updateWater(dateKey, next);
-    setMealLog(updated);
+    try {
+      const updated = await updateWater(dateKey, next);
+      setMealLog(updated);
+      setSaveStatus("saved");
+    } catch (err) {
+      setMealLog(previous);
+      setSaveStatus("error");
+      setError(err instanceof Error ? err.message : "Không lưu được lượng nước");
+    }
   };
 
   if (loading) {
@@ -109,12 +134,28 @@ export function MealTracker() {
     return <div className="bg-gray-50 min-h-screen p-8 text-red-600">{error ?? "Không có dữ liệu nhật ký"}</div>;
   }
 
+  const saveStatusText = {
+    idle: "Tự động lưu",
+    saving: "Đang lưu...",
+    saved: "Đã lưu tự động",
+    error: "Lưu thất bại",
+  }[saveStatus];
+
   return (
     <div className="bg-gray-50 min-h-screen">
       <div className="max-w-[1440px] mx-auto px-8 py-8">
         <div className="mb-6">
           <h1 className="text-gray-900 mb-1" style={{ fontSize: "1.6rem", fontWeight: 800 }}>Nhật Ký Bữa Ăn</h1>
           <p className="text-gray-500" style={{ fontSize: "0.9rem" }}>Dữ liệu lấy từ backend theo ngày bạn chọn</p>
+        </div>
+
+        <div className="mb-4 flex justify-end">
+          <div className={`flex items-center gap-2 rounded-xl border px-3 py-2 ${
+            saveStatus === "error" ? "border-red-200 bg-red-50 text-red-600" : "border-green-200 bg-green-50 text-green-700"
+          }`} style={{ fontSize: "0.82rem", fontWeight: 700 }}>
+            <Check className="w-4 h-4" />
+            {saveStatusText}
+          </div>
         </div>
 
         <div className="bg-white rounded-2xl p-5 shadow-sm border border-gray-100 mb-6">

@@ -35,6 +35,7 @@ export function Navbar({ isLanding = false }: NavbarProps) {
   const { session, logout } = useAuth();
   const [mobileOpen, setMobileOpen] = useState(false);
   const member = session?.member;
+  const canAccessAdmin = member?.role?.toLowerCase() === "admin";
 
   const navBg = isLanding
     ? "bg-transparent absolute top-0 left-0 right-0 z-50"
@@ -89,14 +90,16 @@ export function Navbar({ isLanding = false }: NavbarProps) {
             <Crown className="w-4 h-4" />
             SVIP
           </Link>
-          <Link
-            to="/admin"
-            className={`flex items-center gap-1.5 px-3 py-2 rounded-lg transition-all ${linkColor}`}
-            style={{ fontSize: "0.875rem", fontWeight: 500 }}
-          >
-            <ShieldCheck className="w-4 h-4" />
-            Admin
-          </Link>
+          {canAccessAdmin && (
+            <Link
+              to="/admin"
+              className={`flex items-center gap-1.5 px-3 py-2 rounded-lg transition-all ${linkColor}`}
+              style={{ fontSize: "0.875rem", fontWeight: 500 }}
+            >
+              <ShieldCheck className="w-4 h-4" />
+              Admin
+            </Link>
+          )}
 
           {member ? (
             <>
@@ -144,15 +147,6 @@ export function Navbar({ isLanding = false }: NavbarProps) {
             </>
           )}
 
-          {isLanding && member && (
-            <Link
-              to="/dashboard"
-              className="ml-2 bg-white text-green-700 px-4 py-2 rounded-xl transition-all hover:bg-green-50"
-              style={{ fontSize: "0.875rem", fontWeight: 700 }}
-            >
-              Vào Dashboard
-            </Link>
-          )}
         </div>
 
         <button
@@ -185,14 +179,16 @@ export function Navbar({ isLanding = false }: NavbarProps) {
             <Crown className="w-4 h-4" />
             SVIP
           </Link>
-          <Link
-            to="/admin"
-            className={`flex items-center gap-2 py-2.5 ${isLanding ? "text-white" : "text-gray-700"}`}
-            onClick={() => setMobileOpen(false)}
-          >
-            <ShieldCheck className="w-4 h-4" />
-            Admin
-          </Link>
+          {canAccessAdmin && (
+            <Link
+              to="/admin"
+              className={`flex items-center gap-2 py-2.5 ${isLanding ? "text-white" : "text-gray-700"}`}
+              onClick={() => setMobileOpen(false)}
+            >
+              <ShieldCheck className="w-4 h-4" />
+              Admin
+            </Link>
+          )}
           <div className={`mt-3 pt-3 border-t ${isLanding ? "border-white/20" : "border-gray-100"}`}>
             {member ? (
               <>

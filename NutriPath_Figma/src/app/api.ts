@@ -1,6 +1,13 @@
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? "http://127.0.0.1:8080";
 const SESSION_KEY = "nutripath_session";
 
+function getLocalDateString(date = new Date()) {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
 type RequestBody = Record<string, unknown> | unknown[];
 
 export interface AuthSession {
@@ -78,6 +85,8 @@ export interface Member {
   name: string;
   email: string;
   initials: string;
+  role?: "member" | "admin" | "moderator";
+  status?: string;
   tier: "free" | "vip" | "svip";
   joinedAt: string;
   calorieTarget: number;
@@ -222,6 +231,22 @@ export interface Payment {
   paidAt: string;
 }
 
+export interface ChatMessage {
+  id: string;
+  sender: "user" | "ai";
+  text: string;
+  time: string;
+}
+
+export interface ChatResponse {
+  messages: ChatMessage[];
+  quickReplies: string[];
+  adminOverride?: boolean;
+  intent?: "set_calorie_goal" | "reject_calorie_goal";
+  dailyCalorieGoal?: number;
+  member?: Member;
+}
+
 export function login(email: string, password: string) {
   return apiFetch<AuthSession>("/api/auth/login", {
     method: "POST",
@@ -246,7 +271,7 @@ export function logout() {
   return apiFetch<{ loggedOut: boolean }>("/api/auth/logout", { method: "POST" });
 }
 
-export function getDashboard(date = "2026-03-13") {
+export function getDashboard(date = getLocalDateString()) {
   return apiFetch<DashboardData>(`/api/members/${getCurrentMemberId()}/dashboard?date=${encodeURIComponent(date)}`);
 }
 
@@ -300,10 +325,16 @@ export function getProfile() {
 
 export function sendChatMessage(text: string) {
   const memberId = getStoredSession()?.member.id;
-  return apiFetch<{ messages: Array<{ id: string; sender: "user" | "ai"; text: string; time: string }>; quickReplies: string[] }>("/api/chat/messages", {
+  return apiFetch<ChatResponse>("/api/chat/messages", {
     method: "POST",
     body: memberId ? { memberId, text } : { text },
   });
+}
+
+export function getChatHistory() {
+  const memberId = getStoredSession()?.member.id;
+  const query = memberId ? `?memberId=${encodeURIComponent(memberId)}` : "";
+  return apiFetch<{ messages: ChatMessage[]; quickReplies: string[] }>(`/api/chat/history${query}`);
 }
 
 export function getQuickReplies() {

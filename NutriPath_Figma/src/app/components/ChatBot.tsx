@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from "react";
 import { MessageCircle, X, Send, Mic, Bot, User } from "lucide-react";
-import { getQuickReplies, sendChatMessage } from "../api";
+import { getChatHistory, getQuickReplies, getStoredSession, sendChatMessage, setStoredSession } from "../api";
 
 interface Message {
   id: string;
@@ -13,7 +13,7 @@ const initialMessages: Message[] = [
   {
     id: "welcome",
     sender: "ai",
-    text: "Xin chào! Tôi là NutriBot 🌿 Tôi có thể giúp bạn tính calo, gợi ý công thức nấu ăn, và lên kế hoạch dinh dưỡng. Hôm nay bạn cần giúp gì?",
+    text: "Xin chào! Tôi là NutriBot 🌿 Tôi có thể giúp bạn tính calo, gợi ý công thức nấu ăn và lên kế hoạch dinh dưỡng. Hôm nay bạn cần giúp gì?",
     time: "09:00",
   },
 ];
@@ -33,6 +33,12 @@ function TypingIndicator() {
       </div>
     </div>
   );
+}
+
+function formatMessageTime(value: string) {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return value;
+  return date.toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit" });
 }
 
 export function ChatBot() {
@@ -55,6 +61,18 @@ export function ChatBot() {
     getQuickReplies()
       .then((data) => setQuickReplies(data.quickReplies))
       .catch(() => setQuickReplies([]));
+
+    getChatHistory()
+      .then((data) => {
+        if (data.quickReplies?.length) setQuickReplies(data.quickReplies);
+        if (data.messages?.length) {
+          setMessages(data.messages.map((message) => ({
+            ...message,
+            time: formatMessageTime(message.time),
+          })));
+        }
+      })
+      .catch(() => undefined);
   }, []);
 
   const sendMessage = async (text: string) => {
@@ -72,21 +90,33 @@ export function ChatBot() {
 
     try {
       const data = await sendChatMessage(text);
+      if (data.member) {
+        const session = getStoredSession();
+        if (session) {
+          setStoredSession({ ...session, member: data.member });
+        }
+        window.dispatchEvent(new CustomEvent("nutripath:member-updated", { detail: { member: data.member } }));
+      }
+      const userEcho = data.messages.find((message) => message.sender === "user");
       const ai = data.messages.find((message) => message.sender === "ai");
       const aiMsg: Message = {
         id: ai?.id ?? `ai-${Date.now()}`,
         sender: "ai",
         text: ai?.text ?? "Tôi chưa nhận được phản hồi từ hệ thống.",
-        time: new Date(ai?.time ?? Date.now()).toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit" }),
+        time: formatMessageTime(ai?.time ?? new Date().toISOString()),
       };
       setIsTyping(false);
-      setMessages((prev) => [...prev, aiMsg]);
-    } catch {
+      setMessages((prev) => [
+        ...prev.map((message) => (message.id === userMsg.id && userEcho ? { ...message, text: userEcho.text } : message)),
+        aiMsg,
+      ]);
+    } catch (error) {
       setIsTyping(false);
+      const message = error instanceof Error ? error.message : "Mình chưa kết nối được NutriBot API. Bạn kiểm tra backend ở cổng 8080 nhé.";
       setMessages((prev) => [...prev, {
         id: `ai-error-${Date.now()}`,
         sender: "ai",
-        text: "Mình chưa kết nối được NutriBot API. Bạn kiểm tra backend ở cổng 8080 nhé.",
+        text: message,
         time: new Date().toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit" }),
       }]);
     }
@@ -105,7 +135,7 @@ export function ChatBot() {
       {isOpen && (
         <div
           className="fixed bottom-24 right-6 z-50 flex flex-col bg-white rounded-2xl shadow-2xl border border-gray-100 overflow-hidden"
-          style={{ width: "380px", height: "560px" }}
+          style={{ width: "min(380px, calc(100vw - 32px))", height: "min(560px, calc(100vh - 120px))" }}
         >
           {/* Header */}
           <div className="bg-gradient-to-r from-green-600 to-emerald-500 px-4 py-3 flex items-center justify-between">
@@ -123,6 +153,7 @@ export function ChatBot() {
             </div>
             <button
               onClick={() => setIsOpen(false)}
+              aria-label="Đóng NutriBot"
               className="p-1.5 rounded-full hover:bg-white/20 text-white transition-colors"
             >
               <X className="w-5 h-5" />
@@ -191,13 +222,14 @@ export function ChatBot() {
                 className="flex-1 bg-transparent outline-none text-gray-700 placeholder-gray-400"
                 style={{ fontSize: "0.875rem" }}
               />
-              <button className="text-gray-400 hover:text-green-600 transition-colors">
+              <button className="text-gray-400 hover:text-green-600 transition-colors" aria-label="Ghi âm">
                 <Mic className="w-4 h-4" />
               </button>
             </div>
             <button
               onClick={() => sendMessage(inputText)}
               disabled={!inputText.trim()}
+              aria-label="Gửi tin nhắn"
               className="w-9 h-9 rounded-full bg-green-600 text-white flex items-center justify-center hover:bg-green-700 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
             >
               <Send className="w-4 h-4" />
@@ -209,6 +241,7 @@ export function ChatBot() {
       {/* FAB Button */}
       <button
         onClick={() => setIsOpen(!isOpen)}
+        aria-label={isOpen ? "Đóng NutriBot" : "Mở NutriBot"}
         className={`fixed bottom-6 right-6 z-50 w-14 h-14 rounded-full shadow-lg flex items-center justify-center transition-all hover:scale-110 ${
           isOpen ? "bg-gray-700" : "bg-gradient-to-br from-green-500 to-emerald-600"
         }`}

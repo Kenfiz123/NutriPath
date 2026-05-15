@@ -117,6 +117,67 @@ VALUES (${sqlLiteral(credential.id)}, ${sqlLiteral(credential.memberId)}, ${sqlL
 `);
 }
 
+export async function updateSqlServerMemberCalorieGoal(memberId, dailyCalorieGoal) {
+  const database = process.env.NUTRIPATH_SQL_DATABASE || "NutriPath";
+  await execSql(database, `
+UPDATE dbo.Members
+SET calorie_target = ${sqlLiteral(dailyCalorieGoal)}
+WHERE id = ${sqlLiteral(memberId)};
+`);
+}
+
+function sqlTimeLiteral(value) {
+  return sqlLiteral(value || "00:00");
+}
+
+export async function saveSqlServerMealLog(log) {
+  const database = process.env.NUTRIPATH_SQL_DATABASE || "NutriPath";
+  await execSql(database, `
+BEGIN TRANSACTION;
+
+MERGE dbo.MealLogs AS target
+USING (
+  SELECT ${sqlLiteral(log.id)} AS id, ${sqlLiteral(log.memberId)} AS member_id, ${sqlLiteral(log.date)} AS log_date,
+    ${sqlLiteral(log.waterGlasses || 0)} AS water_glasses,
+    ${sqlLiteral(log.activity?.steps || 0)} AS steps,
+    ${sqlLiteral(log.activity?.burnedCalories || 0)} AS burned_calories,
+    ${sqlLiteral(log.activity?.activeMinutes || 0)} AS active_minutes
+) AS source
+ON target.id = source.id
+WHEN MATCHED THEN UPDATE SET
+  member_id = source.member_id,
+  log_date = source.log_date,
+  water_glasses = source.water_glasses,
+  steps = source.steps,
+  burned_calories = source.burned_calories,
+  active_minutes = source.active_minutes
+WHEN NOT MATCHED THEN INSERT (id, member_id, log_date, water_glasses, steps, burned_calories, active_minutes)
+  VALUES (source.id, source.member_id, source.log_date, source.water_glasses, source.steps, source.burned_calories, source.active_minutes);
+
+DELETE FROM dbo.MealItems WHERE meal_log_id = ${sqlLiteral(log.id)};
+DELETE FROM dbo.Goals WHERE meal_log_id = ${sqlLiteral(log.id)};
+DELETE FROM dbo.MealSections WHERE meal_log_id = ${sqlLiteral(log.id)};
+
+${(log.meals || []).map((meal) => `
+INSERT INTO dbo.MealSections (id, meal_log_id, name, icon, target_kcal, meal_time)
+VALUES (${sqlLiteral(meal.id)}, ${sqlLiteral(log.id)}, ${sqlLiteral(meal.name)}, ${sqlLiteral(meal.icon)}, ${sqlLiteral(meal.targetKcal || 0)}, ${sqlTimeLiteral(meal.time)});
+${(meal.items || []).map((item) => `
+INSERT INTO dbo.MealItems (id, meal_log_id, meal_section_id, food_id, name, calories, protein, carbs, fat, portion, quantity)
+VALUES (${sqlLiteral(item.id)}, ${sqlLiteral(log.id)}, ${sqlLiteral(meal.id)}, ${sqlLiteral(item.foodId)}, ${sqlLiteral(item.name)},
+  ${sqlLiteral(item.calories || 0)}, ${sqlLiteral(item.protein || 0)}, ${sqlLiteral(item.carbs || 0)}, ${sqlLiteral(item.fat || 0)},
+  ${sqlLiteral(item.portion || "1 phần")}, ${sqlLiteral(item.quantity || 1)});
+`).join("\n")}
+`).join("\n")}
+
+${(log.goals || []).map((goal) => `
+INSERT INTO dbo.Goals (id, meal_log_id, label, done)
+VALUES (${sqlLiteral(goal.id)}, ${sqlLiteral(log.id)}, ${sqlLiteral(goal.label)}, ${goal.done ? 1 : 0});
+`).join("\n")}
+
+COMMIT TRANSACTION;
+`);
+}
+
 function byId(items) {
   return new Map(items.map((item) => [item.id, item]));
 }

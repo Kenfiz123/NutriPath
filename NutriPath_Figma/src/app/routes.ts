@@ -1,7 +1,7 @@
 import { createBrowserRouter } from "react-router";
 import { createElement, type ComponentType } from "react";
 import { Root } from "./components/layout/Root";
-import { RequireAuth } from "./auth";
+import { RequireAdmin, RequireAuth } from "./auth";
 import { LandingPage } from "./pages/LandingPage";
 import { Dashboard } from "./pages/Dashboard";
 import { CalorieCalculator } from "./pages/CalorieCalculator";
@@ -21,11 +21,17 @@ function protectedComponent(Component: ComponentType) {
   };
 }
 
+function adminComponent(Component: ComponentType) {
+  return function AdminPage() {
+    return createElement(RequireAdmin, null, createElement(Component));
+  };
+}
+
 const ProtectedDashboard = protectedComponent(Dashboard);
 const ProtectedMealTracker = protectedComponent(MealTracker);
 const ProtectedCheckout = protectedComponent(Checkout);
 const ProtectedMemberProfile = protectedComponent(MemberProfile);
-const ProtectedAdmin = protectedComponent(Admin);
+const ProtectedAdmin = adminComponent(Admin);
 
 export const router = createBrowserRouter([
   {
