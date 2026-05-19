@@ -299,6 +299,37 @@ export interface RecipeCollectionMeta {
   };
 }
 
+export interface PersonalizedRecipe extends Omit<Recipe, "ingredients"> {
+  memberId?: string;
+  savedAt?: string;
+  imagePrompt: string;
+  mealTime: string;
+  recommendedEatingTime: string;
+  ingredients: Array<{
+    name: string;
+    amount: string;
+    grams?: number | null;
+    note?: string;
+  }>;
+  notes: string[];
+  personalizationSummary: string;
+  generatedAt: string;
+  generatedBy: "ai";
+}
+
+export interface PersonalizedRecipeQuestion {
+  id: string;
+  label: string;
+  question: string;
+}
+
+export interface PersonalizedRecipeResponse {
+  status: "needs_questions" | "recipe";
+  message?: string;
+  questions?: PersonalizedRecipeQuestion[];
+  recipe?: PersonalizedRecipe;
+}
+
 export interface Plan {
   id: "free" | "vip" | "svip";
   name: string;
@@ -367,6 +398,138 @@ export interface ChatResponse {
   intent?: "set_calorie_goal" | "reject_calorie_goal";
   dailyCalorieGoal?: number;
   member?: Member;
+}
+
+export interface AdminKpi {
+  id: string;
+  label: string;
+  value: string | number;
+  change: string;
+}
+
+export interface AdminSystemService {
+  id?: string;
+  name: string;
+  status: string;
+  uptime: string;
+  latency?: string;
+  latencyMs?: number;
+}
+
+export interface AdminUser {
+  id: string;
+  memberId: string;
+  name: string;
+  email: string;
+  role: "User" | "Moderator" | "Admin";
+  status: string;
+  joined: string;
+  plan: string;
+  initials: string;
+  color: string;
+  calorieTarget: number;
+  aiConversations: number;
+  trackedCalories: number;
+}
+
+export interface AdminOverview {
+  kpis: AdminKpi[];
+  systemServices: AdminSystemService[];
+  recentUsers: AdminUser[];
+  roleBreakdown: Array<{ role: string; count: number }>;
+  tierBreakdown: Array<{ tier: string; count: number }>;
+  topRecipes: Array<{
+    rank: number;
+    id: string;
+    name: string;
+    calories: number;
+    tags: string[];
+    servings: number;
+  }>;
+}
+
+export interface AdminUsersResponse {
+  total: number;
+  count: number;
+  filters: {
+    search: string;
+    role: string;
+    status: string;
+  };
+  roleBreakdown: Array<{ role: string; count: number }>;
+  _embedded: {
+    users: AdminUser[];
+  };
+}
+
+export interface AdminContent {
+  foods: Food[];
+  recipes: Recipe[];
+  mealPlans: Array<{
+    id: string;
+    name: string;
+    target: string;
+    calories: number;
+    meals: number;
+    status: string;
+  }>;
+}
+
+export interface AdminAnalytics {
+  dailyMeals: Array<{ day: string; meals: number }>;
+  nutritionShare: Array<{ name: string; value: number }>;
+  topDishes: Array<{
+    rank: number;
+    dish: string;
+    searches: number;
+    calories: number;
+    category: string;
+  }>;
+}
+
+export interface AdminAiSettings {
+  model: string;
+  autoPortionRecommendation: boolean;
+  smartMealSuggestions: boolean;
+  nutritionValidation: boolean;
+  confidenceThreshold: number;
+  calorieFormula: string;
+}
+
+export interface AdminSecurity {
+  twoFactorEnabled: boolean;
+  passwordPolicy: {
+    minLength: number;
+    requireSpecialChar: boolean;
+    requireUppercase: boolean;
+    requireNumber: boolean;
+  };
+  loginActivity: Array<{
+    ip: string;
+    device: string;
+    location: string;
+    time: string;
+    status: string;
+  }>;
+}
+
+export interface AdminAiSafetyLog {
+  id: string;
+  time: string;
+  memberId?: string;
+  prompt?: string;
+  reason?: string;
+  ip?: string;
+}
+
+export interface CreateFoodPayload {
+  name: string;
+  category?: string;
+  calories: number;
+  protein: number;
+  carbs: number;
+  fat: number;
+  portion: string;
 }
 
 export function login(email: string, password: string) {
@@ -451,6 +614,19 @@ export function getRecipes(search = "", tag = "Tất cả") {
   return apiFetch<{ _embedded: { recipes: Recipe[] }; tags: string[]; access?: RecipeCollectionMeta["access"] }>(`/api/recipes${query ? `?${query}` : ""}`);
 }
 
+export function generatePersonalizedRecipe(payload: { prompt: string; answers?: Record<string, string> }) {
+  return apiFetch<PersonalizedRecipeResponse>("/api/ai/personalized-recipes", {
+    method: "POST",
+    body: payload,
+  });
+}
+
+export function getPersonalizedRecipes() {
+  return apiFetch<{ count: number; _embedded: { recipes: PersonalizedRecipe[] } }>(
+    `/api/members/${getCurrentMemberId()}/personalized-recipes`,
+  );
+}
+
 export function getPlans(billing: "monthly" | "annual") {
   return apiFetch<{ _embedded: { plans: Plan[] } }>(`/api/plans?billing=${billing}`);
 }
@@ -493,4 +669,72 @@ export function getChatHistory() {
 
 export function getQuickReplies() {
   return apiFetch<{ quickReplies: string[] }>("/api/chat/quick-replies");
+}
+
+export function getAdminOverview() {
+  return apiFetch<AdminOverview>("/api/admin/overview");
+}
+
+export function getAdminUsers(filters: { search?: string; role?: string; status?: string } = {}) {
+  const params = new URLSearchParams();
+  if (filters.search) params.set("search", filters.search);
+  if (filters.role && filters.role !== "Tất cả") params.set("role", filters.role);
+  if (filters.status && filters.status !== "Tất cả") params.set("status", filters.status);
+  const query = params.toString();
+  return apiFetch<AdminUsersResponse>(`/api/admin/users${query ? `?${query}` : ""}`);
+}
+
+
+export function getAdminContent() {
+  return apiFetch<AdminContent>("/api/admin/content");
+}
+
+export function getAdminAnalytics() {
+  return apiFetch<AdminAnalytics>("/api/admin/analytics");
+}
+
+export function getAdminAiSettings() {
+  return apiFetch<{ settings: AdminAiSettings }>("/api/admin/settings/ai");
+}
+
+export function updateAdminAiSettings(payload: Partial<AdminAiSettings>) {
+  return apiFetch<{ settings: AdminAiSettings }>("/api/admin/settings/ai", {
+    method: "PATCH",
+    body: payload,
+  });
+}
+
+export function getAdminSecurity() {
+  return apiFetch<{ security: AdminSecurity }>("/api/admin/security");
+}
+
+export function updateAdminSecurity(payload: Partial<AdminSecurity>) {
+  return apiFetch<{ security: AdminSecurity }>("/api/admin/security", {
+    method: "PATCH",
+    body: payload,
+  });
+}
+
+export function getAdminAiSafetyLogs() {
+  return apiFetch<{ logs: AdminAiSafetyLog[] }>("/api/admin/ai-safety-logs");
+}
+
+export function createFood(payload: CreateFoodPayload) {
+  return apiFetch<Food>("/api/foods", {
+    method: "POST",
+    body: payload,
+  });
+}
+
+export function updateFood(foodId: string, payload: Partial<CreateFoodPayload>) {
+  return apiFetch<Food>(`/api/foods/${foodId}`, {
+    method: "PATCH",
+    body: payload,
+  });
+}
+
+export function deleteFood(foodId: string) {
+  return apiFetch<{ deleted: string }>(`/api/foods/${foodId}`, {
+    method: "DELETE",
+  });
 }

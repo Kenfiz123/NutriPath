@@ -1,19 +1,34 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router";
-import { Search, X, Clock, Flame, Star, Filter, BookOpen, Users } from "lucide-react";
-import { getRecipes, type Recipe } from "../api";
+import { Search, X, Clock, Flame, Star, Filter, BookOpen, Users, Crown, Sparkles } from "lucide-react";
+import { generatePersonalizedRecipe, getPersonalizedRecipes, getRecipes, type PersonalizedRecipe, type PersonalizedRecipeQuestion, type Recipe } from "../api";
+import { useAuth } from "../auth";
+
+type DisplayRecipe = Recipe | PersonalizedRecipe;
 
 const difficultyLabels = ["", "Dễ", "Trung bình", "Khó"];
 
+function isPersonalizedRecipe(recipe: DisplayRecipe): recipe is PersonalizedRecipe {
+  return "generatedBy" in recipe;
+}
+
 export function Recipes() {
+  const { session } = useAuth();
   const [search, setSearch] = useState("");
   const [activeTag, setActiveTag] = useState("Tất cả");
   const [recipes, setRecipes] = useState<Recipe[]>([]);
+  const [savedAiRecipes, setSavedAiRecipes] = useState<PersonalizedRecipe[]>([]);
   const [tags, setTags] = useState<string[]>(["Tất cả"]);
-  const [selectedRecipe, setSelectedRecipe] = useState<Recipe | null>(null);
+  const [selectedRecipe, setSelectedRecipe] = useState<DisplayRecipe | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [recipeAccess, setRecipeAccess] = useState<{ tier: string; recipeLimit: number | null; totalAvailable: number; upgradeRequired: boolean } | null>(null);
+  const [aiPrompt, setAiPrompt] = useState("");
+  const [aiQuestions, setAiQuestions] = useState<PersonalizedRecipeQuestion[]>([]);
+  const [aiAnswers, setAiAnswers] = useState<Record<string, string>>({});
+  const [aiLoading, setAiLoading] = useState(false);
+  const [aiError, setAiError] = useState<string | null>(null);
+  const aiRecipeUnlocked = Boolean(session?.member?.access?.aiCoach || session?.member?.tier === "svip");
 
   useEffect(() => {
     setLoading(true);
@@ -28,6 +43,38 @@ export function Recipes() {
       .finally(() => setLoading(false));
   }, [search, activeTag]);
 
+  useEffect(() => {
+    if (!session?.member) {
+      setSavedAiRecipes([]);
+      return;
+    }
+    getPersonalizedRecipes()
+      .then((data) => setSavedAiRecipes(data._embedded.recipes))
+      .catch(() => setSavedAiRecipes([]));
+  }, [session?.member?.id]);
+
+
+  const handleGeneratePersonalizedRecipe = async () => {
+    setAiLoading(true);
+    setAiError(null);
+    try {
+      const data = await generatePersonalizedRecipe({ prompt: aiPrompt, answers: aiAnswers });
+      if (data.status === "needs_questions") {
+        setAiQuestions(data.questions ?? []);
+        return;
+      }
+      if (data.recipe) {
+        setAiQuestions([]);
+        setAiAnswers({});
+        setSavedAiRecipes((current) => [data.recipe as PersonalizedRecipe, ...current.filter((recipe) => recipe.id !== data.recipe?.id)]);
+        setSelectedRecipe(data.recipe);
+      }
+    } catch (err) {
+      setAiError(err instanceof Error ? err.message : "Không tạo được công thức cá nhân hóa");
+    } finally {
+      setAiLoading(false);
+    }
+  };
   return (
     <div className="bg-gray-50 min-h-screen">
       <div className="max-w-[1440px] mx-auto px-8 py-8">
@@ -79,6 +126,87 @@ export function Recipes() {
           </div>
         </div>
 
+        <div className="mb-8 overflow-hidden rounded-2xl border border-amber-200 bg-white shadow-sm">
+          <div className="bg-gradient-to-r from-amber-50 via-green-50 to-white p-5">
+            <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+              <div>
+                <div className="mb-3 inline-flex items-center gap-2 rounded-full border border-amber-200 bg-white px-3 py-1 text-amber-700" style={{ fontSize: "0.78rem", fontWeight: 800 }}>
+                  <Crown className="h-4 w-4" />
+                  SVIP AI Recipe
+                </div>
+                <h2 className="text-gray-900" style={{ fontSize: "1.15rem", fontWeight: 800 }}>Công Thức Cá Nhân Hóa Do AI Tạo Ra</h2>
+                <p className="mt-1 max-w-2xl text-gray-600" style={{ fontSize: "0.9rem", lineHeight: 1.6 }}>
+                  AI tạo công thức riêng cho mục tiêu, thời điểm ăn, nguyên liệu sẵn có, khối lượng từng món, macro và lưu ý an toàn.
+                </p>
+              </div>
+              {!aiRecipeUnlocked && (
+                <Link to="/checkout?plan=svip&billing=monthly" className="inline-flex items-center justify-center gap-2 rounded-xl bg-amber-500 px-4 py-2.5 text-white hover:bg-amber-600" style={{ fontSize: "0.86rem", fontWeight: 800 }}>
+                  <Sparkles className="h-4 w-4" />
+                  Mở khóa SVIP
+                </Link>
+              )}
+            </div>
+          </div>
+
+          {aiRecipeUnlocked ? (
+            <div className="p-5">
+              <textarea
+                value={aiPrompt}
+                onChange={(e) => setAiPrompt(e.target.value)}
+                rows={3}
+                className="w-full resize-none rounded-2xl border border-gray-200 bg-gray-50 p-4 text-gray-800 outline-none focus:border-green-500 focus:bg-white"
+                placeholder="Ví dụ: Tôi muốn bữa trưa giảm mỡ, nhiều protein, có ức gà và khoai lang, nấu trong 25 phút..."
+                style={{ fontSize: "0.92rem", lineHeight: 1.6 }}
+              />
+
+              {aiQuestions.length > 0 && (
+                <div className="mt-4 grid gap-3 md:grid-cols-2">
+                  {aiQuestions.map((question) => (
+                    <label key={question.id} className="block rounded-2xl border border-green-100 bg-green-50 p-4">
+                      <span className="block text-green-800" style={{ fontSize: "0.82rem", fontWeight: 800 }}>{question.label}</span>
+                      <span className="mt-1 block text-gray-600" style={{ fontSize: "0.8rem", lineHeight: 1.5 }}>{question.question}</span>
+                      <input
+                        value={aiAnswers[question.id] ?? ""}
+                        onChange={(e) => setAiAnswers((current) => ({ ...current, [question.id]: e.target.value }))}
+                        className="mt-3 w-full rounded-xl border border-green-100 bg-white px-3 py-2 text-gray-800 outline-none focus:border-green-500"
+                        style={{ fontSize: "0.86rem" }}
+                      />
+                    </label>
+                  ))}
+                </div>
+              )}
+
+              {aiError && (
+                <div className="mt-4 rounded-xl border border-red-100 bg-red-50 px-4 py-3 text-red-600" style={{ fontSize: "0.86rem", fontWeight: 600 }}>
+                  {aiError}
+                </div>
+              )}
+
+              <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                <p className="text-gray-500" style={{ fontSize: "0.8rem", lineHeight: 1.5 }}>
+                  Nếu thông tin chưa đủ, AI sẽ hỏi thêm vài câu trước khi tạo công thức.
+                </p>
+                <button
+                  type="button"
+                  onClick={handleGeneratePersonalizedRecipe}
+                  disabled={aiLoading || (!aiPrompt.trim() && Object.keys(aiAnswers).length === 0)}
+                  className="inline-flex items-center justify-center gap-2 rounded-xl bg-green-600 px-5 py-3 text-white transition hover:bg-green-700 disabled:cursor-not-allowed disabled:bg-gray-300"
+                  style={{ fontSize: "0.9rem", fontWeight: 800 }}
+                >
+                  <Sparkles className="h-4 w-4" />
+                  {aiLoading ? "Đang tạo..." : aiQuestions.length ? "Tạo công thức từ câu trả lời" : "Tạo công thức AI"}
+                </button>
+              </div>
+            </div>
+          ) : (
+            <div className="border-t border-amber-100 p-5">
+              <p className="text-gray-600" style={{ fontSize: "0.9rem", lineHeight: 1.6 }}>
+                Tính năng này chỉ dành cho SVIP vì AI cần dùng hồ sơ dinh dưỡng nâng cao và lịch sử ăn uống để cá nhân hóa rõ hơn.
+              </p>
+            </div>
+          )}
+        </div>
+
         {error && (
           <div className="bg-red-50 text-red-600 border border-red-100 rounded-2xl p-5 mb-8">
             {error}
@@ -100,6 +228,46 @@ export function Recipes() {
               <Link to="/checkout?plan=vip&billing=monthly" className="rounded-xl border border-amber-300 px-4 py-2.5 text-amber-700 hover:bg-amber-100" style={{ fontSize: "0.85rem", fontWeight: 700 }}>
                 Mở khóa VIP
               </Link>
+            </div>
+          </div>
+        )}
+
+        {savedAiRecipes.length > 0 && (
+          <div className="mb-8">
+            <div className="mb-4 flex items-center justify-between">
+              <div>
+                <h2 className="text-gray-900" style={{ fontSize: "1.05rem", fontWeight: 800 }}>Công thức AI đã lưu</h2>
+                <p className="text-gray-500" style={{ fontSize: "0.85rem" }}>Những công thức SVIP AI đã tạo sẽ nằm ở đây để xem lại sau khi đăng nhập.</p>
+              </div>
+              <span className="rounded-full bg-amber-50 px-3 py-1 text-amber-700 border border-amber-100" style={{ fontSize: "0.8rem", fontWeight: 800 }}>
+                {savedAiRecipes.length} món
+              </span>
+            </div>
+            <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
+              {savedAiRecipes.map((recipe) => (
+                <button
+                  key={recipe.id}
+                  type="button"
+                  onClick={() => setSelectedRecipe(recipe)}
+                  className="group overflow-hidden rounded-2xl border border-amber-100 bg-white text-left shadow-sm transition hover:-translate-y-0.5 hover:shadow-md"
+                >
+                  <div className="flex gap-4 p-4">
+                    <img src={recipe.image} alt={recipe.name} className="h-24 w-24 flex-shrink-0 rounded-xl object-cover" />
+                    <div className="min-w-0 flex-1">
+                      <div className="mb-2 inline-flex items-center gap-1 rounded-full bg-amber-50 px-2 py-0.5 text-amber-700" style={{ fontSize: "0.72rem", fontWeight: 800 }}>
+                        <Crown className="h-3.5 w-3.5" />
+                        Saved SVIP
+                      </div>
+                      <h3 className="line-clamp-2 text-gray-900" style={{ fontSize: "0.9rem", fontWeight: 800, lineHeight: 1.35 }}>{recipe.name}</h3>
+                      <div className="mt-2 flex flex-wrap gap-2 text-gray-500" style={{ fontSize: "0.76rem" }}>
+                        <span>{recipe.calories} kcal</span>
+                        <span>{recipe.timeMinutes} phút</span>
+                        <span>{recipe.mealTime}</span>
+                      </div>
+                    </div>
+                  </div>
+                </button>
+              ))}
             </div>
           </div>
         )}
@@ -184,14 +352,38 @@ export function Recipes() {
             </div>
 
             <div className="p-6">
+              {isPersonalizedRecipe(selectedRecipe) && (
+                <div className="mb-6 rounded-2xl border border-amber-100 bg-amber-50 p-4">
+                  <div className="flex flex-wrap gap-3">
+                    <span className="inline-flex items-center gap-2 rounded-full bg-white px-3 py-1 text-amber-700" style={{ fontSize: "0.8rem", fontWeight: 800 }}>
+                      <Crown className="h-4 w-4" />
+                      SVIP AI
+                    </span>
+                    <span className="rounded-full bg-white px-3 py-1 text-gray-700" style={{ fontSize: "0.8rem", fontWeight: 700 }}>
+                      Thời gian ăn: {selectedRecipe.recommendedEatingTime}
+                    </span>
+                    <span className="rounded-full bg-white px-3 py-1 text-gray-700" style={{ fontSize: "0.8rem", fontWeight: 700 }}>
+                      Bữa: {selectedRecipe.mealTime}
+                    </span>
+                  </div>
+                  <p className="mt-3 text-gray-700" style={{ fontSize: "0.88rem", lineHeight: 1.6 }}>
+                    {selectedRecipe.personalizationSummary}
+                  </p>
+                </div>
+              )}
               <div className="grid grid-cols-2 gap-6 mb-6">
                 <div>
                   <h3 className="text-gray-900 mb-4 flex items-center gap-2" style={{ fontSize: "1rem", fontWeight: 700 }}>🥗 Nguyên liệu</h3>
                   <div className="space-y-2">
                     {selectedRecipe.ingredients.map((ingredient) => (
-                      <div key={`${ingredient.name}-${ingredient.amount}`} className="flex items-center justify-between py-1.5 border-b border-gray-50">
-                        <span className="text-gray-700" style={{ fontSize: "0.875rem" }}>{ingredient.name}</span>
-                        <span className="text-green-600 bg-green-50 px-2.5 py-0.5 rounded-lg" style={{ fontSize: "0.8rem", fontWeight: 600 }}>{ingredient.amount}</span>
+                      <div key={`${ingredient.name}-${ingredient.amount}`} className="py-1.5 border-b border-gray-50">
+                        <div className="flex items-center justify-between gap-3">
+                          <span className="text-gray-700" style={{ fontSize: "0.875rem" }}>{ingredient.name}</span>
+                          <span className="text-green-600 bg-green-50 px-2.5 py-0.5 rounded-lg" style={{ fontSize: "0.8rem", fontWeight: 600 }}>{ingredient.amount}</span>
+                        </div>
+                        {"note" in ingredient && ingredient.note && (
+                          <p className="mt-1 text-gray-400" style={{ fontSize: "0.74rem", lineHeight: 1.4 }}>{ingredient.note}</p>
+                        )}
                       </div>
                     ))}
                   </div>
@@ -229,6 +421,19 @@ export function Recipes() {
                   </div>
                 ))}
               </div>
+
+              {isPersonalizedRecipe(selectedRecipe) && selectedRecipe.notes.length > 0 && (
+                <div className="mt-6 rounded-2xl border border-amber-100 bg-amber-50 p-4">
+                  <h3 className="text-amber-900 mb-3" style={{ fontSize: "0.95rem", fontWeight: 800 }}>Lưu ý riêng</h3>
+                  <div className="space-y-2">
+                    {selectedRecipe.notes.map((note) => (
+                      <p key={note} className="text-amber-800" style={{ fontSize: "0.85rem", lineHeight: 1.55 }}>
+                        {note}
+                      </p>
+                    ))}
+                  </div>
+                </div>
+              )}
 
               <div className="mt-5 pt-5 border-t border-gray-100 flex items-center gap-2">
                 {selectedRecipe.tags.map((tag) => (

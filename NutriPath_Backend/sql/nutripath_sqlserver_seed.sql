@@ -25,6 +25,7 @@ DROP TABLE IF EXISTS dbo.AdminUsers;
 DROP TABLE IF EXISTS dbo.ChatCannedResponses;
 DROP TABLE IF EXISTS dbo.ChatQuickReplies;
 DROP TABLE IF EXISTS dbo.Payments;
+DROP TABLE IF EXISTS dbo.PersonalizedRecipes;
 DROP TABLE IF EXISTS dbo.RecipeSteps;
 DROP TABLE IF EXISTS dbo.RecipeIngredients;
 DROP TABLE IF EXISTS dbo.RecipeTags;
@@ -258,6 +259,32 @@ CREATE TABLE dbo.RecipeSteps (
   CONSTRAINT FK_RecipeSteps_Recipes FOREIGN KEY (recipe_id) REFERENCES dbo.Recipes(id)
 );
 
+CREATE TABLE dbo.PersonalizedRecipes (
+  id NVARCHAR(60) NOT NULL PRIMARY KEY,
+  member_id NVARCHAR(40) NOT NULL,
+  name NVARCHAR(180) NOT NULL,
+  image_url NVARCHAR(1000) NULL,
+  image_prompt NVARCHAR(1000) NULL,
+  meal_time NVARCHAR(120) NULL,
+  recommended_eating_time NVARCHAR(160) NULL,
+  time_minutes INT NOT NULL,
+  calories INT NOT NULL,
+  difficulty INT NOT NULL,
+  servings INT NOT NULL,
+  protein DECIMAL(8, 1) NOT NULL,
+  carbs DECIMAL(8, 1) NOT NULL,
+  fat DECIMAL(8, 1) NOT NULL,
+  fiber DECIMAL(8, 1) NOT NULL,
+  ingredients_json NVARCHAR(MAX) NOT NULL,
+  steps_json NVARCHAR(MAX) NOT NULL,
+  notes_json NVARCHAR(MAX) NOT NULL,
+  tags_json NVARCHAR(MAX) NOT NULL,
+  personalization_summary NVARCHAR(MAX) NULL,
+  generated_at DATETIME2 NOT NULL,
+  saved_at DATETIME2 NOT NULL,
+  CONSTRAINT FK_PersonalizedRecipes_Members FOREIGN KEY (member_id) REFERENCES dbo.Members(id)
+);
+
 CREATE TABLE dbo.Payments (
   id NVARCHAR(40) NOT NULL PRIMARY KEY,
   member_id NVARCHAR(40) NOT NULL,
@@ -367,18 +394,23 @@ INSERT INTO dbo.Plans (id, name, monthly_price, period, description) VALUES
 (N'svip', N'SVIP', 199000, N'tháng', N'Trải nghiệm đỉnh cao với AI Coach cá nhân');
 
 INSERT INTO dbo.PlanFeatures (plan_id, label, included) VALUES
-(N'free', N'Máy tính calo cơ bản', 1),
-(N'free', N'5 công thức / tháng', 1),
-(N'free', N'AI chat giới hạn (5 tin/ngày)', 1),
-(N'free', N'Theo dõi calo không giới hạn', 0),
-(N'vip', N'Công thức không giới hạn', 1),
-(N'vip', N'Theo dõi calo không giới hạn', 1),
-(N'vip', N'50 tin nhắn AI / ngày', 1),
-(N'vip', N'AI Coach dinh dưỡng cá nhân', 0),
-(N'svip', N'Tất cả tính năng VIP', 1),
-(N'svip', N'AI chat không giới hạn', 1),
-(N'svip', N'AI Coach dinh dưỡng cá nhân', 1),
-(N'svip', N'Hỗ trợ ưu tiên 24/7', 1);
+(N'free', N'May tinh calo co ban', 1),
+(N'free', N'5 cong thuc dau tien', 1),
+(N'free', N'AI chat 5 tin/gio, 300 ky tu/lan', 1),
+(N'free', N'Meal Tracker 3 ngay gan nhat, 12 mon/ngay', 1),
+(N'free', N'Bao cao dinh duong 7 ngay', 1),
+(N'free', N'AI Coach dinh duong ca nhan', 0),
+(N'vip', N'Cong thuc khong gioi han', 1),
+(N'vip', N'Meal Tracker 30 ngay, 60 mon/ngay', 1),
+(N'vip', N'AI chat 50 tin/gio, 1000 ky tu/lan', 1),
+(N'vip', N'Bao cao dinh duong 30 ngay', 1),
+(N'vip', N'AI Coach dinh duong ca nhan', 0),
+(N'svip', N'Tat ca tinh nang VIP', 1),
+(N'svip', N'Meal Tracker 180 ngay, 200 mon/ngay', 1),
+(N'svip', N'AI chat 200 tin/gio, 2500 ky tu/lan', 1),
+(N'svip', N'AI Coach dinh duong ca nhan', 1),
+(N'svip', N'Bao cao 90 ngay + xuat file', 1),
+(N'svip', N'Ho tro uu tien 24/7', 1);
 
 INSERT INTO dbo.Members (
   id, name, email, initials, role, status, tier, gender, age, weight_kg, height_cm,

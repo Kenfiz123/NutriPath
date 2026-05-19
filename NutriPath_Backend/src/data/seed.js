@@ -170,6 +170,7 @@ export const seedData = {
     { date: "2026-03-14", day: "T7", consumed: 0, target: 1800 },
     { date: "2026-03-15", day: "CN", consumed: 0, target: 1800 },
   ],
+  personalizedRecipes: [],
   recipes: [
     {
       id: "recipe-001",
@@ -320,10 +321,12 @@ export const seedData = {
       period: "mãi mãi",
       description: "Khởi đầu hành trình sức khỏe của bạn",
       features: [
-        { label: "Máy tính calo cơ bản", included: true },
-        { label: "5 công thức / tháng", included: true },
-        { label: "AI chat giới hạn (5 tin/ngày)", included: true },
-        { label: "Theo dõi calo không giới hạn", included: false },
+        { label: "May tinh calo co ban", included: true },
+        { label: "5 cong thuc dau tien", included: true },
+        { label: "AI chat 5 tin/gio, 300 ky tu/lan", included: true },
+        { label: "Meal Tracker 3 ngay gan nhat, 12 mon/ngay", included: true },
+        { label: "Bao cao dinh duong 7 ngay", included: true },
+        { label: "AI Coach dinh duong ca nhan", included: false },
       ],
     },
     {
@@ -333,10 +336,11 @@ export const seedData = {
       period: "tháng",
       description: "Nâng cao sức khỏe với đầy đủ tính năng",
       features: [
-        { label: "Công thức không giới hạn", included: true },
-        { label: "Theo dõi calo không giới hạn", included: true },
-        { label: "50 tin nhắn AI / ngày", included: true },
-        { label: "AI Coach dinh dưỡng cá nhân", included: false },
+        { label: "Cong thuc khong gioi han", included: true },
+        { label: "Meal Tracker 30 ngay, 60 mon/ngay", included: true },
+        { label: "AI chat 50 tin/gio, 1000 ky tu/lan", included: true },
+        { label: "Bao cao dinh duong 30 ngay", included: true },
+        { label: "AI Coach dinh duong ca nhan", included: false },
       ],
     },
     {
@@ -346,10 +350,12 @@ export const seedData = {
       period: "tháng",
       description: "Trải nghiệm đỉnh cao với AI Coach cá nhân",
       features: [
-        { label: "Tất cả tính năng VIP", included: true },
-        { label: "AI chat không giới hạn", included: true },
-        { label: "AI Coach dinh dưỡng cá nhân", included: true },
-        { label: "Hỗ trợ ưu tiên 24/7", included: true },
+        { label: "Tat ca tinh nang VIP", included: true },
+        { label: "Meal Tracker 180 ngay, 200 mon/ngay", included: true },
+        { label: "AI chat 200 tin/gio, 2500 ky tu/lan", included: true },
+        { label: "AI Coach dinh duong ca nhan", included: true },
+        { label: "Bao cao 90 ngay + xuat file", included: true },
+        { label: "Ho tro uu tien 24/7", included: true },
       ],
     },
   ],
@@ -357,7 +363,7 @@ export const seedData = {
     { id: "faq-001", question: "Tôi có thể hủy bất cứ lúc nào không?", answer: "Có, bạn có thể hủy đăng ký bất cứ lúc nào. Gói tiếp tục hoạt động đến hết kỳ thanh toán." },
     { id: "faq-002", question: "Thanh toán có an toàn không?", answer: "Có. Backend demo không lưu số thẻ, CVV hoặc dữ liệu thanh toán nhạy cảm." },
     { id: "faq-003", question: "Tôi có thể nâng cấp từ VIP lên SVIP không?", answer: "Có, bạn có thể nâng cấp bất cứ lúc nào. Phần chênh lệch được tính theo kỳ còn lại." },
-    { id: "faq-004", question: "SVIP khác gì VIP?", answer: "SVIP có AI Coach cá nhân, thực đơn tùy chỉnh, hỗ trợ ưu tiên và phân tích cơ thể nâng cao." },
+    { id: "faq-004", question: "SVIP khác gì VIP?", answer: "SVIP mo AI Coach ca nhan, Meal Tracker 180 ngay, bao cao 90 ngay co xuat file va ho tro uu tien 24/7." },
   ],
   payments: [
     { id: "pay-001", memberId: "mem-001", invoice: "INV-2026-031", planId: "svip", billing: "monthly", amount: 199000, currency: "VND", status: "paid", paidAt: "2026-03-13T09:00:00.000Z" },
