@@ -9,7 +9,7 @@ export function Root() {
   const { session } = useAuth();
 
   return (
-    <div className="min-h-screen bg-white">
+    <div className="min-h-screen bg-white text-gray-900 transition-colors duration-200 dark:bg-slate-950 dark:text-slate-50">
       <Navbar isLanding={isLanding} />
       <main>
         <Outlet />
