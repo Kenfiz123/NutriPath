@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, type SyntheticEvent } from "react";
 import { Link } from "react-router";
 import { Search, X, Clock, Flame, Star, Filter, BookOpen, Users, Crown, Sparkles } from "lucide-react";
 import { generatePersonalizedRecipe, getPersonalizedRecipes, getRecipes, type PersonalizedRecipe, type PersonalizedRecipeQuestion, type Recipe } from "../api";
@@ -7,9 +7,16 @@ import { useAuth } from "../auth";
 type DisplayRecipe = Recipe | PersonalizedRecipe;
 
 const difficultyLabels = ["", "Dễ", "Trung bình", "Khó"];
+const RECIPE_FALLBACK_IMAGE = "https://images.unsplash.com/photo-1498837167922-ddd27525d352?auto=format&fit=crop&w=800&q=80";
 
 function isPersonalizedRecipe(recipe: DisplayRecipe): recipe is PersonalizedRecipe {
   return "generatedBy" in recipe;
+}
+
+function handleRecipeImageError(event: SyntheticEvent<HTMLImageElement>) {
+  if (event.currentTarget.src !== RECIPE_FALLBACK_IMAGE) {
+    event.currentTarget.src = RECIPE_FALLBACK_IMAGE;
+  }
 }
 
 export function Recipes() {
@@ -252,7 +259,7 @@ export function Recipes() {
                   className="group overflow-hidden rounded-2xl border border-amber-100 bg-white text-left shadow-sm transition hover:-translate-y-0.5 hover:shadow-md"
                 >
                   <div className="flex gap-4 p-4">
-                    <img src={recipe.image} alt={recipe.name} className="h-24 w-24 flex-shrink-0 rounded-xl object-cover" />
+                    <img src={recipe.image || RECIPE_FALLBACK_IMAGE} onError={handleRecipeImageError} alt={recipe.name} className="h-24 w-24 flex-shrink-0 rounded-xl object-cover bg-amber-50" />
                     <div className="min-w-0 flex-1">
                       <div className="mb-2 inline-flex items-center gap-1 rounded-full bg-amber-50 px-2 py-0.5 text-amber-700" style={{ fontSize: "0.72rem", fontWeight: 800 }}>
                         <Crown className="h-3.5 w-3.5" />
@@ -280,7 +287,7 @@ export function Recipes() {
               className="bg-white rounded-2xl overflow-hidden shadow-sm border border-gray-100 hover:shadow-lg hover:-translate-y-1 transition-all text-left group"
             >
               <div className="relative overflow-hidden">
-                <img src={recipe.image} alt={recipe.name} className="w-full h-44 object-cover group-hover:scale-105 transition-transform duration-300" />
+                <img src={recipe.image || RECIPE_FALLBACK_IMAGE} onError={handleRecipeImageError} alt={recipe.name} className="w-full h-44 object-cover group-hover:scale-105 transition-transform duration-300" />
                 <div className="absolute top-3 right-3 bg-white/90 backdrop-blur-sm rounded-xl px-2.5 py-1 flex items-center gap-1 shadow-sm">
                   <Flame className="w-3.5 h-3.5 text-orange-500" />
                   <span className="text-gray-900" style={{ fontSize: "0.78rem", fontWeight: 700 }}>{recipe.calories} kcal</span>
@@ -336,7 +343,7 @@ export function Recipes() {
         <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto py-8" style={{ backgroundColor: "rgba(0,0,0,0.5)" }}>
           <div className="bg-white rounded-3xl w-full max-w-3xl mx-4 overflow-hidden shadow-2xl my-auto">
             <div className="relative">
-              <img src={selectedRecipe.image} alt={selectedRecipe.name} className="w-full h-64 object-cover" />
+              <img src={selectedRecipe.image || RECIPE_FALLBACK_IMAGE} onError={handleRecipeImageError} alt={selectedRecipe.name} className="w-full h-64 object-cover" />
               <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent" />
               <button onClick={() => setSelectedRecipe(null)} className="absolute top-4 right-4 w-9 h-9 rounded-full bg-white/20 backdrop-blur-sm flex items-center justify-center text-white hover:bg-white/30 transition-colors">
                 <X className="w-5 h-5" />

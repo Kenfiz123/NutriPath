@@ -157,6 +157,11 @@ export interface NutritionProfile {
     tdee: number;
     calorieGoal: number;
     goalDelta: number;
+    formula?: string;
+    accuracy?: {
+      label: string;
+      note: string;
+    };
     bmi: {
       value: number;
       label: string;
@@ -172,6 +177,16 @@ export interface NutritionProfile {
       burnedCalories: number;
       fatEquivalentGrams: number;
     };
+    warnings?: string[];
+  };
+  aiInsight?: {
+    summary: string;
+    calorieStrategy: string;
+    macroStrategy: string;
+    mealTiming: string;
+    actionSteps: string[];
+    cautions: string[];
+    generatedAt: string;
   };
 }
 
@@ -189,6 +204,7 @@ export interface CalorieCalculationInput {
 export interface CalorieCalculation {
   input: NutritionProfile["input"];
   results: NutritionProfile["results"];
+  aiInsight?: NutritionProfile["aiInsight"];
 }
 
 export interface Food {
@@ -258,6 +274,131 @@ export interface MealLog {
     remainingCalories: number;
     calorieProgressPct: number;
   };
+}
+
+export interface FoodPhotoEstimate {
+  dishName: string;
+  portion: string;
+  servingEstimate: string;
+  calories: number;
+  protein: number;
+  carbs: number;
+  fat: number;
+  confidence: number;
+  items: Array<{ name: string; estimatedGrams: number; calories: number }>;
+  assumptions: string[];
+  accuracyTips: string[];
+  disclaimer: string;
+  analysisMode?: "standard_ai_vision" | "svip_vision_only" | "svip_full_ai" | string;
+  refinedBy?: string[];
+}
+
+export interface AddMealItemPayload {
+  name: string;
+  calories: number;
+  protein: number;
+  carbs: number;
+  fat: number;
+  portion: string;
+  quantity?: number;
+}
+
+export interface CustomFoodUnit {
+  id: string;
+  label: string;
+  shortLabel: string;
+  description: string;
+}
+
+export interface NutritionIngredient {
+  id: string;
+  name: string;
+  aliases: string[];
+  caloriesPer100g: number;
+  proteinPer100g: number;
+  carbsPer100g: number;
+  fatPer100g: number;
+  defaultUnits: Record<string, number>;
+}
+
+export interface CustomFoodIngredientInput {
+  name: string;
+  quantity: number;
+  unit: string;
+  note?: string;
+}
+
+export interface CustomFoodEstimate {
+  dishName: string;
+  servings: number;
+  cookingMethod: string;
+  ingredients: Array<{
+    inputName: string;
+    matchedName: string;
+    quantity: number;
+    unit: string;
+    unitLabel: string;
+    grams: number;
+    calories: number;
+    protein: number;
+    carbs: number;
+    fat: number;
+    note?: string;
+  }>;
+  totals: {
+    calories: number;
+    protein: number;
+    carbs: number;
+    fat: number;
+  };
+  perServing: {
+    calories: number;
+    protein: number;
+    carbs: number;
+    fat: number;
+  };
+  confidence: {
+    level: "high" | "medium" | "low";
+    label: string;
+    reason: string;
+  };
+  disclaimer: string;
+  suggestions: string[];
+}
+
+export interface CustomFoodEstimateResponse {
+  needsMoreInfo: boolean;
+  question?: string;
+  quickEstimate?: {
+    dishName: string;
+    caloriesRange: [number, number];
+    proteinRange: [number, number];
+    confidence: string;
+    note: string;
+  } | null;
+  unresolved?: Array<{ inputName: string; quantity: number; unit: string; reason: string }>;
+  recognized?: CustomFoodEstimate["ingredients"];
+  suggestions?: string[];
+  estimate?: CustomFoodEstimate;
+  addableItem?: AddMealItemPayload;
+  logic?: {
+    formula: string;
+    macroFormula: string;
+    servingFormula: string;
+    reminder: string;
+  };
+}
+
+export interface SavedCustomFood extends AddMealItemPayload {
+  id: string;
+  memberId: string;
+  servings: number;
+  cookingMethod?: string;
+  ingredients?: CustomFoodEstimate["ingredients"];
+  confidence?: CustomFoodEstimate["confidence"] | null;
+  disclaimer?: string;
+  createdAt: string;
+  updatedAt: string;
 }
 
 export interface DashboardData {
@@ -586,10 +727,49 @@ export function getFoods(search = "") {
   return apiFetch<{ _embedded: { foods: Food[] }; categories: string[] }>(`/api/foods?search=${encodeURIComponent(search)}`);
 }
 
-export function addMealItem(date: string, mealId: string, foodId: string) {
+export function addMealItem(date: string, mealId: string, food: string | AddMealItemPayload) {
   return apiFetch<MealLog>(`/api/members/${getCurrentMemberId()}/meal-logs/${encodeURIComponent(date)}/meals/${mealId}/items`, {
     method: "POST",
-    body: { foodId },
+    body: typeof food === "string" ? { foodId: food } : food,
+  });
+}
+
+export function estimateFoodPhoto(payload: { imageDataUrl: string; notes?: string }) {
+  return apiFetch<{ estimate: FoodPhotoEstimate; addableItem: AddMealItemPayload }>("/api/ai/food-photo-estimate", {
+    method: "POST",
+    body: payload,
+  });
+}
+
+export function getCustomFoodIngredients(search = "") {
+  return apiFetch<{ _embedded: { ingredients: NutritionIngredient[] }; units: CustomFoodUnit[]; examples: string[] }>(
+    `/api/nutrition/custom-food/ingredients?search=${encodeURIComponent(search)}`,
+  );
+}
+
+export function estimateCustomFood(payload: {
+  name: string;
+  servings: number;
+  cookingMethod?: string;
+  rawText?: string;
+  ingredients: CustomFoodIngredientInput[];
+}) {
+  return apiFetch<CustomFoodEstimateResponse>("/api/nutrition/custom-food/estimate", {
+    method: "POST",
+    body: payload,
+  });
+}
+
+export function getSavedCustomFoods(search = "") {
+  return apiFetch<{ _embedded: { customFoods: SavedCustomFood[] } }>(
+    `/api/members/${getCurrentMemberId()}/custom-foods?search=${encodeURIComponent(search)}`,
+  );
+}
+
+export function saveCustomFoodEstimate(payload: { estimate: CustomFoodEstimate; addableItem: AddMealItemPayload }) {
+  return apiFetch<SavedCustomFood>(`/api/members/${getCurrentMemberId()}/custom-foods`, {
+    method: "POST",
+    body: payload,
   });
 }
 

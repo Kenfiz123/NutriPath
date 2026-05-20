@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
-import { Calculator, Dumbbell, Flame, Minus, TrendingDown, TrendingUp } from "lucide-react";
-import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip } from "recharts";
+import { AlertTriangle, Calculator, Dumbbell, Flame, Minus, ShieldCheck, Sparkles, TrendingDown, TrendingUp } from "lucide-react";
+import { Cell, Pie, PieChart, ResponsiveContainer, Tooltip } from "recharts";
 import {
   calculateCalories as requestCalorieCalculation,
   getStoredSession,
@@ -69,6 +69,7 @@ function getInitialCalculation(): CalorieCalculation | null {
   return {
     input: profile.input,
     results: profile.results,
+    aiInsight: profile.aiInsight,
   };
 }
 
@@ -113,15 +114,15 @@ export function CalorieCalculator() {
   const session = getStoredSession();
   const isLoggedIn = Boolean(session?.token);
   const tier = session?.member?.tier ?? "free";
+  const isSvip = tier === "svip";
   const lastSaved = session?.member?.nutritionProfile?.updatedAt;
+  const exerciseLabel = exerciseTypes.find((item) => item.value === exerciseType)?.label ?? "Đi bộ";
 
   const macroData = calculation ? [
     getMacro(calculation, "Protein"),
     getMacro(calculation, "Carbs"),
     getFatMacro(calculation),
   ] : [];
-
-  const exerciseLabel = exerciseTypes.find((item) => item.value === exerciseType)?.label ?? "Đi bộ";
 
   async function handleCalculate() {
     setSubmitting(true);
@@ -151,9 +152,11 @@ export function CalorieCalculator() {
         window.dispatchEvent(new CustomEvent("nutripath:member-updated", { detail: { member: data.member } }));
 
         setNotice(
-          tier === "vip" || tier === "svip"
-            ? "Đã lưu hồ sơ dinh dưỡng mới nhất. NutriBot VIP/SVIP có thể dùng dữ liệu này để tư vấn sát hơn."
-            : "Đã lưu hồ sơ dinh dưỡng mới nhất vào tài khoản của bạn.",
+          isSvip
+            ? "Đã lưu hồ sơ mới nhất và chạy AI Coach SVIP để phân tích mục tiêu."
+            : tier === "vip"
+              ? "Đã lưu hồ sơ dinh dưỡng mới nhất. NutriBot VIP có thể dùng dữ liệu này để tư vấn sát hơn."
+              : "Đã lưu hồ sơ dinh dưỡng mới nhất vào tài khoản của bạn.",
         );
       } else {
         const data = await requestCalorieCalculation(payload);
@@ -169,12 +172,12 @@ export function CalorieCalculator() {
 
   return (
     <div className="min-h-screen bg-gray-50">
-      <div className="mx-auto max-w-[1440px] px-8 py-8">
-        <div className="mb-8 flex items-start justify-between gap-4">
+      <div className="mx-auto max-w-[1440px] px-4 py-6 sm:px-6 lg:px-8">
+        <div className="mb-6 flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
           <div>
             <h1 className="text-gray-900" style={{ fontSize: "1.6rem", fontWeight: 800 }}>Máy Tính Calo & Dinh Dưỡng</h1>
             <p className="mt-2 text-gray-500" style={{ fontSize: "0.95rem" }}>
-              Tính BMR, TDEE, macro và lưu snapshot mới nhất vào hồ sơ người dùng.
+              Tính BMR, TDEE, macro bằng công thức Mifflin-St Jeor, có giới hạn an toàn và lưu snapshot mới nhất.
             </p>
             {lastSaved && (
               <p className="mt-2 text-green-700" style={{ fontSize: "0.82rem", fontWeight: 600 }}>
@@ -182,10 +185,10 @@ export function CalorieCalculator() {
               </p>
             )}
           </div>
-          <div className="rounded-2xl border border-green-100 bg-green-50 px-4 py-3 text-green-700" style={{ fontSize: "0.84rem", fontWeight: 600 }}>
+          <div className="max-w-xl rounded-2xl border border-green-100 bg-green-50 px-4 py-3 text-green-700" style={{ fontSize: "0.84rem", fontWeight: 600 }}>
             {isLoggedIn
-              ? tier === "vip" || tier === "svip"
-                ? "Dashboard và NutriBot VIP/SVIP sẽ dùng dữ liệu mới nhất sau mỗi lần tính."
+              ? isSvip
+                ? "SVIP: sau khi tính, AI Coach sẽ phân tích mục tiêu calo, macro và bước hành động theo hồ sơ của bạn."
                 : "Dashboard sẽ cập nhật theo dữ liệu mới nhất sau mỗi lần tính."
               : "Đăng nhập để lưu kết quả vào dashboard và cho AI dùng về sau."}
           </div>
@@ -197,13 +200,13 @@ export function CalorieCalculator() {
           </div>
         )}
 
-        <div className="grid grid-cols-12 gap-8">
-          <div className="col-span-5 space-y-6">
+        <div className="grid grid-cols-1 gap-6 lg:grid-cols-12">
+          <div className="space-y-6 lg:col-span-5">
             <div className="rounded-2xl border border-gray-100 bg-white p-6 shadow-sm">
               <h2 className="mb-5 flex items-center gap-2 text-gray-900" style={{ fontSize: "1.05rem", fontWeight: 700 }}>
-                <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-green-100">
+                <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-green-100">
                   <Calculator className="h-4 w-4 text-green-600" />
-                </div>
+                </span>
                 Thông tin cơ bản
               </h2>
 
@@ -230,9 +233,9 @@ export function CalorieCalculator() {
                 </div>
               </div>
 
-              <div className="mb-5 grid grid-cols-3 gap-3">
+              <div className="mb-5 grid grid-cols-1 gap-3 sm:grid-cols-3">
                 {[
-                  { label: "Tuổi", value: age, setValue: setAge, unit: "tuổi", min: 15, max: 90 },
+                  { label: "Tuổi", value: age, setValue: setAge, unit: "tuổi", min: 13, max: 90 },
                   { label: "Cân nặng", value: weightKg, setValue: setWeightKg, unit: "kg", min: 30, max: 250 },
                   { label: "Chiều cao", value: heightCm, setValue: setHeightCm, unit: "cm", min: 130, max: 230 },
                 ].map((field) => (
@@ -267,10 +270,10 @@ export function CalorieCalculator() {
                           : "border-gray-200 bg-white hover:border-gray-300"
                       }`}
                     >
-                      <div>
-                        <p className={activityLevel === item.value ? "text-green-700" : "text-gray-800"} style={{ fontSize: "0.875rem", fontWeight: 600 }}>{item.label}</p>
-                        <p className="text-gray-500" style={{ fontSize: "0.75rem" }}>{item.desc}</p>
-                      </div>
+                      <span>
+                        <span className={`block ${activityLevel === item.value ? "text-green-700" : "text-gray-800"}`} style={{ fontSize: "0.875rem", fontWeight: 600 }}>{item.label}</span>
+                        <span className="block text-gray-500" style={{ fontSize: "0.75rem" }}>{item.desc}</span>
+                      </span>
                       <span className={activityLevel === item.value ? "text-green-600" : "text-gray-400"} style={{ fontSize: "0.8rem", fontWeight: 700 }}>
                         x{item.multiplier}
                       </span>
@@ -307,7 +310,7 @@ export function CalorieCalculator() {
                 <Dumbbell className="h-5 w-5 text-green-600" />
                 Bài tập tham chiếu
               </h2>
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                 <div>
                   <label className="mb-2 block text-gray-700" style={{ fontSize: "0.85rem", fontWeight: 600 }}>Loại bài tập</label>
                   <select
@@ -326,7 +329,7 @@ export function CalorieCalculator() {
                   <div className="relative">
                     <input
                       type="number"
-                      min={5}
+                      min={0}
                       max={240}
                       value={durationMinutes}
                       onChange={(event) => setDurationMinutes(Number(event.target.value))}
@@ -345,14 +348,14 @@ export function CalorieCalculator() {
               className="w-full rounded-2xl bg-gradient-to-r from-green-600 to-emerald-500 py-4 text-white shadow-lg transition-all hover:from-green-700 hover:to-emerald-600 disabled:cursor-not-allowed disabled:opacity-70"
               style={{ fontSize: "1rem", fontWeight: 700 }}
             >
-              <div className="flex items-center justify-center gap-2">
+              <span className="flex items-center justify-center gap-2">
                 <Calculator className="h-5 w-5" />
                 {submitting ? "Đang tính và lưu..." : "Tính Toán Ngay"}
-              </div>
+              </span>
             </button>
           </div>
 
-          <div className="col-span-7 space-y-6">
+          <div className="space-y-6 lg:col-span-7">
             {!calculation ? (
               <div className="flex flex-col items-center justify-center rounded-2xl border border-gray-100 bg-white p-16 text-center shadow-sm">
                 <div className="mb-6 flex h-20 w-20 items-center justify-center rounded-full bg-green-50">
@@ -365,7 +368,7 @@ export function CalorieCalculator() {
               </div>
             ) : (
               <>
-                <div className="grid grid-cols-3 gap-4">
+                <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
                   {[
                     {
                       label: "BMR",
@@ -377,7 +380,7 @@ export function CalorieCalculator() {
                     {
                       label: "TDEE",
                       value: calculation.results.tdee,
-                      desc: "Tiêu thụ hàng ngày",
+                      desc: "Tiêu thụ hằng ngày",
                       color: "bg-blue-50 border-blue-100",
                       valueColor: "text-blue-600",
                     },
@@ -392,27 +395,39 @@ export function CalorieCalculator() {
                     },
                   ].map((item) => (
                     <div key={item.label} className={`rounded-2xl border p-5 text-center ${item.color}`}>
-                      <p className={item.valueColor} style={{ fontSize: "1.8rem", fontWeight: 800 }}>{item.value.toLocaleString()}</p>
+                      <p className={item.valueColor} style={{ fontSize: "1.8rem", fontWeight: 800 }}>{item.value.toLocaleString("vi-VN")}</p>
                       <p className="mt-1 text-gray-900" style={{ fontSize: "0.9rem", fontWeight: 700 }}>{item.label}</p>
                       <p className="mt-1 text-gray-500" style={{ fontSize: "0.75rem" }}>{item.desc}</p>
                     </div>
                   ))}
                 </div>
 
+                <div className="rounded-2xl border border-emerald-100 bg-white p-6 shadow-sm">
+                  <h3 className="mb-3 flex items-center gap-2 text-gray-900" style={{ fontSize: "1rem", fontWeight: 700 }}>
+                    <ShieldCheck className="h-5 w-5 text-emerald-600" />
+                    Độ tin cậy & giới hạn an toàn
+                  </h3>
+                  <p className="text-gray-600" style={{ fontSize: "0.86rem", lineHeight: 1.6 }}>
+                    Công thức: {calculation.results.formula ?? "Mifflin-St Jeor"}. {calculation.results.accuracy?.note ?? "Kết quả là ước lượng và có thể thay đổi theo cơ địa, vận động và sức khỏe."}
+                  </p>
+                  {!!calculation.results.warnings?.length && (
+                    <div className="mt-4 space-y-2">
+                      {calculation.results.warnings.map((warning) => (
+                        <div key={warning} className="flex gap-2 rounded-xl bg-amber-50 px-3 py-2 text-amber-800">
+                          <AlertTriangle className="mt-0.5 h-4 w-4 flex-shrink-0" />
+                          <span style={{ fontSize: "0.8rem", lineHeight: 1.45 }}>{warning}</span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
                 <div className="rounded-2xl border border-gray-100 bg-white p-6 shadow-sm">
                   <h3 className="mb-5 text-gray-900" style={{ fontSize: "1rem", fontWeight: 700 }}>Phân chia dinh dưỡng đa lượng</h3>
-                  <div className="grid grid-cols-2 items-center gap-6">
+                  <div className="grid grid-cols-1 items-center gap-6 md:grid-cols-2">
                     <ResponsiveContainer width="100%" height={220}>
                       <PieChart>
-                        <Pie
-                          data={macroData}
-                          dataKey="calories"
-                          cx="50%"
-                          cy="50%"
-                          innerRadius={62}
-                          outerRadius={92}
-                          paddingAngle={3}
-                        >
+                        <Pie data={macroData} dataKey="calories" cx="50%" cy="50%" innerRadius={62} outerRadius={92} paddingAngle={3}>
                           {macroData.map((_, index) => (
                             <Cell key={index} fill={MACRO_COLORS[index]} />
                           ))}
@@ -423,22 +438,70 @@ export function CalorieCalculator() {
                     <div className="space-y-4">
                       {macroData.map((item, index) => (
                         <div key={item.name} className="flex items-center gap-3">
-                          <div className="h-3 w-3 flex-shrink-0 rounded-full" style={{ backgroundColor: MACRO_COLORS[index] }}></div>
+                          <div className="h-3 w-3 flex-shrink-0 rounded-full" style={{ backgroundColor: MACRO_COLORS[index] }} />
                           <div className="flex-1">
                             <div className="mb-1 flex justify-between">
                               <span className="text-gray-700" style={{ fontSize: "0.875rem", fontWeight: 600 }}>{item.name}</span>
                               <span className="text-gray-900" style={{ fontSize: "0.875rem", fontWeight: 700 }}>{item.grams}g</span>
                             </div>
                             <div className="h-2 w-full rounded-full bg-gray-100">
-                              <div className="h-2 rounded-full" style={{ width: `${Math.max(4, item.pct)}%`, backgroundColor: MACRO_COLORS[index] }}></div>
+                              <div className="h-2 rounded-full" style={{ width: `${Math.max(4, Math.min(item.pct, 100))}%`, backgroundColor: MACRO_COLORS[index] }} />
                             </div>
-                            <p className="mt-0.5 text-gray-400" style={{ fontSize: "0.72rem" }}>{item.pct}% • {item.calories} kcal</p>
+                            <p className="mt-0.5 text-gray-400" style={{ fontSize: "0.72rem" }}>{item.pct}% - {item.calories} kcal</p>
                           </div>
                         </div>
                       ))}
                     </div>
                   </div>
                 </div>
+
+                {isSvip ? (
+                  <div className="rounded-2xl border border-amber-200 bg-gradient-to-br from-slate-950 to-slate-900 p-6 text-white shadow-sm">
+                    <h3 className="mb-4 flex items-center gap-2" style={{ fontSize: "1rem", fontWeight: 800 }}>
+                      <Sparkles className="h-5 w-5 text-amber-300" />
+                      AI Coach SVIP
+                    </h3>
+                    {calculation.aiInsight ? (
+                      <div className="space-y-4">
+                        <p className="text-slate-100" style={{ fontSize: "0.92rem", lineHeight: 1.65 }}>{calculation.aiInsight.summary}</p>
+                        <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
+                          {[
+                            { label: "Calo", value: calculation.aiInsight.calorieStrategy },
+                            { label: "Macro", value: calculation.aiInsight.macroStrategy },
+                            { label: "Thời điểm ăn", value: calculation.aiInsight.mealTiming },
+                          ].map((item) => (
+                            <div key={item.label} className="rounded-xl bg-white/10 p-3">
+                              <p className="text-amber-200" style={{ fontSize: "0.76rem", fontWeight: 800 }}>{item.label}</p>
+                              <p className="mt-1 text-slate-100" style={{ fontSize: "0.8rem", lineHeight: 1.45 }}>{item.value}</p>
+                            </div>
+                          ))}
+                        </div>
+                        <div>
+                          <p className="mb-2 text-amber-200" style={{ fontSize: "0.8rem", fontWeight: 800 }}>Bước hành động</p>
+                          <ul className="space-y-2">
+                            {calculation.aiInsight.actionSteps.map((step) => (
+                              <li key={step} className="rounded-xl bg-white/10 px-3 py-2 text-slate-100" style={{ fontSize: "0.82rem" }}>{step}</li>
+                            ))}
+                          </ul>
+                        </div>
+                      </div>
+                    ) : (
+                      <p className="text-slate-300" style={{ fontSize: "0.88rem" }}>
+                        Bấm tính để AI Coach SVIP phân tích kết quả theo hồ sơ, mục tiêu và nhật ký bữa ăn mới nhất.
+                      </p>
+                    )}
+                  </div>
+                ) : (
+                  <div className="rounded-2xl border border-gray-100 bg-white p-6 shadow-sm">
+                    <h3 className="mb-2 flex items-center gap-2 text-gray-900" style={{ fontSize: "1rem", fontWeight: 800 }}>
+                      <Sparkles className="h-5 w-5 text-amber-500" />
+                      AI Coach SVIP
+                    </h3>
+                    <p className="text-gray-500" style={{ fontSize: "0.86rem", lineHeight: 1.6 }}>
+                      Nâng lên SVIP để AI phân tích mục tiêu calo, macro, thời điểm ăn và bước hành động cá nhân hóa sau mỗi lần tính.
+                    </p>
+                  </div>
+                )}
 
                 <div className="rounded-2xl border border-gray-100 bg-white p-6 shadow-sm">
                   <h3 className="mb-4 text-gray-900" style={{ fontSize: "1rem", fontWeight: 700 }}>Chỉ số BMI</h3>
@@ -447,7 +510,7 @@ export function CalorieCalculator() {
                     <span className="mb-1 text-green-600" style={{ fontSize: "1rem", fontWeight: 600 }}>{calculation.results.bmi.label}</span>
                   </div>
                   <p className="mt-3 text-gray-500" style={{ fontSize: "0.82rem", lineHeight: 1.6 }}>
-                    Đây là chỉ số tham khảo nhanh từ chiều cao và cân nặng hiện tại, giúp NutriPath gợi ý mục tiêu calo phù hợp hơn.
+                    BMI chỉ là chỉ số tham khảo nhanh từ chiều cao và cân nặng, không phản ánh đầy đủ tỷ lệ cơ, mỡ hay tình trạng sức khỏe.
                   </p>
                 </div>
 

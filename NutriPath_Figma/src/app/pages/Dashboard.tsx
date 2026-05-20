@@ -16,17 +16,24 @@ const quickActions = [
   { label: "Tìm công thức", icon: Search, color: "bg-orange-50 text-orange-700 hover:bg-orange-100 border border-orange-200", link: "/recipes" },
 ];
 
+function makeMojibake(value: string) {
+  return Array.from(new TextEncoder().encode(value), (byte) => String.fromCharCode(byte)).join("");
+}
+
+const dashboardTextFixes = [
+  ["Xin ch" + String.fromCharCode(0xc3) + " o", "Xin chào"],
+  [makeMojibake("Xin chào"), "Xin chào"],
+  [makeMojibake("Dữ liệu được tải từ backend"), "Dữ liệu được tải từ backend"],
+  [makeMojibake("Bắt đầu chuỗi ghi bữa"), "Bắt đầu chuỗi ghi bữa"],
+  [makeMojibake("Thêm bữa ăn hôm nay để tạo chuỗi mới"), "Thêm bữa ăn hôm nay để tạo chuỗi mới"],
+  [makeMojibake("ly nước"), "ly nước"],
+  [makeMojibake("Tiến độ nước hôm nay"), "Tiến độ nước hôm nay"],
+  [makeMojibake("kcal còn lại"), "kcal còn lại"],
+  [makeMojibake("Chưa có calo từ bữa ăn hôm nay"), "Chưa có calo từ bữa ăn hôm nay"],
+] as const;
+
 function cleanDashboardText(value: string) {
-  return value
-    .replaceAll("Xin chÃ o", "Xin chào")
-    .replaceAll("Xin chÃ o", "Xin chào")
-    .replaceAll("Dá»¯ liá»‡u Ä‘Æ°á»£c táº£i tá»« backend", "Dữ liệu được tải từ backend")
-    .replaceAll("Báº¯t Ä‘áº§u chuá»—i ghi bá»¯a", "Bắt đầu chuỗi ghi bữa")
-    .replaceAll("ThÃªm bá»¯a Äƒn hÃ´m nay Ä‘á»ƒ táº¡o chuá»—i má»›i", "Thêm bữa ăn hôm nay để tạo chuỗi mới")
-    .replaceAll("ly nÆ°á»›c", "ly nước")
-    .replaceAll("Tiáº¿n Ä‘á»™ nÆ°á»›c hÃ´m nay", "Tiến độ nước hôm nay")
-    .replaceAll("kcal cÃ²n láº¡i", "kcal còn lại")
-    .replaceAll("ChÆ°a cÃ³ calo tá»« bá»¯a Äƒn hÃ´m nay", "Chưa có calo từ bữa ăn hôm nay");
+  return dashboardTextFixes.reduce((text, [broken, fixed]) => text.replaceAll(broken, fixed), value);
 }
 
 export function Dashboard() {
