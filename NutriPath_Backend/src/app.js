@@ -716,10 +716,10 @@ function buildAdminOverview(db) {
 
   return {
     kpis: [
-      { id: "total-users", label: "Tong nguoi dung", value: users.length, change: `+${users.filter((user) => getMealHistoryDayDelta(user.joined) < 30).length} trong 30 ngay` },
-      { id: "dau", label: "DAU hom nay", value: activeMemberIds.size, change: `${today}` },
-      { id: "ai-messages", label: "Tin nhan AI hom nay", value: todayAiMessages, change: `${(db.chatHistory || []).length} tong hoi thoai` },
-      { id: "retention", label: "Ti le giu chan 7 ngay", value: `${retentionPct}%`, change: `${retainedMembers.length}/${matureMembers.length || 0} thanh vien` },
+      { id: "total-users", label: "Tổng người dùng", value: users.length, change: `+${users.filter((user) => getMealHistoryDayDelta(user.joined) < 30).length} trong 30 ngày` },
+      { id: "dau", label: "DAU hôm nay", value: activeMemberIds.size, change: `${today}` },
+      { id: "ai-messages", label: "Tin nhắn AI hôm nay", value: todayAiMessages, change: `${(db.chatHistory || []).length} tổng hội thoại` },
+      { id: "retention", label: "Tỉ lệ giữ chân 7 ngày", value: `${retentionPct}%`, change: `${retainedMembers.length}/${matureMembers.length || 0} thành viên` },
     ],
     systemServices: db.admin?.systemServices || [],
     recentUsers: users.slice(0, 8),
@@ -2496,9 +2496,27 @@ route("GET", "/api/members/:id", async ({ req, store, params }) => {
 });
 
 route("PATCH", "/api/members/:id", async ({ req, store, params, body }) => {
-  const member = getMember(store.db, params.id);
-  if (!member) notFound(req, "Member not found.");
-  Object.assign(member, body, { id: member.id });
+  const { sessionMember, member } = assertMemberSessionAccess(req, store, params.id);
+  const isAdmin = sessionMember.role?.toLowerCase() === "admin";
+  const allowed = new Set(isAdmin
+    ? ["name", "email", "calorieTarget", "waterTargetGlasses", "role", "status", "tier", "subscription", "macroTargets"]
+    : ["name", "email", "calorieTarget", "waterTargetGlasses"]);
+
+  if (body.calorieTarget !== undefined) {
+    const target = Number(body.calorieTarget);
+    if (!Number.isFinite(target) || target < 1200 || target > 5000) badRequest("Mục tiêu calo phải nằm trong khoảng 1200-5000 kcal/ngày.");
+    body.calorieTarget = Math.round(target);
+  }
+  if (body.waterTargetGlasses !== undefined) {
+    const target = Number(body.waterTargetGlasses);
+    if (!Number.isFinite(target) || target < 1 || target > 20) badRequest("Mục tiêu nước phải nằm trong khoảng 1-20 ly/ngày.");
+    body.waterTargetGlasses = Math.round(target);
+  }
+
+  for (const [key, value] of Object.entries(body || {})) {
+    if (allowed.has(key)) member[key] = value;
+  }
+  if (body.name) member.initials = initialsFromName(member.name);
   await store.save();
   return memberResource(req, member);
 });
@@ -3269,8 +3287,8 @@ route("GET", "/api/admin/users", async ({ req, store, url }) => {
       total: allUsers.length,
       filters: {
         search: url.searchParams.get("search") || "",
-        role: role || "Tat ca",
-        status: status || "Tat ca",
+        role: role || "Tất cả",
+        status: status || "Tất cả",
       },
       roleBreakdown: [
         { role: "User", count: allUsers.filter((user) => user.role === "User").length },

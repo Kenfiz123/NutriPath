@@ -47,6 +47,7 @@ export function ChatBot() {
   const [quickReplies, setQuickReplies] = useState<string[]>([]);
   const [inputText, setInputText] = useState("");
   const [isTyping, setIsTyping] = useState(false);
+  const [isListening, setIsListening] = useState(false);
   const [chatMode, setChatMode] = useState<"assistant" | "coach">("assistant");
   const [memberAccess, setMemberAccess] = useState(getStoredSession()?.member.access ?? null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -150,6 +151,31 @@ export function ChatBot() {
       e.preventDefault();
       sendMessage(inputText);
     }
+  };
+
+  const handleVoiceInput = () => {
+    const SpeechRecognition = (window as any).SpeechRecognition ?? (window as any).webkitSpeechRecognition;
+
+    if (!SpeechRecognition) {
+      setInputText((current) => current || "Trình duyệt hiện chưa hỗ trợ ghi âm. Bạn có thể nhập tin nhắn bằng bàn phím.");
+      return;
+    }
+
+    const recognition = new SpeechRecognition();
+    recognition.lang = "vi-VN";
+    recognition.interimResults = false;
+    recognition.maxAlternatives = 1;
+    setIsListening(true);
+
+    recognition.onresult = (event: any) => {
+      const transcript = event.results?.[0]?.[0]?.transcript?.trim();
+      if (transcript) setInputText(transcript);
+    };
+    recognition.onerror = () => {
+      setInputText((current) => current || "Mình chưa nghe rõ. Bạn thử nói lại hoặc nhập bằng bàn phím nhé.");
+    };
+    recognition.onend = () => setIsListening(false);
+    recognition.start();
   };
 
   const coachUnlocked = Boolean(memberAccess?.aiCoach);
@@ -283,7 +309,13 @@ export function ChatBot() {
                 className="flex-1 bg-transparent text-gray-700 outline-none placeholder-gray-400"
                 style={{ fontSize: "0.875rem" }}
               />
-              <button className="text-gray-400 transition-colors hover:text-green-600" aria-label="Ghi âm">
+              <button
+                type="button"
+                onClick={handleVoiceInput}
+                className={`transition-colors ${isListening ? "text-green-600" : "text-gray-400 hover:text-green-600"}`}
+                aria-label={isListening ? "Đang nghe" : "Ghi âm"}
+                title={isListening ? "Đang nghe..." : "Ghi âm tiếng Việt"}
+              >
                 <Mic className="h-4 w-4" />
               </button>
             </div>

@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router";
 import { Check, X, Crown, Star, Zap, Leaf, ArrowRight, Shield, Sparkles } from "lucide-react";
-import { getFaqs, getPlans, type Plan } from "../api";
+import { getFaqs, getPlans, getStoredSession, type Plan } from "../api";
 import { UpgradeModal } from "../components/UpgradeModal";
 
 const planUi = {
@@ -118,6 +118,8 @@ export function PricingPlans() {
                       if (plan.id !== "free") {
                         setSelectedPlan(plan.id);
                         setShowModal(true);
+                      } else {
+                        window.location.assign(getStoredSession() ? "/dashboard" : "/register");
                       }
                     }}
                     className={`w-full py-3.5 rounded-2xl mb-6 transition-all ${ui.btnClass}`}

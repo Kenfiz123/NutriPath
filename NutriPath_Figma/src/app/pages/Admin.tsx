@@ -274,7 +274,7 @@ export function Admin() {
   }
 
   async function handleDeleteFood(foodId: string) {
-    if (!window.confirm("Xoa mon an nay khoi he thong?")) return;
+    if (!window.confirm("Xóa món ăn này khỏi hệ thống?")) return;
     try {
       await deleteFood(foodId);
       if (editingFoodId === foodId) resetFoodForm();
@@ -676,23 +676,23 @@ export function Admin() {
                 </div>
 
                 <SectionCard
-                  title={editingFoodId ? "Sua mon an" : "Them mon an"}
-                  subtitle={editingFoodId ? "Dang chinh sua food da chon" : "Admin co the tao food moi ngay trong dashboard"}
+                  title={editingFoodId ? "Sửa món ăn" : "Thêm món ăn"}
+                  subtitle={editingFoodId ? "Đang chỉnh sửa món đã chọn" : "Admin có thể tạo món ăn mới ngay trong dashboard"}
                 >
                   <form onSubmit={(event) => void handleCreateFood(event)} className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
                     <label className="block">
-                      <span className="mb-1 block text-sm font-medium text-slate-700">Ten mon</span>
+                      <span className="mb-1 block text-sm font-medium text-slate-700">Tên món</span>
                       <input
                         required
                         value={foodForm.name}
                         onChange={(event) => setFoodForm({ ...foodForm, name: event.target.value })}
                         className="w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm outline-none"
-                        placeholder="Uc ga ap chao"
+                        placeholder="Ức gà áp chảo"
                       />
                     </label>
 
                     <label className="block">
-                      <span className="mb-1 block text-sm font-medium text-slate-700">Danh muc</span>
+                      <span className="mb-1 block text-sm font-medium text-slate-700">Danh mục</span>
                       <input
                         value={foodForm.category || ""}
                         onChange={(event) => setFoodForm({ ...foodForm, category: event.target.value })}
@@ -702,13 +702,13 @@ export function Admin() {
                     </label>
 
                     <label className="block">
-                      <span className="mb-1 block text-sm font-medium text-slate-700">Khau phan</span>
+                      <span className="mb-1 block text-sm font-medium text-slate-700">Khẩu phần</span>
                       <input
                         required
                         value={foodForm.portion}
                         onChange={(event) => setFoodForm({ ...foodForm, portion: event.target.value })}
                         className="w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm outline-none"
-                        placeholder="100g / 1 bat / 1 ly"
+                        placeholder="100g / 1 bát / 1 ly"
                       />
                     </label>
 
@@ -772,7 +772,7 @@ export function Admin() {
                           onClick={resetFoodForm}
                           className="rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 transition hover:bg-slate-100"
                         >
-                          Huy sua
+                          Hủy sửa
                         </button>
                       ) : null}
                       <button
@@ -780,7 +780,7 @@ export function Admin() {
                         disabled={savingFood}
                         className="rounded-xl bg-emerald-600 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-emerald-700 disabled:opacity-60"
                       >
-                        {savingFood ? (editingFoodId ? "Dang luu..." : "Dang them...") : (editingFoodId ? "Luu mon an" : "Them mon an")}
+                        {savingFood ? (editingFoodId ? "Đang lưu..." : "Đang thêm...") : (editingFoodId ? "Lưu món ăn" : "Thêm món ăn")}
                       </button>
                     </div>
                   </form>
@@ -798,7 +798,7 @@ export function Admin() {
                           <div className="flex items-center gap-4">
                             <div className="text-right text-sm">
                               <p className="font-semibold text-slate-900">{food.calories} kcal</p>
-                              <p className="text-slate-500">P {food.protein} ? C {food.carbs} ? F {food.fat}</p>
+                              <p className="text-slate-500">P {food.protein} • C {food.carbs} • F {food.fat}</p>
                             </div>
                             <div className="flex gap-2">
                               <button
@@ -806,14 +806,14 @@ export function Admin() {
                                 onClick={() => startEditFood(food)}
                                 className="rounded-lg border border-blue-200 bg-blue-50 px-3 py-1.5 text-xs font-semibold text-blue-700 transition hover:bg-blue-100"
                               >
-                                Sua
+                                Sửa
                               </button>
                               <button
                                 type="button"
                                 onClick={() => void handleDeleteFood(food.id)}
                                 className="rounded-lg border border-red-200 bg-red-50 px-3 py-1.5 text-xs font-semibold text-red-700 transition hover:bg-red-100"
                               >
-                                Xoa
+                                Xóa
                               </button>
                             </div>
                           </div>

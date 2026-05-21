@@ -35,8 +35,31 @@ export function Navbar({ isLanding = false }: NavbarProps) {
   const location = useLocation();
   const { session, logout } = useAuth();
   const [mobileOpen, setMobileOpen] = useState(false);
+  const [notificationsOpen, setNotificationsOpen] = useState(false);
   const member = session?.member;
   const canAccessAdmin = member?.role?.toLowerCase() === "admin";
+  const subscriptionDaysRemaining = member?.subscription?.daysRemaining ?? null;
+  const notifications = member
+    ? [
+        {
+          id: "goal",
+          title: "Mục tiêu hôm nay",
+          text: `Mục tiêu hiện tại của bạn là ${member.calorieTarget?.toLocaleString("vi-VN") ?? 1800} kcal/ngày.`,
+        },
+        {
+          id: "membership",
+          title: `${(member.tier || "free").toUpperCase()} đang hoạt động`,
+          text: subscriptionDaysRemaining !== null
+            ? `Gói còn ${subscriptionDaysRemaining} ngày sử dụng.`
+            : "Bạn có thể nâng cấp để mở thêm quyền AI và báo cáo.",
+        },
+        {
+          id: "water",
+          title: "Nhắc uống nước",
+          text: `Mục tiêu nước: ${member.waterTargetGlasses ?? 8} ly/ngày.`,
+        },
+      ]
+    : [];
 
   const navBg = isLanding
     ? "bg-transparent absolute top-0 left-0 right-0 z-50"
@@ -105,10 +128,40 @@ export function Navbar({ isLanding = false }: NavbarProps) {
           {member ? (
             <>
               <ThemeToggle compact isLanding={isLanding} />
-              <button className={`relative p-2 rounded-full transition-all ${isLanding ? "text-white/80 hover:text-white hover:bg-white/10" : "text-gray-500 hover:text-gray-700 hover:bg-gray-100 dark:text-slate-300 dark:hover:bg-slate-800 dark:hover:text-white"}`}>
-                <Bell className="w-5 h-5" />
-                <span className="absolute top-1 right-1 w-2 h-2 bg-red-500 rounded-full" />
-              </button>
+              <div className="relative">
+                <button
+                  type="button"
+                  onClick={() => setNotificationsOpen((value) => !value)}
+                  className={`relative p-2 rounded-full transition-all ${isLanding ? "text-white/80 hover:text-white hover:bg-white/10" : "text-gray-500 hover:text-gray-700 hover:bg-gray-100 dark:text-slate-300 dark:hover:bg-slate-800 dark:hover:text-white"}`}
+                  aria-expanded={notificationsOpen}
+                  aria-label="Mở thông báo"
+                >
+                  <Bell className="w-5 h-5" />
+                  <span className="absolute top-1 right-1 w-2 h-2 bg-red-500 rounded-full" />
+                </button>
+                {notificationsOpen && (
+                  <div className="absolute right-0 top-11 z-50 w-80 rounded-2xl border border-gray-100 bg-white p-3 shadow-xl dark:border-slate-700 dark:bg-slate-900">
+                    <div className="mb-2 flex items-center justify-between px-1">
+                      <p className="text-sm font-bold text-gray-900 dark:text-slate-50">Thông báo</p>
+                      <Link
+                        to="/member"
+                        onClick={() => setNotificationsOpen(false)}
+                        className="text-xs font-semibold text-green-600 hover:text-green-700"
+                      >
+                        Hồ sơ
+                      </Link>
+                    </div>
+                    <div className="space-y-2">
+                      {notifications.map((item) => (
+                        <div key={item.id} className="rounded-xl bg-green-50 px-3 py-2.5 dark:bg-green-500/10">
+                          <p className="text-sm font-semibold text-gray-900 dark:text-slate-50">{item.title}</p>
+                          <p className="mt-0.5 text-xs leading-5 text-gray-500 dark:text-slate-300">{item.text}</p>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
               <Link to="/member" className="flex items-center gap-2">
                 <div className={`w-8 h-8 rounded-full flex items-center justify-center ${isLanding ? "bg-white/20 text-white" : "bg-green-100 text-green-700 dark:bg-green-500/15 dark:text-green-300"}`} style={{ fontSize: "0.78rem", fontWeight: 800 }}>
                   {member.initials}

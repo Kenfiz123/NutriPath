@@ -268,10 +268,10 @@ export function LandingPage() {
                   Bắt Đầu Miễn Phí
                   <ArrowRight className="w-5 h-5" />
                 </Link>
-                <button className="flex items-center gap-2 bg-white/10 border border-white/30 text-white px-6 py-3.5 rounded-2xl hover:bg-white/20 transition-all">
+                <a href="#features" className="flex items-center gap-2 bg-white/10 border border-white/30 text-white px-6 py-3.5 rounded-2xl hover:bg-white/20 transition-all">
                   <Play className="w-5 h-5" />
                   <span style={{ fontSize: "1rem", fontWeight: 500 }}>Xem Demo</span>
-                </button>
+                </a>
               </div>
               <div className="flex flex-wrap gap-x-6 gap-y-2">
                 {["Dùng thử 14 ngày miễn phí", "Không cần thẻ tín dụng", "Hủy bất cứ lúc nào"].map((item) => (
@@ -321,7 +321,7 @@ export function LandingPage() {
       </section>
 
       {/* FEATURES SECTION */}
-      <section className="bg-gray-50 py-20">
+      <section id="features" className="bg-gray-50 py-20">
         <div className="max-w-[1440px] mx-auto px-8">
           <div className="text-center mb-12">
             <span className="inline-block bg-green-100 text-green-700 rounded-full px-4 py-1.5 mb-4" style={{ fontSize: "0.875rem", fontWeight: 600 }}>Tính năng nổi bật</span>
@@ -571,7 +571,7 @@ export function LandingPage() {
             <p style={{ fontSize: "0.875rem" }}>© 2026 NutriPath. Tất cả quyền được bảo lưu.</p>
             <div className="flex gap-6">
               {["Điều khoản", "Bảo mật", "Liên hệ"].map((item) => (
-                <button key={item} className="hover:text-white transition-colors" style={{ fontSize: "0.875rem" }}>{item}</button>
+                <a key={item} href={item.includes("Li") ? "mailto:support@nutripath.local" : item.includes("B") ? "/member" : "/pricing"} className="hover:text-white transition-colors" style={{ fontSize: "0.875rem" }}>{item}</a>
               ))}
             </div>
           </div>

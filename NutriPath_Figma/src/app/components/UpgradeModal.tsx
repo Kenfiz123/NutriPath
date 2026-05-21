@@ -146,9 +146,14 @@ export function UpgradeModal({ defaultPlan = "vip", onClose }: UpgradeModalProps
             Nâng cấp ngay <ArrowRight className="w-5 h-5" />
           </Link>
           <div className="text-center pb-2">
-            <button className="text-green-600 hover:text-green-700 underline" style={{ fontSize: "0.875rem" }}>
+            <Link
+              to={`/checkout?plan=${selected}&billing=monthly&trial=7`}
+              onClick={onClose}
+              className="text-green-600 hover:text-green-700 underline"
+              style={{ fontSize: "0.875rem" }}
+            >
               Dùng thử 7 ngày miễn phí
-            </button>
+            </Link>
           </div>
         </div>
 

@@ -833,6 +833,13 @@ export function getProfile() {
   return apiFetch<{ member: Member; plan: Plan | null; benefits: Plan["features"]; billingHistory: Payment[] }>(`/api/members/${getCurrentMemberId()}/profile`);
 }
 
+export function updateMemberProfile(payload: Partial<Pick<Member, "name" | "email" | "calorieTarget" | "waterTargetGlasses">>) {
+  return apiFetch<Member>(`/api/members/${getCurrentMemberId()}`, {
+    method: "PATCH",
+    body: payload,
+  });
+}
+
 export function sendChatMessage(text: string, mode: "assistant" | "coach" = "assistant") {
   const memberId = getStoredSession()?.member.id;
   return apiFetch<ChatResponse>("/api/chat/messages", {
