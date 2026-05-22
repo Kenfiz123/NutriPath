@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Link, useLocation } from "react-router";
 import {
   Bell,
@@ -6,6 +6,7 @@ import {
   Calculator,
   CreditCard,
   Crown,
+  FileBarChart,
   LayoutDashboard,
   Leaf,
   LogIn,
@@ -17,6 +18,7 @@ import {
   X,
 } from "lucide-react";
 import { useAuth } from "../../auth";
+import { getNotifications, markAllNotificationsRead, type AppNotification } from "../../api";
 import { ThemeToggle } from "../ThemeToggle";
 
 const navLinks = [
@@ -24,6 +26,7 @@ const navLinks = [
   { href: "/calculator", label: "Tính Calo", icon: Calculator },
   { href: "/tracker", label: "Theo Dõi", icon: UtensilsCrossed },
   { href: "/recipes", label: "Công Thức", icon: BookOpen },
+  { href: "/reports", label: "Báo cáo", icon: FileBarChart },
   { href: "/pricing", label: "Gói thành viên", icon: CreditCard },
 ];
 
@@ -36,30 +39,35 @@ export function Navbar({ isLanding = false }: NavbarProps) {
   const { session, logout } = useAuth();
   const [mobileOpen, setMobileOpen] = useState(false);
   const [notificationsOpen, setNotificationsOpen] = useState(false);
+  const [notifications, setNotifications] = useState<AppNotification[]>([]);
+  const [unreadCount, setUnreadCount] = useState(0);
   const member = session?.member;
   const canAccessAdmin = member?.role?.toLowerCase() === "admin";
-  const subscriptionDaysRemaining = member?.subscription?.daysRemaining ?? null;
-  const notifications = member
-    ? [
-        {
-          id: "goal",
-          title: "Mục tiêu hôm nay",
-          text: `Mục tiêu hiện tại của bạn là ${member.calorieTarget?.toLocaleString("vi-VN") ?? 1800} kcal/ngày.`,
-        },
-        {
-          id: "membership",
-          title: `${(member.tier || "free").toUpperCase()} đang hoạt động`,
-          text: subscriptionDaysRemaining !== null
-            ? `Gói còn ${subscriptionDaysRemaining} ngày sử dụng.`
-            : "Bạn có thể nâng cấp để mở thêm quyền AI và báo cáo.",
-        },
-        {
-          id: "water",
-          title: "Nhắc uống nước",
-          text: `Mục tiêu nước: ${member.waterTargetGlasses ?? 8} ly/ngày.`,
-        },
-      ]
-    : [];
+
+  useEffect(() => {
+    if (!member) {
+      setNotifications([]);
+      setUnreadCount(0);
+      return;
+    }
+
+    let active = true;
+    getNotifications({ limit: 5 })
+      .then((data) => {
+        if (!active) return;
+        setNotifications(data._embedded.notifications);
+        setUnreadCount(data.unreadCount);
+      })
+      .catch(() => {
+        if (!active) return;
+        setNotifications([]);
+        setUnreadCount(0);
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [member?.id, member?.calorieTarget, member?.subscription?.daysRemaining]);
 
   const navBg = isLanding
     ? "bg-transparent absolute top-0 left-0 right-0 z-50"
@@ -72,6 +80,12 @@ export function Navbar({ isLanding = false }: NavbarProps) {
   const handleLogout = async () => {
     await logout();
     setMobileOpen(false);
+  };
+
+  const handleMarkAllNotificationsRead = async () => {
+    await markAllNotificationsRead().catch(() => null);
+    setNotifications((items) => items.map((item) => ({ ...item, readAt: item.readAt || new Date().toISOString() })));
+    setUnreadCount(0);
   };
 
   return (
@@ -137,27 +151,43 @@ export function Navbar({ isLanding = false }: NavbarProps) {
                   aria-label="Mở thông báo"
                 >
                   <Bell className="w-5 h-5" />
-                  <span className="absolute top-1 right-1 w-2 h-2 bg-red-500 rounded-full" />
+                  {unreadCount > 0 && (
+                    <span className="absolute -right-1 -top-1 flex min-h-4 min-w-4 items-center justify-center rounded-full bg-red-500 px-1 text-[10px] font-bold text-white">
+                      {unreadCount > 9 ? "9+" : unreadCount}
+                    </span>
+                  )}
                 </button>
                 {notificationsOpen && (
                   <div className="absolute right-0 top-11 z-50 w-80 rounded-2xl border border-gray-100 bg-white p-3 shadow-xl dark:border-slate-700 dark:bg-slate-900">
                     <div className="mb-2 flex items-center justify-between px-1">
                       <p className="text-sm font-bold text-gray-900 dark:text-slate-50">Thông báo</p>
-                      <Link
-                        to="/member"
-                        onClick={() => setNotificationsOpen(false)}
+                      <button
+                        type="button"
+                        onClick={() => void handleMarkAllNotificationsRead()}
                         className="text-xs font-semibold text-green-600 hover:text-green-700"
                       >
-                        Hồ sơ
-                      </Link>
+                        Đánh dấu đã đọc
+                      </button>
                     </div>
                     <div className="space-y-2">
-                      {notifications.map((item) => (
-                        <div key={item.id} className="rounded-xl bg-green-50 px-3 py-2.5 dark:bg-green-500/10">
-                          <p className="text-sm font-semibold text-gray-900 dark:text-slate-50">{item.title}</p>
+                      {notifications.length ? notifications.map((item) => (
+                        <Link
+                          key={item.id}
+                          to={item.actionHref || "/member"}
+                          onClick={() => setNotificationsOpen(false)}
+                          className={`block rounded-xl px-3 py-2.5 ${item.readAt ? "bg-slate-50 dark:bg-slate-800" : "bg-green-50 dark:bg-green-500/10"}`}
+                        >
+                          <div className="flex items-start justify-between gap-2">
+                            <p className="text-sm font-semibold text-gray-900 dark:text-slate-50">{item.title}</p>
+                            {!item.readAt && <span className="mt-1 h-2 w-2 flex-shrink-0 rounded-full bg-green-500" />}
+                          </div>
                           <p className="mt-0.5 text-xs leading-5 text-gray-500 dark:text-slate-300">{item.text}</p>
+                        </Link>
+                      )) : (
+                        <div className="rounded-xl bg-slate-50 px-3 py-3 text-xs text-slate-500 dark:bg-slate-800 dark:text-slate-300">
+                          Chưa có thông báo mới.
                         </div>
-                      ))}
+                      )}
                     </div>
                   </div>
                 )}

@@ -431,7 +431,7 @@ export function MealTracker() {
 
   return (
     <div className="min-h-screen bg-gray-50">
-      <div className="mx-auto max-w-[1440px] px-8 py-8">
+      <div className="mx-auto max-w-[1440px] px-4 py-6 sm:px-6 lg:px-8 lg:py-8">
         <div className="mb-6">
           <h1 className="mb-1 text-gray-900" style={{ fontSize: "1.6rem", fontWeight: 800 }}>Nhật Ký Bữa Ăn</h1>
           <p className="text-gray-500" style={{ fontSize: "0.9rem" }}>Dữ liệu lấy từ backend theo ngày bạn chọn</p>
@@ -488,7 +488,7 @@ export function MealTracker() {
                 <ChevronRight className="h-4 w-4 text-gray-600" />
               </button>
             </div>
-            <div className="flex items-center gap-6">
+            <div className="grid w-full grid-cols-1 gap-3 sm:w-auto sm:grid-cols-3 sm:gap-6">
               {[
                 { label: "Tiêu thụ", value: `${totals.calories} kcal`, color: "text-green-600" },
                 { label: "Mục tiêu", value: `${targets.calories} kcal`, color: "text-gray-700" },
@@ -510,8 +510,8 @@ export function MealTracker() {
           </div>
         </div>
 
-        <div className="grid grid-cols-12 gap-6">
-          <div className="col-span-8 space-y-4">
+        <div className="grid grid-cols-1 gap-6 xl:grid-cols-12">
+          <div className="space-y-4 xl:col-span-8">
             {mealLog.meals.map((meal) => {
               const style = mealStyles[meal.id] ?? { icon: "M", color: "text-gray-700", borderColor: "border-gray-200", headerBg: "bg-gray-50" };
               const isOpen = openSections.includes(meal.id);
@@ -590,7 +590,7 @@ export function MealTracker() {
             })}
           </div>
 
-          <div className="col-span-4 space-y-6">
+          <div className="space-y-6 xl:col-span-4">
             <div className="rounded-2xl border border-green-100 bg-white p-6 shadow-sm">
               <div className="mb-4 flex items-start justify-between gap-3">
                 <div>
@@ -818,7 +818,7 @@ export function MealTracker() {
                 </button>
               </div>
 
-              <div className="mb-4 grid grid-cols-3 gap-2 rounded-2xl bg-gray-100 p-1">
+              <div className="mb-4 grid grid-cols-1 gap-2 rounded-2xl bg-gray-100 p-1 sm:grid-cols-3">
                 {[
                   { id: "foods", label: "Kho món" },
                   { id: "custom", label: "Món tự nấu" },

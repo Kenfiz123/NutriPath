@@ -4,9 +4,11 @@ import {
   BarChart3,
   BookOpen,
   Bot,
+  Edit3,
   LayoutDashboard,
   LogOut,
   RefreshCw,
+  Save,
   Search,
   Shield,
   Users,
@@ -22,6 +24,7 @@ import {
   getAdminSecurity,
   getAdminUsers,
   updateFood,
+  updateAdminUser,
   updateAdminAiSettings,
   updateAdminSecurity,
   type AdminAiSafetyLog,
@@ -98,7 +101,7 @@ function Toggle({
 
 function MetricCard({ label, value, change }: { label: string; value: string | number; change: string }) {
   return (
-    <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+    <div className="min-w-0 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
       <p className="text-sm text-slate-500">{label}</p>
       <p className="mt-3 text-3xl font-bold text-slate-900">{value}</p>
       <p className="mt-2 text-sm text-slate-500">{change}</p>
@@ -118,7 +121,7 @@ function SectionCard({
   children: ReactNode;
 }) {
   return (
-    <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+    <div className="min-w-0 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
       <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
         <div>
           <h2 className="text-lg font-semibold text-slate-900">{title}</h2>
@@ -167,6 +170,17 @@ export function Admin() {
   });
   const [roleFilter, setRoleFilter] = useState("Tất cả");
   const [statusFilter, setStatusFilter] = useState("Tất cả");
+  const [editingUser, setEditingUser] = useState<AdminUser | null>(null);
+  const [savingUser, setSavingUser] = useState(false);
+  const [userForm, setUserForm] = useState({
+    name: "",
+    email: "",
+    role: "member" as "member" | "moderator" | "admin",
+    status: "active",
+    tier: "free" as "free" | "vip" | "svip",
+    billing: "monthly" as "monthly" | "annual",
+    calorieTarget: 1800,
+  });
 
   const roleSummary = useMemo(() => overview?.roleBreakdown ?? [], [overview]);
   const tierSummary = useMemo(() => overview?.tierBreakdown ?? [], [overview]);
@@ -271,6 +285,70 @@ export function Admin() {
       fat: 0,
       portion: "",
     });
+  }
+
+  function startEditUser(user: AdminUser) {
+    setEditingUser(user);
+    setUserForm({
+      name: user.name,
+      email: user.email,
+      role: user.role === "Admin" ? "admin" : user.role === "Moderator" ? "moderator" : "member",
+      status: user.status || "active",
+      tier: user.plan.toLowerCase() === "svip" ? "svip" : user.plan.toLowerCase() === "vip" ? "vip" : "free",
+      billing: "monthly",
+      calorieTarget: Number(user.calorieTarget || 1800),
+    });
+  }
+
+  function resetUserForm() {
+    setEditingUser(null);
+    setUserForm({
+      name: "",
+      email: "",
+      role: "member",
+      status: "active",
+      tier: "free",
+      billing: "monthly",
+      calorieTarget: 1800,
+    });
+  }
+
+  async function handleSaveUser(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!editingUser) return;
+    setSavingUser(true);
+    try {
+      const today = new Date().toISOString().slice(0, 10);
+      const renewal = new Date();
+      if (userForm.tier !== "free") {
+        renewal.setMonth(renewal.getMonth() + (userForm.billing === "annual" ? 12 : 1));
+      }
+      await updateAdminUser(editingUser.memberId, {
+        name: userForm.name.trim(),
+        email: userForm.email.trim(),
+        role: userForm.role,
+        status: userForm.status,
+        tier: userForm.tier,
+        calorieTarget: Number(userForm.calorieTarget),
+        subscription: {
+          planId: userForm.tier,
+          billing: userForm.billing,
+          status: userForm.status === "active" ? "active" : "inactive",
+          startedAt: today,
+          purchaseAt: today,
+          renewsAt: userForm.tier === "free" ? null : renewal.toISOString().slice(0, 10),
+          daysTotal: userForm.tier === "free" ? 0 : userForm.billing === "annual" ? 365 : 30,
+          daysRemaining: userForm.tier === "free" ? 0 : userForm.billing === "annual" ? 365 : 30,
+        },
+      });
+      resetUserForm();
+      await Promise.all([loadUsers(), loadOverview()]);
+      setError(null);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Không lưu được người dùng.");
+    } finally {
+      setSavingUser(false);
+    }
   }
 
   async function handleDeleteFood(foodId: string) {
@@ -391,7 +469,7 @@ export function Admin() {
 
   return (
     <div className="min-h-screen bg-slate-50">
-      <div className="mx-auto max-w-7xl px-6 py-8">
+      <div className="mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:py-8">
         <div className="mb-8 flex flex-wrap items-start justify-between gap-4">
           <div>
             <div className="inline-flex items-center gap-2 rounded-full bg-emerald-50 px-3 py-1 text-sm font-medium text-emerald-700">
@@ -404,23 +482,23 @@ export function Admin() {
             </p>
           </div>
 
-          <div className="flex items-center gap-3">
+          <div className="grid w-full grid-cols-1 gap-3 sm:w-auto sm:grid-cols-3">
             <Link
               to="/dashboard"
-              className="rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 transition hover:bg-slate-100"
+              className="rounded-xl border border-slate-200 bg-white px-4 py-2 text-center text-sm font-semibold text-slate-700 transition hover:bg-slate-100"
             >
               Về dashboard
             </Link>
             <button
               onClick={() => void refreshCurrentTab()}
-              className="inline-flex items-center gap-2 rounded-xl bg-emerald-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-emerald-700"
+              className="inline-flex items-center justify-center gap-2 rounded-xl bg-emerald-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-emerald-700"
             >
               <RefreshCw className="h-4 w-4" />
               Làm mới tab
             </button>
             <button
               onClick={() => void logout()}
-              className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 transition hover:bg-slate-100"
+              className="inline-flex items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 transition hover:bg-slate-100"
             >
               <LogOut className="h-4 w-4" />
               Đăng xuất
@@ -477,20 +555,20 @@ export function Admin() {
                 >
                   <div className="space-y-3">
                     {overview.recentUsers.map((user) => (
-                      <div key={user.id} className="flex items-center justify-between rounded-2xl border border-slate-100 bg-slate-50 px-4 py-3">
-                        <div className="flex items-center gap-3">
+                      <div key={user.id} className="flex min-w-0 flex-col gap-3 rounded-2xl border border-slate-100 bg-slate-50 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
+                        <div className="flex min-w-0 items-center gap-3">
                           <div
                             className="flex h-11 w-11 items-center justify-center rounded-full text-sm font-bold text-white"
                             style={{ backgroundColor: user.color }}
                           >
                             {user.initials}
                           </div>
-                          <div>
-                            <p className="font-semibold text-slate-900">{user.name}</p>
-                            <p className="text-sm text-slate-500">{user.email}</p>
+                          <div className="min-w-0">
+                            <p className="truncate font-semibold text-slate-900">{user.name}</p>
+                            <p className="truncate text-sm text-slate-500">{user.email}</p>
                           </div>
                         </div>
-                        <div className="text-right">
+                        <div className="shrink-0 text-left sm:text-right">
                           <p className="text-sm font-semibold text-slate-700">{user.plan}</p>
                           <p className="text-xs text-slate-500">Tham gia {formatDate(user.joined)}</p>
                         </div>
@@ -594,6 +672,70 @@ export function Admin() {
               </select>
             </div>
 
+            {editingUser && (
+              <form onSubmit={(event) => void handleSaveUser(event)} className="mb-5 rounded-2xl border border-emerald-200 bg-emerald-50 p-4">
+                <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
+                  <div>
+                    <p className="font-semibold text-slate-900">Sửa người dùng: {editingUser.name}</p>
+                    <p className="text-sm text-slate-500">Cập nhật role, trạng thái, gói và mục tiêu calo bằng dữ liệu thật.</p>
+                  </div>
+                  <button type="button" onClick={resetUserForm} className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-600">
+                    Hủy
+                  </button>
+                </div>
+                <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+                  <label className="block">
+                    <span className="mb-1 block text-sm font-medium text-slate-700">Tên</span>
+                    <input value={userForm.name} onChange={(event) => setUserForm({ ...userForm, name: event.target.value })} className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm outline-none" />
+                  </label>
+                  <label className="block">
+                    <span className="mb-1 block text-sm font-medium text-slate-700">Email</span>
+                    <input type="email" value={userForm.email} onChange={(event) => setUserForm({ ...userForm, email: event.target.value })} className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm outline-none" />
+                  </label>
+                  <label className="block">
+                    <span className="mb-1 block text-sm font-medium text-slate-700">Role</span>
+                    <select value={userForm.role} onChange={(event) => setUserForm({ ...userForm, role: event.target.value as typeof userForm.role })} className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm outline-none">
+                      <option value="member">Member</option>
+                      <option value="moderator">Moderator</option>
+                      <option value="admin">Admin</option>
+                    </select>
+                  </label>
+                  <label className="block">
+                    <span className="mb-1 block text-sm font-medium text-slate-700">Trạng thái</span>
+                    <select value={userForm.status} onChange={(event) => setUserForm({ ...userForm, status: event.target.value })} className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm outline-none">
+                      <option value="active">Đang hoạt động</option>
+                      <option value="inactive">Tạm ngưng</option>
+                    </select>
+                  </label>
+                  <label className="block">
+                    <span className="mb-1 block text-sm font-medium text-slate-700">Gói</span>
+                    <select value={userForm.tier} onChange={(event) => setUserForm({ ...userForm, tier: event.target.value as typeof userForm.tier })} className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm outline-none">
+                      <option value="free">Free</option>
+                      <option value="vip">VIP</option>
+                      <option value="svip">SVIP</option>
+                    </select>
+                  </label>
+                  <label className="block">
+                    <span className="mb-1 block text-sm font-medium text-slate-700">Chu kỳ</span>
+                    <select value={userForm.billing} onChange={(event) => setUserForm({ ...userForm, billing: event.target.value as typeof userForm.billing })} className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm outline-none">
+                      <option value="monthly">Tháng</option>
+                      <option value="annual">Năm</option>
+                    </select>
+                  </label>
+                  <label className="block">
+                    <span className="mb-1 block text-sm font-medium text-slate-700">Mục tiêu calo</span>
+                    <input type="number" min={1200} max={5000} value={userForm.calorieTarget} onChange={(event) => setUserForm({ ...userForm, calorieTarget: Number(event.target.value) })} className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm outline-none" />
+                  </label>
+                  <div className="flex items-end">
+                    <button disabled={savingUser} type="submit" className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-emerald-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-emerald-700 disabled:opacity-60">
+                      <Save className="h-4 w-4" />
+                      {savingUser ? "Đang lưu..." : "Lưu user"}
+                    </button>
+                  </div>
+                </div>
+              </form>
+            )}
+
             {loadingUsers ? (
               <div className="rounded-2xl border border-dashed border-slate-200 px-5 py-10 text-center text-slate-500">
                 Đang tải bảng người dùng...
@@ -617,6 +759,7 @@ export function Admin() {
                         <th className="px-3 py-2">Tracked kcal</th>
                         <th className="px-3 py-2">Trạng thái</th>
                         <th className="px-3 py-2">Tham gia</th>
+                        <th className="px-3 py-2">Thao tác</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -650,7 +793,13 @@ export function Admin() {
                               {statusLabel(user.status)}
                             </span>
                           </td>
-                          <td className="rounded-r-2xl px-3 py-3">{formatDate(user.joined)}</td>
+                          <td className="px-3 py-3">{formatDate(user.joined)}</td>
+                          <td className="rounded-r-2xl px-3 py-3">
+                            <button onClick={() => startEditUser(user)} className="inline-flex items-center gap-1 rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-100">
+                              <Edit3 className="h-3.5 w-3.5" />
+                              Sửa
+                            </button>
+                          </td>
                         </tr>
                       ))}
                     </tbody>

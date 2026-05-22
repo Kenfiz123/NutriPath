@@ -1,36 +1,64 @@
 import { createBrowserRouter } from "react-router";
-import { createElement, type ComponentType } from "react";
+import { createElement, lazy, Suspense, type ComponentType, type LazyExoticComponent, type ReactNode } from "react";
 import { Root } from "./components/layout/Root";
 import { RequireAdmin, RequireAuth } from "./auth";
-import { LandingPage } from "./pages/LandingPage";
-import { Dashboard } from "./pages/Dashboard";
-import { CalorieCalculator } from "./pages/CalorieCalculator";
-import { MealTracker } from "./pages/MealTracker";
-import { Recipes } from "./pages/Recipes";
-import { Admin } from "./pages/Admin";
-import { PricingPlans } from "./pages/PricingPlans";
-import { SVIPLanding } from "./pages/SVIPLanding";
-import { Checkout } from "./pages/Checkout";
-import { MemberProfile } from "./pages/MemberProfile";
-import { Login } from "./pages/Login";
-import { Register } from "./pages/Register";
 
-function protectedComponent(Component: ComponentType) {
+const LandingPage = lazy(() => import("./pages/LandingPage").then((module) => ({ default: module.LandingPage })));
+const Dashboard = lazy(() => import("./pages/Dashboard").then((module) => ({ default: module.Dashboard })));
+const CalorieCalculator = lazy(() => import("./pages/CalorieCalculator").then((module) => ({ default: module.CalorieCalculator })));
+const MealTracker = lazy(() => import("./pages/MealTracker").then((module) => ({ default: module.MealTracker })));
+const Recipes = lazy(() => import("./pages/Recipes").then((module) => ({ default: module.Recipes })));
+const Admin = lazy(() => import("./pages/Admin").then((module) => ({ default: module.Admin })));
+const PricingPlans = lazy(() => import("./pages/PricingPlans").then((module) => ({ default: module.PricingPlans })));
+const SVIPLanding = lazy(() => import("./pages/SVIPLanding").then((module) => ({ default: module.SVIPLanding })));
+const Checkout = lazy(() => import("./pages/Checkout").then((module) => ({ default: module.Checkout })));
+const MemberProfile = lazy(() => import("./pages/MemberProfile").then((module) => ({ default: module.MemberProfile })));
+const Reports = lazy(() => import("./pages/Reports").then((module) => ({ default: module.Reports })));
+const Login = lazy(() => import("./pages/Login").then((module) => ({ default: module.Login })));
+const Register = lazy(() => import("./pages/Register").then((module) => ({ default: module.Register })));
+
+function PageFallback() {
+  return createElement(
+    "div",
+    { className: "min-h-screen bg-slate-50 p-8 text-slate-500 dark:bg-slate-950 dark:text-slate-300" },
+    "Đang tải trang...",
+  );
+}
+
+function withSuspense(children: ReactNode) {
+  return createElement(Suspense, { fallback: createElement(PageFallback) }, children);
+}
+
+function lazyComponent(Component: LazyExoticComponent<ComponentType>) {
+  return function LazyPage() {
+    return withSuspense(createElement(Component));
+  };
+}
+
+function protectedComponent(Component: LazyExoticComponent<ComponentType>) {
   return function ProtectedPage() {
-    return createElement(RequireAuth, null, createElement(Component));
+    return withSuspense(createElement(RequireAuth, null, createElement(Component)));
   };
 }
 
-function adminComponent(Component: ComponentType) {
+function adminComponent(Component: LazyExoticComponent<ComponentType>) {
   return function AdminPage() {
-    return createElement(RequireAdmin, null, createElement(Component));
+    return withSuspense(createElement(RequireAdmin, null, createElement(Component)));
   };
 }
 
+const PublicLanding = lazyComponent(LandingPage);
+const PublicLogin = lazyComponent(Login);
+const PublicRegister = lazyComponent(Register);
+const PublicCalculator = lazyComponent(CalorieCalculator);
+const PublicRecipes = lazyComponent(Recipes);
+const PublicPricingPlans = lazyComponent(PricingPlans);
+const PublicSVIPLanding = lazyComponent(SVIPLanding);
 const ProtectedDashboard = protectedComponent(Dashboard);
 const ProtectedMealTracker = protectedComponent(MealTracker);
 const ProtectedCheckout = protectedComponent(Checkout);
 const ProtectedMemberProfile = protectedComponent(MemberProfile);
+const ProtectedReports = protectedComponent(Reports);
 const ProtectedAdmin = adminComponent(Admin);
 
 export const router = createBrowserRouter([
@@ -38,17 +66,18 @@ export const router = createBrowserRouter([
     path: "/",
     Component: Root,
     children: [
-      { index: true, Component: LandingPage },
-      { path: "login", Component: Login },
-      { path: "register", Component: Register },
+      { index: true, Component: PublicLanding },
+      { path: "login", Component: PublicLogin },
+      { path: "register", Component: PublicRegister },
       { path: "dashboard", Component: ProtectedDashboard },
-      { path: "calculator", Component: CalorieCalculator },
+      { path: "calculator", Component: PublicCalculator },
       { path: "tracker", Component: ProtectedMealTracker },
-      { path: "recipes", Component: Recipes },
-      { path: "pricing", Component: PricingPlans },
-      { path: "svip", Component: SVIPLanding },
+      { path: "recipes", Component: PublicRecipes },
+      { path: "pricing", Component: PublicPricingPlans },
+      { path: "svip", Component: PublicSVIPLanding },
       { path: "checkout", Component: ProtectedCheckout },
       { path: "member", Component: ProtectedMemberProfile },
+      { path: "reports", Component: ProtectedReports },
     ],
   },
   {

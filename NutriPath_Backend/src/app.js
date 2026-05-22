@@ -321,7 +321,7 @@ function getActiveSession(req, store) {
   return { token, session, member };
 }
 
-function authSessionResponse(req, member) {
+function authSessionResponse(req, member, db = null) {
   const token = crypto.randomBytes(32).toString("hex");
   const expiresAt = Date.now() + SESSION_TTL_MS;
   sessions.set(token, { memberId: member.id, expiresAt });
@@ -329,7 +329,7 @@ function authSessionResponse(req, member) {
   return {
     token,
     expiresAt: new Date(expiresAt).toISOString(),
-    member: memberResource(req, member),
+    member: memberResource(req, member, db),
     _links: {
       self: currentLink(req),
       me: link(req, "/api/auth/me"),
@@ -447,6 +447,11 @@ function ensurePersonalFoods(db) {
   return db.personalFoods;
 }
 
+function ensureCoachPlans(db) {
+  if (!Array.isArray(db.coachPlans)) db.coachPlans = [];
+  return db.coachPlans;
+}
+
 function assertMemberSessionAccess(req, store, memberId) {
   const { member: sessionMember } = requireSession(req, store);
   const member = getMember(store.db, memberId);
@@ -544,6 +549,66 @@ function addDays(date, days) {
   return next;
 }
 
+function paginateItems(url, items, defaults = {}) {
+  const defaultLimit = defaults.defaultLimit || 50;
+  const maxLimit = defaults.maxLimit || 200;
+  const page = Math.max(1, Number(url.searchParams.get("page") || 1));
+  const limit = Math.max(1, Math.min(Number(url.searchParams.get("limit") || defaultLimit), maxLimit));
+  const offset = (page - 1) * limit;
+  return {
+    page,
+    limit,
+    total: items.length,
+    totalPages: Math.max(1, Math.ceil(items.length / limit)),
+    items: items.slice(offset, offset + limit),
+  };
+}
+
+function dateToUtcDay(date) {
+  return Date.UTC(date.getFullYear(), date.getMonth(), date.getDate());
+}
+
+function daysBetweenDates(fromDateString, toDateString) {
+  const from = parseDate(fromDateString);
+  const to = parseDate(toDateString);
+  if (!from || !to) return null;
+  return Math.ceil((dateToUtcDay(to) - dateToUtcDay(from)) / 86400000);
+}
+
+function earliestDateString(...values) {
+  return values
+    .filter(Boolean)
+    .sort((a, b) => String(a).localeCompare(String(b)))[0] || null;
+}
+
+function getPlanPayments(db, memberId, planId) {
+  if (!db || !Array.isArray(db.payments)) return [];
+  return db.payments
+    .filter((payment) => payment.memberId === memberId && payment.planId === planId)
+    .sort((a, b) => String(a.paidAt || "").localeCompare(String(b.paidAt || "")));
+}
+
+function getSubscriptionSnapshot(db, member) {
+  const current = member?.subscription || {};
+  const planId = current.planId || member?.tier || "free";
+  const payments = getPlanPayments(db, member?.id, planId);
+  const firstPaymentDate = payments[0]?.paidAt ? toLocalDateString(new Date(payments[0].paidAt)) : null;
+  const purchaseAt = earliestDateString(current.startedAt, firstPaymentDate, member?.joinedAt, toLocalDateString());
+  const renewsAt = current.renewsAt || null;
+  const computedTotal = renewsAt && purchaseAt ? daysBetweenDates(purchaseAt, renewsAt) : null;
+  const computedRemaining = renewsAt ? Math.max(0, daysBetweenDates(toLocalDateString(), renewsAt) ?? 0) : null;
+
+  return {
+    ...current,
+    planId,
+    startedAt: purchaseAt,
+    purchaseAt,
+    renewsAt,
+    daysTotal: computedTotal ?? current.daysTotal,
+    daysRemaining: computedRemaining ?? current.daysRemaining,
+  };
+}
+
 function startOfWeek(date) {
   const day = date.getDay();
   const diff = day === 0 ? -6 : 1 - day;
@@ -567,6 +632,308 @@ function buildWeeklyProgress(db, member, selectedDate) {
       target: member.calorieTarget || 1800,
     };
   });
+}
+
+function makeEmptyReportLog(member, date) {
+  return normalizeMealLogLabels({
+    id: `report-empty-${member.id}-${date}`,
+    memberId: member.id,
+    date,
+    waterGlasses: 0,
+    activity: { steps: 0, burnedCalories: 0, activeMinutes: 0 },
+    goals: [],
+    meals: Object.entries(mealDefaults).map(([id, meal]) => ({ id, ...meal, items: [] })),
+  });
+}
+
+function reportDateRange(endDateString, days) {
+  const end = parseDate(endDateString) || parseDate(toLocalDateString()) || new Date();
+  return Array.from({ length: days }, (_, index) => {
+    const current = addDays(end, index - days + 1);
+    return toLocalDateString(current);
+  });
+}
+
+function buildNutritionReport(req, db, member, options = {}) {
+  const access = getMembershipAccess(member);
+  const requestedDays = Math.max(1, Math.min(Number(options.days || access.analyticsWindowDays || 7), 365));
+  const days = Math.min(requestedDays, access.analyticsWindowDays);
+  const endDate = options.endDate && parseDate(options.endDate) ? options.endDate : toLocalDateString();
+  const dates = reportDateRange(endDate, days);
+  const logsByDate = new Map((db.mealLogs || [])
+    .filter((log) => log.memberId === member.id)
+    .map((log) => [log.date, normalizeMealLogLabels(log)]));
+
+  const daily = dates.map((date) => {
+    const log = logsByDate.get(date) || makeEmptyReportLog(member, date);
+    const summary = summarizeMealLog(log, member);
+    const mealCount = getMealItemCount(log);
+    const target = summary.targets.calories;
+    const calorieDelta = round(summary.totals.calories - target);
+    return {
+      date,
+      calories: summary.totals.calories,
+      calorieTarget: target,
+      calorieDelta,
+      protein: summary.totals.protein,
+      carbs: summary.totals.carbs,
+      fat: summary.totals.fat,
+      waterGlasses: log.waterGlasses || 0,
+      waterTarget: summary.targets.waterGlasses,
+      burnedCalories: log.activity?.burnedCalories || 0,
+      activeMinutes: log.activity?.activeMinutes || 0,
+      mealCount,
+      onTarget: summary.totals.calories > 0 && Math.abs(calorieDelta) <= Math.max(100, target * 0.1),
+      waterDone: (log.waterGlasses || 0) >= summary.targets.waterGlasses,
+    };
+  });
+
+  const totals = daily.reduce((sum, day) => {
+    sum.calories += day.calories;
+    sum.protein += day.protein;
+    sum.carbs += day.carbs;
+    sum.fat += day.fat;
+    sum.waterGlasses += day.waterGlasses;
+    sum.burnedCalories += day.burnedCalories;
+    sum.activeMinutes += day.activeMinutes;
+    sum.mealCount += day.mealCount;
+    if (day.mealCount > 0) sum.trackedDays += 1;
+    if (day.onTarget) sum.onTargetDays += 1;
+    if (day.waterDone) sum.waterDoneDays += 1;
+    return sum;
+  }, {
+    calories: 0,
+    protein: 0,
+    carbs: 0,
+    fat: 0,
+    waterGlasses: 0,
+    burnedCalories: 0,
+    activeMinutes: 0,
+    mealCount: 0,
+    trackedDays: 0,
+    onTargetDays: 0,
+    waterDoneDays: 0,
+  });
+
+  const mealTypeTotals = Object.entries(mealDefaults).map(([id, meal]) => ({
+    id,
+    name: meal.name,
+    calories: 0,
+    count: 0,
+  }));
+  const mealTypeMap = new Map(mealTypeTotals.map((meal) => [meal.name, meal]));
+  const dishMap = new Map();
+  for (const date of dates) {
+    const log = logsByDate.get(date);
+    if (!log) continue;
+    for (const meal of log.meals || []) {
+      const bucket = mealTypeMap.get(meal.name) || { id: meal.id, name: meal.name, calories: 0, count: 0 };
+      for (const item of meal.items || []) {
+        const calories = Number(item.calories) || 0;
+        bucket.calories += calories;
+        bucket.count += 1;
+        const key = normalizeVietnameseText(item.name || "mon an");
+        const current = dishMap.get(key) || { name: item.name || "Món ăn", calories: 0, count: 0 };
+        current.calories += calories;
+        current.count += 1;
+        dishMap.set(key, current);
+      }
+      mealTypeMap.set(meal.name, bucket);
+    }
+  }
+
+  const averages = {
+    calories: round(totals.calories / days),
+    protein: round(totals.protein / days, 1),
+    carbs: round(totals.carbs / days, 1),
+    fat: round(totals.fat / days, 1),
+    waterGlasses: round(totals.waterGlasses / days, 1),
+    burnedCalories: round(totals.burnedCalories / days),
+    activeMinutes: round(totals.activeMinutes / days),
+  };
+
+  const targetSummary = {
+    calories: member.calorieTarget || 1800,
+    protein: member.macroTargets?.protein || 120,
+    carbs: member.macroTargets?.carbs || 220,
+    fat: member.macroTargets?.fat || 60,
+    waterGlasses: member.waterTargetGlasses || 8,
+  };
+
+  const adherence = {
+    trackedDays: totals.trackedDays,
+    trackedPct: round((totals.trackedDays / days) * 100),
+    onTargetDays: totals.onTargetDays,
+    onTargetPct: round((totals.onTargetDays / days) * 100),
+    waterDoneDays: totals.waterDoneDays,
+    waterDonePct: round((totals.waterDoneDays / days) * 100),
+  };
+
+  const insights = [];
+  if (adherence.trackedDays === 0) {
+    insights.push("Chưa có dữ liệu bữa ăn trong kỳ báo cáo. Hãy ghi món mỗi ngày để phân tích chính xác hơn.");
+  } else {
+    insights.push(`Bạn đã ghi bữa ${adherence.trackedDays}/${days} ngày trong kỳ báo cáo.`);
+  }
+  if (averages.calories > targetSummary.calories * 1.1) {
+    insights.push("Calo trung bình đang cao hơn mục tiêu. Hãy kiểm tra lại dầu ăn, sốt và khẩu phần tinh bột.");
+  } else if (averages.calories > 0 && averages.calories < targetSummary.calories * 0.8) {
+    insights.push("Calo trung bình đang thấp hơn mục tiêu khá nhiều. Nên bổ sung bữa cân bằng để tránh thiếu năng lượng.");
+  } else if (averages.calories > 0) {
+    insights.push("Calo trung bình đang tương đối sát mục tiêu hiện tại.");
+  }
+  if (averages.protein < targetSummary.protein * 0.75 && adherence.trackedDays > 0) {
+    insights.push("Protein trung bình còn thấp. Ưu tiên thêm ức gà, cá, trứng, đậu hũ hoặc sữa chua không đường.");
+  }
+  if (adherence.waterDonePct < 50) {
+    insights.push("Tần suất đạt mục tiêu nước còn thấp. Đặt nhắc uống nước theo từng khung giờ sẽ dễ duy trì hơn.");
+  }
+
+  return {
+    range: {
+      from: dates[0],
+      to: dates[dates.length - 1],
+      days,
+      requestedDays,
+      limitedByPlan: requestedDays > days,
+    },
+    access,
+    targets: targetSummary,
+    totals: {
+      calories: round(totals.calories),
+      protein: round(totals.protein, 1),
+      carbs: round(totals.carbs, 1),
+      fat: round(totals.fat, 1),
+      waterGlasses: round(totals.waterGlasses, 1),
+      burnedCalories: round(totals.burnedCalories),
+      activeMinutes: round(totals.activeMinutes),
+      mealCount: totals.mealCount,
+    },
+    averages,
+    adherence,
+    daily,
+    mealBreakdown: [...mealTypeMap.values()]
+      .filter((meal) => meal.count > 0)
+      .map((meal) => ({ ...meal, calories: round(meal.calories) }))
+      .sort((a, b) => b.calories - a.calories),
+    topFoods: [...dishMap.values()]
+      .map((dish) => ({ ...dish, calories: round(dish.calories) }))
+      .sort((a, b) => b.calories - a.calories)
+      .slice(0, 8),
+    insights: insights.slice(0, 5),
+    generatedAt: new Date().toISOString(),
+    _links: {
+      self: currentLink(req),
+      member: link(req, `/api/members/${member.id}`),
+      mealLogs: link(req, `/api/members/${member.id}/meal-logs`),
+      export: link(req, `/api/members/${member.id}/reports/export?days=${days}&endDate=${encodeURIComponent(endDate)}`, "GET"),
+    },
+  };
+}
+
+function csvValue(value) {
+  const text = String(value ?? "");
+  return /[",\n]/.test(text) ? `"${text.replace(/"/g, '""')}"` : text;
+}
+
+function buildReportCsv(report) {
+  const rows = [
+    ["Ngày", "Calo", "Mục tiêu calo", "Protein", "Carbs", "Fat", "Nước", "Mục tiêu nước", "Kcal đốt", "Phút vận động", "Số món"],
+    ...report.daily.map((day) => [
+      day.date,
+      day.calories,
+      day.calorieTarget,
+      day.protein,
+      day.carbs,
+      day.fat,
+      day.waterGlasses,
+      day.waterTarget,
+      day.burnedCalories,
+      day.activeMinutes,
+      day.mealCount,
+    ]),
+    [],
+    ["Tổng calo", report.totals.calories],
+    ["Calo trung bình/ngày", report.averages.calories],
+    ["Ngày có ghi bữa", `${report.adherence.trackedDays}/${report.range.days}`],
+    ["Ngày đạt mục tiêu calo", `${report.adherence.onTargetDays}/${report.range.days}`],
+    ["Ngày đạt mục tiêu nước", `${report.adherence.waterDoneDays}/${report.range.days}`],
+  ];
+  return rows.map((row) => row.map(csvValue).join(",")).join("\n");
+}
+
+function buildWeeklyCoachPlan(store, member, options = {}) {
+  const startDate = options.startDate && parseDate(options.startDate) ? options.startDate : toLocalDateString();
+  const target = member.calorieTarget || 1800;
+  const macroTargets = member.macroTargets || { protein: 120, carbs: 220, fat: 60 };
+  const goal = member.goal || "maintain";
+  const goalText = goal === "lose" ? "giảm mỡ bền vững" : goal === "gain" ? "tăng cân/tăng cơ lành mạnh" : "duy trì năng lượng ổn định";
+  const recentReport = buildNutritionReport(options.req, store.db, member, { days: 7 });
+  const proteinGap = recentReport.averages.protein < macroTargets.protein * 0.8;
+  const waterGap = recentReport.averages.waterGlasses < (member.waterTargetGlasses || 8) * 0.7;
+  const calorieLow = recentReport.averages.calories > 0 && recentReport.averages.calories < target * 0.8;
+  const calorieHigh = recentReport.averages.calories > target * 1.1;
+  const mealTemplates = [
+    {
+      breakfast: "Yến mạch sữa chua không đường, chuối và hạt chia",
+      lunch: "Cơm gạo lứt, ức gà áp chảo, rau luộc và canh",
+      dinner: "Cá kho nhạt, khoai lang, salad rau xanh",
+      snack: "Sữa chua Hy Lạp hoặc 1 quả trứng luộc",
+    },
+    {
+      breakfast: "Bánh mì nguyên cám trứng ốp ít dầu và rau",
+      lunch: "Bún thịt nạc nướng ít sốt, thêm rau sống",
+      dinner: "Đậu hũ sốt cà chua, cơm trắng vừa khẩu phần, rau xào ít dầu",
+      snack: "Trái cây ít ngọt và một nắm hạt nhỏ",
+    },
+    {
+      breakfast: "Phở bò phần vừa, ưu tiên nhiều rau và ít nước béo",
+      lunch: "Cơm cá hồi/cá thu, rau xanh và canh bí",
+      dinner: "Ức gà xé trộn salad, khoai lang hoặc bắp",
+      snack: "Sữa tươi không đường hoặc đậu nành không đường",
+    },
+  ];
+  const labels = ["Thứ 2", "Thứ 3", "Thứ 4", "Thứ 5", "Thứ 6", "Thứ 7", "Chủ nhật"];
+  const start = parseDate(startDate) || new Date();
+  const days = labels.map((label, index) => {
+    const template = mealTemplates[index % mealTemplates.length];
+    const calorieAdjust = goal === "lose" ? -80 : goal === "gain" ? 150 : 0;
+    return {
+      date: toLocalDateString(addDays(start, index)),
+      label,
+      targetCalories: Math.max(1200, target + calorieAdjust),
+      meals: [
+        { name: "Bữa sáng", time: "07:00-08:30", suggestion: template.breakfast, calories: Math.round((target + calorieAdjust) * 0.25) },
+        { name: "Bữa trưa", time: "11:30-13:00", suggestion: template.lunch, calories: Math.round((target + calorieAdjust) * 0.35) },
+        { name: "Bữa tối", time: "18:00-19:30", suggestion: template.dinner, calories: Math.round((target + calorieAdjust) * 0.3) },
+        { name: "Bữa phụ", time: "15:00-16:30", suggestion: template.snack, calories: Math.round((target + calorieAdjust) * 0.1) },
+      ],
+      focus: index % 2 === 0 ? "Ưu tiên protein nạc và rau xanh" : "Giữ khẩu phần tinh bột vừa đủ, hạn chế sốt ngọt",
+    };
+  });
+
+  const actionSteps = [
+    `Giữ mục tiêu khoảng ${target} kcal/ngày cho mục tiêu ${goalText}.`,
+    `Protein mục tiêu: ${macroTargets.protein}g/ngày; chia đều trong 3-4 bữa.`,
+    waterGap ? `Tăng nước lên ${member.waterTargetGlasses || 8} ly/ngày, chia theo buổi sáng - chiều - tối.` : "Duy trì lượng nước hiện tại, ưu tiên nước lọc và đồ uống ít đường.",
+    proteinGap ? "Mỗi bữa chính nên có một nguồn protein rõ ràng: trứng, ức gà, cá, thịt nạc hoặc đậu hũ." : "Protein gần ổn, tiếp tục giữ nguồn đạm nạc trong các bữa chính.",
+    calorieHigh ? "Giảm dầu ăn, sốt và đồ uống ngọt trong tuần này." : calorieLow ? "Bổ sung thêm bữa phụ lành mạnh để tránh thiếu năng lượng." : "Theo dõi calo sau mỗi bữa để điều chỉnh khẩu phần trong ngày.",
+  ];
+
+  return {
+    id: store.nextId("coach-plan", ensureCoachPlans(store.db)),
+    memberId: member.id,
+    title: `Kế hoạch AI Coach 7 ngày cho ${goalText}`,
+    startDate,
+    endDate: days[days.length - 1].date,
+    targetCalories: target,
+    macroTargets,
+    summary: `Kế hoạch 7 ngày được cá nhân hóa từ mục tiêu ${target} kcal/ngày, macro hiện tại và nhật ký bữa ăn gần nhất.`,
+    actionSteps,
+    days,
+    generatedAt: new Date().toISOString(),
+    generatedBy: "ai-coach",
+  };
 }
 
 function buildDashboardTips(log, summary) {
@@ -786,15 +1153,18 @@ function assertMealItemQuota(member, log, additionalItems = 1) {
   return access;
 }
 
-function memberResource(req, member) {
+function memberResource(req, member, db = null) {
   return {
     ...member,
+    subscription: getSubscriptionSnapshot(db, member),
     access: getMembershipAccess(member),
     _links: {
       self: link(req, `/api/members/${member.id}`),
       profile: link(req, `/api/members/${member.id}/profile`),
       dashboard: link(req, `/api/members/${member.id}/dashboard`),
       mealLogs: link(req, `/api/members/${member.id}/meal-logs`),
+      reports: link(req, `/api/members/${member.id}/reports/nutrition`),
+      notifications: link(req, `/api/members/${member.id}/notifications`),
       payments: link(req, `/api/members/${member.id}/payments`),
       update: link(req, `/api/members/${member.id}`, "PATCH"),
       delete: link(req, `/api/members/${member.id}`, "DELETE"),
@@ -1105,7 +1475,10 @@ function buildQuote(db, body) {
   const discountCode = String(body.discountCode || "").trim().toUpperCase();
   const discountRate = discountCode === "NUTRIPATH10" ? 0.1 : 0;
   const discountAmount = Math.round(subtotal * discountRate);
-  const total = subtotal + vat - discountAmount;
+  const originalTotal = subtotal + vat - discountAmount;
+  const trialDays = Number(body.trialDays || 0);
+  const safeTrialDays = trialDays === 7 && plan.id !== "free" ? 7 : 0;
+  const total = safeTrialDays ? 0 : originalTotal;
 
   return {
     planId: plan.id,
@@ -1119,6 +1492,8 @@ function buildQuote(db, body) {
     discountCode: discountRate ? discountCode : null,
     discountAmount,
     total,
+    trialDays: safeTrialDays,
+    originalTotal,
   };
 }
 
@@ -1366,6 +1741,108 @@ function getSafeChatQuickReplies(member) {
 function ensureChatHistory(db) {
   db.chatHistory ??= [];
   return db.chatHistory;
+}
+
+function ensureNotifications(db) {
+  db.notifications ??= [];
+  return db.notifications;
+}
+
+function notificationResource(req, notification) {
+  return {
+    ...notification,
+    _links: {
+      self: link(req, `/api/members/${notification.memberId}/notifications/${notification.id}`),
+      markRead: link(req, `/api/members/${notification.memberId}/notifications/${notification.id}`, "PATCH"),
+    },
+  };
+}
+
+function upsertNotification(store, memberId, type, title, text, options = {}) {
+  const notifications = ensureNotifications(store.db);
+  const key = options.key || `${memberId}:${type}`;
+  const now = new Date().toISOString();
+  let notification = notifications.find((item) => item.memberId === memberId && item.key === key);
+  if (notification) {
+    notification.title = title;
+    notification.text = text;
+    notification.type = type;
+    notification.priority = options.priority || notification.priority || "normal";
+    notification.actionHref = options.actionHref ?? notification.actionHref ?? null;
+    notification.updatedAt = now;
+    return notification;
+  }
+
+  notification = {
+    id: store.nextId("notif", notifications),
+    memberId,
+    key,
+    type,
+    title,
+    text,
+    priority: options.priority || "normal",
+    actionHref: options.actionHref || null,
+    readAt: null,
+    createdAt: now,
+    updatedAt: now,
+  };
+  notifications.unshift(notification);
+  return notification;
+}
+
+function syncMemberNotifications(store, member) {
+  if (!member) return [];
+  const today = toLocalDateString();
+  const access = getMembershipAccess(member);
+  upsertNotification(
+    store,
+    member.id,
+    "nutrition-goal",
+    "Mục tiêu hôm nay",
+    `Mục tiêu hiện tại của bạn là ${Number(member.calorieTarget || 1800).toLocaleString("vi-VN")} kcal/ngày và ${member.waterTargetGlasses || 8} ly nước.`,
+    { key: `${member.id}:nutrition-goal`, actionHref: "/dashboard" },
+  );
+
+  if (member.subscription?.renewsAt) {
+    const daysRemaining = getSubscriptionSnapshot(store.db, member).daysRemaining;
+    upsertNotification(
+      store,
+      member.id,
+      "membership",
+      `${access.tier.toUpperCase()} đang hoạt động`,
+      `Gói của bạn còn ${daysRemaining ?? 0} ngày, hết hạn vào ${member.subscription.renewsAt}.`,
+      { key: `${member.id}:membership`, actionHref: "/member", priority: Number(daysRemaining) <= 7 ? "high" : "normal" },
+    );
+  }
+
+  const todayLog = store.db.mealLogs?.find((log) => log.memberId === member.id && log.date === today);
+  if (!todayLog || getMealItemCount(todayLog) === 0) {
+    upsertNotification(
+      store,
+      member.id,
+      "meal-reminder",
+      "Nhắc ghi bữa ăn",
+      "Hôm nay bạn chưa ghi món nào. Thêm bữa đầu tiên để báo cáo và AI Coach hiểu tiến trình thật hơn.",
+      { key: `${member.id}:meal-reminder:${today}`, actionHref: "/tracker" },
+    );
+  }
+
+  const waterTarget = member.waterTargetGlasses || 8;
+  const waterGlasses = todayLog?.waterGlasses || 0;
+  if (waterGlasses < waterTarget) {
+    upsertNotification(
+      store,
+      member.id,
+      "water-reminder",
+      "Nhắc uống nước",
+      `Bạn đã ghi ${waterGlasses}/${waterTarget} ly nước hôm nay.`,
+      { key: `${member.id}:water-reminder:${today}`, actionHref: "/dashboard" },
+    );
+  }
+
+  return ensureNotifications(store.db)
+    .filter((item) => item.memberId === member.id)
+    .sort((a, b) => String(b.createdAt || "").localeCompare(String(a.createdAt || "")));
 }
 
 function chatHistoryResource(message) {
@@ -2345,10 +2822,15 @@ route("POST", "/api/members/:memberId/nutrition-profile", async ({ req, store, p
       await store.save();
     }
   }
+  upsertNotification(store, updatedMember.id, "nutrition-profile", "Đã cập nhật hồ sơ dinh dưỡng", `Mục tiêu mới: ${updatedMember.calorieTarget} kcal/ngày, protein ${updatedMember.macroTargets.protein}g.`, {
+    key: `${updatedMember.id}:nutrition-profile:${toLocalDateString()}`,
+    actionHref: "/calculator",
+  });
+  await store.save();
 
   return {
     saved: true,
-    member: memberResource(req, updatedMember),
+    member: memberResource(req, updatedMember, store.db),
     calculation: aiInsight ? { ...calculation, aiInsight } : calculation,
     _links: {
       self: currentLink(req),
@@ -2400,7 +2882,7 @@ route("POST", "/api/auth/register", async ({ req, store, body }) => {
     await store.save();
   }
 
-  return authSessionResponse(req, member);
+  return authSessionResponse(req, member, store.db);
 });
 
 route("POST", "/api/auth/login", async ({ req, store, body }) => {
@@ -2415,13 +2897,13 @@ route("POST", "/api/auth/login", async ({ req, store, body }) => {
   const member = getMember(store.db, credential.memberId) || findMemberByEmail(store.db, email);
   if (!member) unauthorized("Tài khoản chưa gắn với hồ sơ thành viên.");
 
-  return authSessionResponse(req, member);
+  return authSessionResponse(req, member, store.db);
 });
 
 route("GET", "/api/auth/me", async ({ req, store }) => {
   const { member } = requireSession(req, store);
   return {
-    member: memberResource(req, member),
+    member: memberResource(req, member, store.db),
     _links: {
       self: currentLink(req),
       logout: link(req, "/api/auth/logout", "POST"),
@@ -2455,7 +2937,7 @@ route("GET", "/api/members", async ({ req, store, url }) => {
   });
 
   return collectionResponse(req, "members", members, {
-    itemMapper: (member) => memberResource(req, member),
+    itemMapper: (member) => memberResource(req, member, store.db),
     links: { create: link(req, "/api/members", "POST") },
     meta: { filters: { search, tier } },
   });
@@ -2486,13 +2968,13 @@ route("POST", "/api/members", async ({ req, store, body }) => {
   };
   store.db.members.push(member);
   await store.save();
-  return memberResource(req, member);
+  return memberResource(req, member, store.db);
 });
 
 route("GET", "/api/members/:id", async ({ req, store, params }) => {
   const member = getMember(store.db, params.id);
   if (!member) notFound(req, "Member not found.");
-  return memberResource(req, member);
+  return memberResource(req, member, store.db);
 });
 
 route("PATCH", "/api/members/:id", async ({ req, store, params, body }) => {
@@ -2518,7 +3000,7 @@ route("PATCH", "/api/members/:id", async ({ req, store, params, body }) => {
   }
   if (body.name) member.initials = initialsFromName(member.name);
   await store.save();
-  return memberResource(req, member);
+  return memberResource(req, member, store.db);
 });
 
 route("DELETE", "/api/members/:id", async ({ req, store, params }) => {
@@ -2541,7 +3023,7 @@ route("GET", "/api/members/:memberId/profile", async ({ req, store, params }) =>
   const plan = getPlan(store.db, member.subscription?.planId || member.tier);
   const payments = store.db.payments.filter((payment) => payment.memberId === member.id);
   return {
-    member: memberResource(req, member),
+    member: memberResource(req, member, store.db),
     plan: plan ? planResource(req, plan) : null,
     benefits: plan?.features || [],
     billingHistory: payments.map((payment) => paymentResource(req, payment)),
@@ -2553,6 +3035,61 @@ route("GET", "/api/members/:memberId/profile", async ({ req, store, params }) =>
       checkout: link(req, "/api/payments", "POST"),
     },
   };
+});
+
+route("GET", "/api/members/:memberId/notifications", async ({ req, store, params, url }) => {
+  const { member } = assertMemberSessionAccess(req, store, params.memberId);
+  const notifications = syncMemberNotifications(store, member);
+  await store.save();
+  const unreadOnly = url.searchParams.get("unread") === "true";
+  const limit = Math.max(1, Math.min(Number(url.searchParams.get("limit") || 30), 100));
+  const visible = notifications
+    .filter((notification) => !unreadOnly || !notification.readAt)
+    .slice(0, limit);
+  return collectionResponse(req, "notifications", visible, {
+    itemMapper: (notification) => notificationResource(req, notification),
+    links: {
+      member: link(req, `/api/members/${member.id}`),
+      markAllRead: link(req, `/api/members/${member.id}/notifications/read-all`, "PATCH"),
+    },
+    meta: {
+      unreadCount: notifications.filter((notification) => !notification.readAt).length,
+      total: notifications.length,
+    },
+  });
+});
+
+route("PATCH", "/api/members/:memberId/notifications/read-all", async ({ req, store, params }) => {
+  const { member } = assertMemberSessionAccess(req, store, params.memberId);
+  const now = new Date().toISOString();
+  const notifications = ensureNotifications(store.db).filter((notification) => notification.memberId === member.id);
+  for (const notification of notifications) {
+    notification.readAt ||= now;
+    notification.updatedAt = now;
+  }
+  await store.save();
+  return {
+    updated: notifications.length,
+    unreadCount: 0,
+    _links: {
+      notifications: link(req, `/api/members/${member.id}/notifications`),
+    },
+  };
+});
+
+route("PATCH", "/api/members/:memberId/notifications/:id", async ({ req, store, params, body }) => {
+  const { member } = assertMemberSessionAccess(req, store, params.memberId);
+  const notification = ensureNotifications(store.db).find((item) => item.memberId === member.id && item.id === params.id);
+  if (!notification) notFound(req, "Notification not found.");
+  const now = new Date().toISOString();
+  if (body.read === false) {
+    notification.readAt = null;
+  } else {
+    notification.readAt = now;
+  }
+  notification.updatedAt = now;
+  await store.save();
+  return notificationResource(req, notification);
 });
 
 route("GET", "/api/members/:memberId/dashboard", async ({ req, store, params, url }) => {
@@ -2568,7 +3105,7 @@ route("GET", "/api/members/:memberId/dashboard", async ({ req, store, params, ur
   return {
     date,
     greeting: `Xin chào, ${member.name}`,
-    member: memberResource(req, member),
+    member: memberResource(req, member, store.db),
     nutrition: summary,
     mealLog: mealLogResource(req, log, member),
     weeklyProgress: buildWeeklyProgress(store.db, member, selectedDate),
@@ -2626,11 +3163,21 @@ route("GET", "/api/foods", async ({ req, store, url }) => {
     const matchCategory = !category || food.category === category;
     return matchSearch && matchCategory;
   });
+  const page = paginateItems(url, foods, { defaultLimit: 50, maxLimit: 200 });
   const categories = [...new Set(store.db.foods.map((food) => food.category))].sort();
-  return collectionResponse(req, "foods", foods, {
+  return collectionResponse(req, "foods", page.items, {
     itemMapper: (food) => foodResource(req, food),
     links: { create: link(req, "/api/foods", "POST") },
-    meta: { filters: { search, category }, categories },
+    meta: {
+      filters: { search, category },
+      categories,
+      pagination: {
+        page: page.page,
+        limit: page.limit,
+        total: page.total,
+        totalPages: page.totalPages,
+      },
+    },
   });
 });
 
@@ -2760,6 +3307,39 @@ route("GET", "/api/members/:memberId/meal-logs/:date", async ({ req, store, para
   return mealLogResource(req, log, member);
 });
 
+route("GET", "/api/members/:memberId/reports/nutrition", async ({ req, store, params, url }) => {
+  const { member } = assertMemberSessionAccess(req, store, params.memberId);
+  const days = Number(url.searchParams.get("days") || member.access?.analyticsWindowDays || getMembershipAccess(member).analyticsWindowDays);
+  const endDate = url.searchParams.get("endDate") || toLocalDateString();
+  if (url.searchParams.get("endDate") && !parseDate(endDate)) badRequest("Ngay ket thuc bao cao khong hop le.");
+  return buildNutritionReport(req, store.db, member, { days, endDate });
+});
+
+route("GET", "/api/members/:memberId/reports/export", async ({ req, store, params, url }) => {
+  const { member } = assertMemberSessionAccess(req, store, params.memberId);
+  const access = getMembershipAccess(member);
+  if (!access.reportExports) {
+    forbidden("Tinh nang xuat bao cao chi danh cho goi SVIP.", {
+      tier: access.tier,
+      reportExports: access.reportExports,
+    });
+  }
+  const days = Number(url.searchParams.get("days") || access.analyticsWindowDays);
+  const endDate = url.searchParams.get("endDate") || toLocalDateString();
+  if (url.searchParams.get("endDate") && !parseDate(endDate)) badRequest("Ngay ket thuc bao cao khong hop le.");
+  const report = buildNutritionReport(req, store.db, member, { days, endDate });
+  return {
+    filename: `nutripath-report-${member.id}-${report.range.from}-${report.range.to}.csv`,
+    mimeType: "text/csv;charset=utf-8",
+    content: buildReportCsv(report),
+    generatedAt: report.generatedAt,
+    _links: {
+      report: link(req, `/api/members/${member.id}/reports/nutrition?days=${report.range.days}&endDate=${encodeURIComponent(report.range.to)}`),
+      member: link(req, `/api/members/${member.id}`),
+    },
+  };
+});
+
 route("GET", "/api/members/:memberId/custom-foods", async ({ req, store, params, url }) => {
   const { member } = assertMemberSessionAccess(req, store, params.memberId);
   const search = normalizeVietnameseText(url.searchParams.get("search") || "");
@@ -2820,6 +3400,12 @@ route("PATCH", "/api/members/:memberId/meal-logs/:date/water", async ({ req, sto
   log.goals = log.goals.map((goal) => goal.id === "water"
     ? { ...goal, done: log.waterGlasses >= (member.waterTargetGlasses || 8) }
     : goal);
+  if (log.waterGlasses >= (member.waterTargetGlasses || 8)) {
+    upsertNotification(store, member.id, "water-done", "Đã đạt mục tiêu nước", `Bạn đã hoàn thành ${log.waterGlasses}/${member.waterTargetGlasses || 8} ly nước trong ngày ${params.date}.`, {
+      key: `${member.id}:water-done:${params.date}`,
+      actionHref: "/dashboard",
+    });
+  }
   await saveMealLogChanges(store, log);
   return mealLogResource(req, log, member);
 });
@@ -2853,6 +3439,10 @@ route("POST", "/api/members/:memberId/meal-logs/:date/meals/:mealId/items", asyn
   assertMealItemQuota(member, log);
   meal.items.push(item);
   log.goals = log.goals.map((goal) => goal.id === "journal" ? { ...goal, done: true } : goal);
+  upsertNotification(store, member.id, "meal-added", "Đã thêm món vào nhật ký", `${item.name} đã được ghi vào ${meal.name} ngày ${params.date}.`, {
+    key: `${member.id}:meal-added:${params.date}`,
+    actionHref: "/tracker",
+  });
   await saveMealLogChanges(store, log);
   return mealLogResource(req, log, member);
 });
@@ -2910,19 +3500,26 @@ route("GET", "/api/recipes", async ({ req, store, url }) => {
     const matchDifficulty = !difficulty || recipe.difficulty === difficulty;
     return matchSearch && matchTag && matchCalories && matchDifficulty;
   });
-  const recipes = access.recipeLimit ? filteredRecipes.slice(0, access.recipeLimit) : filteredRecipes;
+  const accessibleRecipes = access.recipeLimit ? filteredRecipes.slice(0, access.recipeLimit) : filteredRecipes;
+  const page = paginateItems(url, accessibleRecipes, { defaultLimit: 24, maxLimit: 100 });
   const tags = [...new Set(store.db.recipes.flatMap((recipe) => recipe.tags))].sort();
-  return collectionResponse(req, "recipes", recipes, {
+  return collectionResponse(req, "recipes", page.items, {
     itemMapper: (recipe) => recipeResource(req, recipe),
     links: { create: link(req, "/api/recipes", "POST") },
     meta: {
       filters: { search, tag, maxCalories: maxCalories || null, difficulty: difficulty || null },
       tags,
+      pagination: {
+        page: page.page,
+        limit: page.limit,
+        total: page.total,
+        totalPages: page.totalPages,
+      },
       access: {
         tier: access.tier,
         recipeLimit: access.recipeLimit,
         totalAvailable: filteredRecipes.length,
-        upgradeRequired: Boolean(access.recipeLimit && filteredRecipes.length > recipes.length),
+        upgradeRequired: Boolean(access.recipeLimit && filteredRecipes.length > accessibleRecipes.length),
       },
     },
   });
@@ -2991,6 +3588,45 @@ route("POST", "/api/ai/personalized-recipes", async ({ req, store, body }) => {
       chat: link(req, "/api/chat/messages", "POST"),
     },
   };
+});
+
+route("POST", "/api/ai/coach-weekly-plan", async ({ req, store, body }) => {
+  const { member } = requireSession(req, store);
+  const access = getMembershipAccess(member);
+  if (!access.aiCoach) {
+    forbidden("AI Coach ke hoach tuan chi danh cho goi SVIP.", {
+      requiredTier: "svip",
+      tier: access.tier,
+    });
+  }
+  const plan = buildWeeklyCoachPlan(store, member, { startDate: body.startDate, req });
+  ensureCoachPlans(store.db).unshift(plan);
+  upsertNotification(store, member.id, "weekly-coach-plan", "AI Coach đã tạo kế hoạch tuần", `Kế hoạch từ ${plan.startDate} đến ${plan.endDate} đã sẵn sàng trên dashboard.`, {
+    key: `${member.id}:weekly-coach-plan:${plan.startDate}`,
+    actionHref: "/dashboard",
+    priority: "high",
+  });
+  await store.save();
+  return {
+    plan,
+    _links: {
+      self: currentLink(req),
+      dashboard: link(req, `/api/members/${member.id}/dashboard`),
+    },
+  };
+});
+
+route("GET", "/api/members/:memberId/coach-plans", async ({ req, store, params }) => {
+  const { member } = assertMemberSessionAccess(req, store, params.memberId);
+  const plans = ensureCoachPlans(store.db)
+    .filter((plan) => plan.memberId === member.id)
+    .sort((a, b) => String(b.generatedAt || "").localeCompare(String(a.generatedAt || "")));
+  return collectionResponse(req, "coachPlans", plans, {
+    links: {
+      create: link(req, "/api/ai/coach-weekly-plan", "POST"),
+      member: link(req, `/api/members/${member.id}`),
+    },
+  });
 });
 
 route("GET", "/api/recipes/:id", async ({ req, store, params }) => {
@@ -3062,9 +3698,24 @@ route("POST", "/api/payments", async ({ req, store, body }) => {
   if (!plan) notFound(req, "Plan not found.");
   const quote = buildQuote(store.db, body);
   const now = new Date();
-  const renews = new Date(now);
-  renews.setMonth(renews.getMonth() + (body.billing === "annual" ? 12 : 1));
-  const daysTotal = body.billing === "annual" ? 365 : 30;
+  const todayString = toLocalDateString(now);
+  const trialDays = quote.trialDays || 0;
+  const existingSubscription = getSubscriptionSnapshot(store.db, member);
+  const sameActivePlan = existingSubscription.planId === plan.id && ["active", "trialing"].includes(existingSubscription.status);
+  const startedAt = sameActivePlan ? (existingSubscription.startedAt || todayString) : todayString;
+  const currentRenewal = parseDate(existingSubscription.renewsAt);
+  const renewalBase = !trialDays && sameActivePlan && currentRenewal && currentRenewal > parseDate(todayString)
+    ? currentRenewal
+    : now;
+  const renews = new Date(renewalBase);
+  if (trialDays) {
+    renews.setDate(renews.getDate() + trialDays);
+  } else {
+    renews.setMonth(renews.getMonth() + (body.billing === "annual" ? 12 : 1));
+  }
+  const renewsAt = toLocalDateString(renews);
+  const daysTotal = daysBetweenDates(startedAt, renewsAt) || trialDays || (body.billing === "annual" ? 365 : 30);
+  const daysRemaining = Math.max(0, daysBetweenDates(todayString, renewsAt) ?? daysTotal);
   const payment = {
     id: store.nextId("pay", store.db.payments),
     memberId: member.id,
@@ -3074,19 +3725,25 @@ route("POST", "/api/payments", async ({ req, store, body }) => {
     paymentMethod: body.paymentMethod,
     amount: quote.total,
     currency: "VND",
-    status: "paid",
+    status: trialDays ? "trial" : "paid",
     paidAt: now.toISOString(),
   };
   member.tier = plan.id;
   member.subscription = {
     planId: plan.id,
     billing: body.billing,
-    status: "active",
-    startedAt: now.toISOString().slice(0, 10),
-    renewsAt: renews.toISOString().slice(0, 10),
+    status: trialDays ? "trialing" : "active",
+    startedAt,
+    purchaseAt: startedAt,
+    renewsAt,
     daysTotal,
-    daysRemaining: daysTotal,
+    daysRemaining,
   };
+  upsertNotification(store, member.id, "membership-payment", trialDays ? "Đã kích hoạt dùng thử" : "Gói thành viên đã được kích hoạt", `${plan.name} ${body.billing === "annual" ? "năm" : "tháng"} có hiệu lực đến ${renewsAt}.`, {
+    key: `${member.id}:membership-payment:${payment.id}`,
+    actionHref: "/member",
+    priority: "high",
+  });
 
   if (store.dataSource === "sqlserver") {
     await saveSqlServerPaymentAndSubscription(member, payment, member.subscription);
@@ -3099,7 +3756,7 @@ route("POST", "/api/payments", async ({ req, store, body }) => {
 
   return {
     payment: paymentResource(req, payment),
-    member: memberResource(req, member),
+    member: memberResource(req, member, store.db),
     quote,
     note: "Card number, CVV and other sensitive payment details are intentionally not stored.",
     _links: {
@@ -3238,7 +3895,7 @@ route("POST", "/api/chat/messages", async ({ req, store, body }) => {
     adminOverride,
     intent: chatIntent?.intent,
     dailyCalorieGoal: intentResult?.dailyCalorieGoal,
-    member: intentResult?.member ? memberResource(req, intentResult.member) : undefined,
+    member: intentResult?.member ? memberResource(req, intentResult.member, store.db) : undefined,
     quickReplies: getSafeChatQuickReplies(member),
     _links: {
       self: currentLink(req),
@@ -3299,11 +3956,13 @@ route("GET", "/api/admin/users", async ({ req, store, url }) => {
   });
 });
 
-route("GET", "/api/admin/content", async ({ req, store }) => {
+route("GET", "/api/admin/content", async ({ req, store, url }) => {
   requireAdminSession(req, store);
+  const foodPage = paginateItems(url, store.db.foods, { defaultLimit: 100, maxLimit: 300 });
+  const recipePage = paginateItems(url, store.db.recipes, { defaultLimit: 100, maxLimit: 300 });
   return {
-    foods: store.db.foods.map((food) => foodResource(req, food)),
-    recipes: store.db.recipes.map((recipe) => recipeResource(req, recipe)),
+    foods: foodPage.items.map((food) => foodResource(req, food)),
+    recipes: recipePage.items.map((recipe) => recipeResource(req, recipe)),
     mealPlans: store.db.plans.map((plan) => ({
       id: plan.id,
       name: plan.name,
@@ -3317,6 +3976,20 @@ route("GET", "/api/admin/content", async ({ req, store }) => {
       foods: link(req, "/api/foods"),
       recipes: link(req, "/api/recipes"),
       overview: link(req, "/api/admin/overview"),
+    },
+    pagination: {
+      foods: {
+        page: foodPage.page,
+        limit: foodPage.limit,
+        total: foodPage.total,
+        totalPages: foodPage.totalPages,
+      },
+      recipes: {
+        page: recipePage.page,
+        limit: recipePage.limit,
+        total: recipePage.total,
+        totalPages: recipePage.totalPages,
+      },
     },
   };
 });

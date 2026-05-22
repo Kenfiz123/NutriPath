@@ -69,9 +69,11 @@ export function Checkout() {
   const [searchParams, setSearchParams] = useSearchParams();
   const initialPlan = searchParams.get("plan") === "svip" ? "svip" : "vip";
   const initialBilling = searchParams.get("billing") === "annual" ? "annual" : "monthly";
+  const initialTrialDays = searchParams.get("trial") === "7" ? 7 : 0;
 
   const [selectedPlan, setSelectedPlan] = useState<PlanId>(initialPlan);
   const [billing, setBilling] = useState<Billing>(initialBilling);
+  const [trialDays, setTrialDays] = useState(initialTrialDays);
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>("card");
   const [discountInput, setDiscountInput] = useState("");
   const [appliedDiscountCode, setAppliedDiscountCode] = useState("");
@@ -97,13 +99,15 @@ export function Checkout() {
   }, [billing]);
 
   useEffect(() => {
-    setSearchParams({ plan: selectedPlan, billing });
-  }, [selectedPlan, billing, setSearchParams]);
+    const params: Record<string, string> = { plan: selectedPlan, billing };
+    if (trialDays > 0) params.trial = String(trialDays);
+    setSearchParams(params);
+  }, [selectedPlan, billing, trialDays, setSearchParams]);
 
   useEffect(() => {
     let active = true;
     setLoadingQuote(true);
-    getCheckoutQuote(selectedPlan, billing, appliedDiscountCode)
+    getCheckoutQuote(selectedPlan, billing, appliedDiscountCode, trialDays)
       .then((data) => {
         if (!active) return;
         setQuote(data.quote);
@@ -120,7 +124,7 @@ export function Checkout() {
     return () => {
       active = false;
     };
-  }, [selectedPlan, billing, appliedDiscountCode]);
+  }, [selectedPlan, billing, appliedDiscountCode, trialDays]);
 
   const selectedPlanData = useMemo(
     () => plans.find((plan) => plan.id === selectedPlan) ?? null,
@@ -129,10 +133,12 @@ export function Checkout() {
 
   const palette = planColors[selectedPlan];
   const PlanIcon = palette.icon;
+  const isTrialCheckout = trialDays > 0;
 
   async function handleCheckout() {
     if (!quote) return;
-    if (paymentMethod === "card" && (!cardNumber || !expiry || cvv.length < 3 || !cardName.trim())) {
+    const isTrialCheckout = (quote.trialDays ?? 0) > 0;
+    if (!isTrialCheckout && paymentMethod === "card" && (!cardNumber || !expiry || cvv.length < 3 || !cardName.trim())) {
       setError("Vui lòng nhập đầy đủ thông tin thẻ để tiếp tục.");
       return;
     }
@@ -148,6 +154,7 @@ export function Checkout() {
         billing,
         paymentMethod,
         discountCode: appliedDiscountCode,
+        trialDays: quote.trialDays ?? 0,
       });
       syncStoredMember(data.member);
       setCompleted({
@@ -170,10 +177,10 @@ export function Checkout() {
           </div>
           <h1 className="text-gray-900" style={{ fontSize: "1.8rem", fontWeight: 800 }}>Kích hoạt gói thành công</h1>
           <p className="mt-3 text-gray-500" style={{ fontSize: "0.95rem", lineHeight: 1.7 }}>
-            Tài khoản của bạn đã được nâng cấp lên <strong>{completed.planName}</strong>. Quyền mới đã được bật ngay trên dashboard, hồ sơ thành viên và các tính năng liên quan.
+            Tài khoản của bạn đã được {completed.quote.trialDays ? `kích hoạt dùng thử ${completed.quote.trialDays} ngày` : "nâng cấp"} lên <strong>{completed.planName}</strong>. Quyền mới đã được bật ngay trên dashboard, hồ sơ thành viên và các tính năng liên quan.
           </p>
           <div className="mt-6 rounded-2xl border border-green-100 bg-green-50 px-5 py-4 text-left">
-            <p className="text-green-700" style={{ fontSize: "0.82rem", fontWeight: 700 }}>Tổng thanh toán</p>
+            <p className="text-green-700" style={{ fontSize: "0.82rem", fontWeight: 700 }}>{completed.quote.trialDays ? "Thanh toán hôm nay" : "Tổng thanh toán"}</p>
             <p className="mt-1 text-gray-900" style={{ fontSize: "1.35rem", fontWeight: 800 }}>{formatMoney(completed.quote.total, completed.quote.currency)}</p>
           </div>
           <div className="mt-8 space-y-3">
@@ -275,10 +282,33 @@ export function Checkout() {
                   <p className="mt-1 text-gray-500" style={{ fontSize: "0.82rem" }}>Tiết kiệm hơn với giá theo năm</p>
                 </button>
               </div>
+              <div className="mt-4 rounded-2xl border border-green-100 bg-green-50 p-4">
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                  <div>
+                    <p className="text-green-800" style={{ fontSize: "0.9rem", fontWeight: 800 }}>Dùng thử 7 ngày miễn phí</p>
+                    <p className="mt-1 text-green-700" style={{ fontSize: "0.82rem", lineHeight: 1.5 }}>
+                      Kích hoạt quyền VIP/SVIP trong 7 ngày, thanh toán hôm nay là 0đ.
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setTrialDays((value) => (value > 0 ? 0 : 7))}
+                    className={`rounded-xl px-4 py-2.5 transition ${isTrialCheckout ? "bg-green-600 text-white hover:bg-green-700" : "bg-white text-green-700 hover:bg-green-100"}`}
+                    style={{ fontSize: "0.84rem", fontWeight: 800 }}
+                  >
+                    {isTrialCheckout ? "Đang dùng thử" : "Bật dùng thử"}
+                  </button>
+                </div>
+              </div>
             </div>
 
             <div className="rounded-3xl border border-gray-100 bg-white p-6 shadow-sm">
               <h2 className="mb-4 text-gray-700" style={{ fontSize: "0.9rem", fontWeight: 700, letterSpacing: "0.04em", textTransform: "uppercase" }}>Phương thức thanh toán</h2>
+              {isTrialCheckout && (
+                <div className="mb-4 rounded-2xl border border-amber-100 bg-amber-50 px-5 py-4 text-amber-800" style={{ fontSize: "0.85rem", lineHeight: 1.6 }}>
+                  Dùng thử không yêu cầu nhập thẻ. Bạn có thể thanh toán sau khi hết thời gian dùng thử.
+                </div>
+              )}
               <div className="grid gap-2 sm:grid-cols-2">
                 {paymentMethods.map(({ id, label, icon: Icon }) => (
                   <button
@@ -292,7 +322,7 @@ export function Checkout() {
                 ))}
               </div>
 
-              {paymentMethod === "card" && (
+              {paymentMethod === "card" && !isTrialCheckout && (
                 <div className="mt-5 space-y-4">
                   <label className="block">
                     <span className="text-gray-700" style={{ fontSize: "0.8rem", fontWeight: 700 }}>Số thẻ</span>
@@ -339,7 +369,7 @@ export function Checkout() {
                 </div>
               )}
 
-              {paymentMethod !== "card" && (
+              {paymentMethod !== "card" && !isTrialCheckout && (
                 <div className="mt-5 rounded-2xl border border-gray-100 bg-gray-50 px-5 py-4 text-gray-600" style={{ fontSize: "0.85rem", lineHeight: 1.7 }}>
                   Đây là luồng thanh toán mô phỏng an toàn. Sau khi bấm hoàn tất, backend sẽ kích hoạt gói và không lưu dữ liệu thanh toán nhạy cảm.
                 </div>
@@ -389,13 +419,21 @@ export function Checkout() {
                   <div className="space-y-3">
                     <div className="flex justify-between text-gray-600">
                       <span>{quote.planName} ({quote.billing === "annual" ? "12 tháng" : "1 tháng"})</span>
-                      <span className="text-gray-900" style={{ fontWeight: 700 }}>{formatMoney(quote.subtotal, quote.currency)}</span>
+                      <span className="text-gray-900" style={{ fontWeight: 700 }}>{formatMoney(quote.originalTotal ?? quote.subtotal, quote.currency)}</span>
                     </div>
-                    <div className="flex justify-between text-gray-500">
-                      <span>VAT</span>
-                      <span>{formatMoney(quote.vat, quote.currency)}</span>
-                    </div>
-                    {quote.discountAmount > 0 && (
+                    {quote.trialDays ? (
+                      <div className="flex justify-between text-green-600">
+                        <span>Dùng thử {quote.trialDays} ngày</span>
+                        <span>-{formatMoney(quote.originalTotal ?? quote.subtotal, quote.currency)}</span>
+                      </div>
+                    ) : null}
+                    {!quote.trialDays && (
+                      <div className="flex justify-between text-gray-500">
+                        <span>VAT</span>
+                        <span>{formatMoney(quote.vat, quote.currency)}</span>
+                      </div>
+                    )}
+                    {quote.discountAmount > 0 && !quote.trialDays && (
                       <div className="flex justify-between text-green-600">
                         <span>Giảm giá {quote.discountCode}</span>
                         <span>-{formatMoney(quote.discountAmount, quote.currency)}</span>
@@ -406,7 +444,7 @@ export function Checkout() {
                   <div className="mt-5 border-t border-gray-100 pt-5">
                     <div className="flex items-end justify-between">
                       <div>
-                        <p className="text-gray-500" style={{ fontSize: "0.8rem" }}>Tổng thanh toán</p>
+                        <p className="text-gray-500" style={{ fontSize: "0.8rem" }}>{quote.trialDays ? "Thanh toán hôm nay" : "Tổng thanh toán"}</p>
                         <p className="mt-1 text-gray-900" style={{ fontSize: "1.6rem", fontWeight: 850 }}>{formatMoney(quote.total, quote.currency)}</p>
                       </div>
                       <span className={`rounded-full border px-3 py-1 ${palette.badge}`} style={{ fontSize: "0.74rem", fontWeight: 700 }}>
@@ -422,7 +460,7 @@ export function Checkout() {
                     style={{ fontSize: "1rem", fontWeight: 800 }}
                   >
                     <Lock className="h-5 w-5" />
-                    {submitting ? "Đang kích hoạt gói..." : "Hoàn tất thanh toán"}
+                    {submitting ? "Đang kích hoạt gói..." : quote.trialDays ? "Kích hoạt dùng thử" : "Hoàn tất thanh toán"}
                     <ArrowRight className="h-5 w-5" />
                   </button>
                 </>

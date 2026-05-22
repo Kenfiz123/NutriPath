@@ -2,18 +2,26 @@
 import { Link } from "react-router";
 import {
   Plus, MessageCircle, Search, Droplets, Flame, TrendingUp, Target, Apple,
-  ChevronRight, Zap, Award, Activity, Check
+  ChevronRight, Zap, Award, Activity, Check, FileBarChart, Crown, Sparkles
 } from "lucide-react";
 import {
   RadialBarChart, RadialBar, ResponsiveContainer, BarChart, Bar, XAxis, YAxis,
   CartesianGrid, Tooltip, Cell
 } from "recharts";
-import { getDashboard, updateWater, type DashboardData } from "../api";
+import {
+  createWeeklyCoachPlan,
+  getDashboard,
+  getWeeklyCoachPlans,
+  updateWater,
+  type DashboardData,
+  type WeeklyCoachPlan,
+} from "../api";
 
 const quickActions = [
   { label: "Thêm bữa ăn", icon: Plus, color: "bg-green-600 text-white hover:bg-green-700", link: "/tracker" },
   { label: "Chat với AI", icon: MessageCircle, color: "bg-emerald-50 text-emerald-700 hover:bg-emerald-100 border border-emerald-200", link: "/" },
   { label: "Tìm công thức", icon: Search, color: "bg-orange-50 text-orange-700 hover:bg-orange-100 border border-orange-200", link: "/recipes" },
+  { label: "Báo cáo", icon: FileBarChart, color: "bg-blue-50 text-blue-700 hover:bg-blue-100 border border-blue-200", link: "/reports" },
 ];
 
 function makeMojibake(value: string) {
@@ -41,6 +49,9 @@ export function Dashboard() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [waterGlasses, setWaterGlasses] = useState(5);
+  const [coachPlan, setCoachPlan] = useState<WeeklyCoachPlan | null>(null);
+  const [coachLoading, setCoachLoading] = useState(false);
+  const [coachMessage, setCoachMessage] = useState<string | null>(null);
 
   useEffect(() => {
     let active = true;
@@ -62,6 +73,9 @@ export function Dashboard() {
     };
 
     loadDashboard();
+    getWeeklyCoachPlans()
+      .then((data) => setCoachPlan(data._embedded.coachPlans[0] ?? null))
+      .catch(() => null);
     window.addEventListener("nutripath:member-updated", loadDashboard);
 
     return () => {
@@ -116,19 +130,34 @@ export function Dashboard() {
   const activity = dashboard.mealLog.activity;
   const goals = dashboard.mealLog.goals;
   const greeting = cleanDashboardText(dashboard.greeting);
+  const canUseCoach = Boolean(membershipAccess.aiCoach);
+
+  const handleCreateCoachPlan = async () => {
+    setCoachLoading(true);
+    setCoachMessage(null);
+    try {
+      const data = await createWeeklyCoachPlan();
+      setCoachPlan(data.plan);
+      setCoachMessage("AI Coach đã tạo kế hoạch tuần mới.");
+    } catch (err) {
+      setCoachMessage(err instanceof Error ? err.message : "Không tạo được kế hoạch tuần.");
+    } finally {
+      setCoachLoading(false);
+    }
+  };
 
   return (
     <div className="bg-gray-50 min-h-screen">
-      <div className="max-w-[1440px] mx-auto px-8 py-8">
+      <div className="max-w-[1440px] mx-auto px-4 py-6 sm:px-6 lg:px-8 lg:py-8">
         {/* Page Header */}
-        <div className="flex items-center justify-between mb-8">
-          <div>
+        <div className="mb-8 flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+          <div className="min-w-0">
             <h1 className="text-gray-900" style={{ fontSize: "1.6rem", fontWeight: 800 }}>{greeting} 👋</h1>
             <p className="text-gray-500 mt-1" style={{ fontSize: "0.9rem" }}>{dashboard.date} • Dữ liệu được tải từ backend</p>
           </div>
-          <div className="flex items-center gap-3">
+          <div className="grid w-full grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4 lg:w-auto">
             {quickActions.map(({ label, icon: Icon, color, link }) => (
-              <Link key={label} to={link} className={`flex items-center gap-2 px-4 py-2.5 rounded-xl transition-all ${color}`} style={{ fontSize: "0.875rem", fontWeight: 600 }}>
+              <Link key={label} to={link} className={`flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl transition-all ${color}`} style={{ fontSize: "0.875rem", fontWeight: 600 }}>
                 <Icon className="w-4 h-4" />
                 {label}
               </Link>
@@ -137,9 +166,9 @@ export function Dashboard() {
         </div>
 
         {/* 3-col grid */}
-        <div className="grid grid-cols-12 gap-6">
+        <div className="grid grid-cols-1 gap-6 xl:grid-cols-12">
           {/* LEFT COLUMN */}
-          <div className="col-span-3 space-y-6">
+          <div className="space-y-6 xl:col-span-3">
             {/* Calorie Ring */}
             <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100">
               <div className="flex items-center justify-between mb-4">
@@ -238,7 +267,7 @@ export function Dashboard() {
           </div>
 
           {/* CENTER COLUMN */}
-          <div className="col-span-6 space-y-6">
+          <div className="space-y-6 xl:col-span-6">
             {/* Today's Meals */}
             <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100">
               <div className="flex items-center justify-between mb-5">
@@ -299,7 +328,7 @@ export function Dashboard() {
                 <h3 className="text-gray-900" style={{ fontSize: "1rem", fontWeight: 700 }}>Hoạt động thể chất</h3>
                 <Activity className="w-5 h-5 text-green-600" />
               </div>
-              <div className="grid grid-cols-3 gap-4">
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
                 {[
                   { label: "Đi bộ", value: activity.steps.toLocaleString("vi-VN"), unit: "bước", icon: "🚶", color: "bg-green-50 text-green-700" },
                   { label: "Đốt cháy", value: activity.burnedCalories.toLocaleString("vi-VN"), unit: "kcal", icon: "🔥", color: "bg-orange-50 text-orange-700" },
@@ -317,7 +346,7 @@ export function Dashboard() {
           </div>
 
           {/* RIGHT COLUMN */}
-          <div className="col-span-3 space-y-6">
+          <div className="space-y-6 xl:col-span-3">
             {/* Weekly Chart */}
             <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100">
               <div className="flex items-center justify-between mb-4">
@@ -399,6 +428,72 @@ export function Dashboard() {
                   </div>
                 ))}
               </div>
+            </div>
+
+            <div className="rounded-2xl border border-amber-200 bg-amber-50 p-6 shadow-sm">
+              <div className="mb-4 flex items-center justify-between gap-3">
+                <div>
+                  <div className="mb-2 inline-flex items-center gap-1.5 rounded-full bg-amber-100 px-2.5 py-1 text-amber-700">
+                    <Crown className="h-3.5 w-3.5" />
+                    <span className="text-xs font-bold">SVIP AI Coach</span>
+                  </div>
+                  <h3 className="text-gray-900" style={{ fontSize: "1rem", fontWeight: 800 }}>Kế hoạch tuần</h3>
+                </div>
+                <Sparkles className="h-5 w-5 text-amber-600" />
+              </div>
+
+              {canUseCoach ? (
+                <>
+                  <button
+                    type="button"
+                    onClick={() => void handleCreateCoachPlan()}
+                    disabled={coachLoading}
+                    className="mb-4 flex w-full items-center justify-center gap-2 rounded-xl bg-amber-500 px-4 py-3 text-sm font-bold text-white transition hover:bg-amber-600 disabled:opacity-60"
+                  >
+                    <Sparkles className="h-4 w-4" />
+                    {coachLoading ? "Đang tạo..." : coachPlan ? "Tạo lại kế hoạch" : "Tạo kế hoạch 7 ngày"}
+                  </button>
+                  {coachMessage && <p className="mb-3 text-sm font-semibold text-amber-800">{coachMessage}</p>}
+                  {coachPlan ? (
+                    <div className="space-y-3">
+                      <div className="rounded-xl bg-white/80 p-3">
+                        <p className="text-sm font-bold text-gray-900">{coachPlan.title}</p>
+                        <p className="mt-1 text-xs leading-5 text-gray-600">{coachPlan.summary}</p>
+                      </div>
+                      <div className="max-h-72 space-y-2 overflow-y-auto pr-1">
+                        {coachPlan.days.slice(0, 7).map((day) => (
+                          <div key={day.date} className="rounded-xl bg-white px-3 py-3">
+                            <div className="mb-2 flex items-center justify-between">
+                              <p className="text-sm font-bold text-gray-900">{day.label}</p>
+                              <span className="text-xs font-semibold text-amber-700">{day.targetCalories} kcal</span>
+                            </div>
+                            <p className="mb-2 text-xs text-gray-500">{day.focus}</p>
+                            <div className="space-y-1">
+                              {day.meals.slice(0, 2).map((meal) => (
+                                <p key={`${day.date}-${meal.name}`} className="text-xs leading-5 text-gray-700">
+                                  <span className="font-bold">{meal.name}:</span> {meal.suggestion}
+                                </p>
+                              ))}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  ) : (
+                    <p className="text-sm leading-6 text-amber-900">
+                      Tạo kế hoạch 7 ngày dựa trên mục tiêu calo, macro và nhật ký bữa ăn gần nhất.
+                    </p>
+                  )}
+                </>
+              ) : (
+                <div className="rounded-xl bg-white/80 p-4">
+                  <p className="text-sm font-bold text-gray-900">AI Coach chỉ dành cho SVIP</p>
+                  <p className="mt-1 text-xs leading-5 text-gray-600">Nâng cấp để tạo kế hoạch ăn uống 7 ngày cá nhân hóa.</p>
+                  <Link to="/svip" className="mt-3 inline-flex rounded-xl bg-amber-500 px-4 py-2 text-xs font-bold text-white hover:bg-amber-600">
+                    Mở SVIP
+                  </Link>
+                </div>
+              )}
             </div>
           </div>
         </div>

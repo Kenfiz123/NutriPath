@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type FormEvent } from "react";
+import { useEffect, useState, type FormEvent } from "react";
 import { Link, useNavigate } from "react-router";
 import {
   ArrowUpCircle,
@@ -6,6 +6,7 @@ import {
   BookOpen,
   Calendar,
   Check,
+  CheckCheck,
   Crown,
   Download,
   Leaf,
@@ -23,8 +24,12 @@ import {
 } from "lucide-react";
 import {
   getProfile,
+  getNotifications,
+  markAllNotificationsRead,
+  markNotificationRead,
   syncStoredMember,
   updateMemberProfile,
+  type AppNotification,
   type Member,
   type Payment,
   type Plan,
@@ -77,6 +82,12 @@ function formatDate(date?: string | null) {
   return new Date(date).toLocaleDateString("vi-VN");
 }
 
+function formatSubscriptionStatus(status?: string) {
+  if (status === "trialing") return "Đang dùng thử";
+  if (status === "active") return "Đang hoạt động";
+  return status ?? "Đang hoạt động";
+}
+
 function formatMoney(amount: number, currency = "VND") {
   return amount.toLocaleString("vi-VN") + (currency === "VND" ? "đ" : ` ${currency}`);
 }
@@ -100,6 +111,8 @@ export function MemberProfile() {
   const [plan, setPlan] = useState<Plan | null>(null);
   const [benefits, setBenefits] = useState<Plan["features"]>([]);
   const [payments, setPayments] = useState<Payment[]>([]);
+  const [notifications, setNotifications] = useState<AppNotification[]>([]);
+  const [unreadNotifications, setUnreadNotifications] = useState(0);
   const [activeNav, setActiveNav] = useState<ProfileTab>("overview");
   const [showAllPayments, setShowAllPayments] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -130,28 +143,25 @@ export function MemberProfile() {
       .catch((err) => setError(err instanceof Error ? err.message : "Không tải được hồ sơ thành viên"));
   }, []);
 
-  const notifications = useMemo(() => {
-    if (!member) return [];
-    const nextPayments = [...payments].sort((a, b) => new Date(b.paidAt).getTime() - new Date(a.paidAt).getTime());
-    return [
-      {
-        title: "Mục tiêu dinh dưỡng",
-        text: `Mục tiêu hiện tại: ${member.calorieTarget.toLocaleString("vi-VN")} kcal/ngày, ${member.waterTargetGlasses} ly nước/ngày.`,
-      },
-      {
-        title: "Gói thành viên",
-        text: member.subscription?.daysRemaining
-          ? `Gói ${member.tier.toUpperCase()} còn ${member.subscription.daysRemaining} ngày sử dụng.`
-          : `Bạn đang ở gói ${member.tier.toUpperCase()}.`,
-      },
-      {
-        title: "Thanh toán gần nhất",
-        text: nextPayments[0]
-          ? `${nextPayments[0].invoice} - ${formatMoney(nextPayments[0].amount, nextPayments[0].currency)} ngày ${formatDate(nextPayments[0].paidAt)}.`
-          : "Chưa có hóa đơn thanh toán nào.",
-      },
-    ];
-  }, [member, payments]);
+  useEffect(() => {
+    if (!member) return;
+    let active = true;
+    getNotifications({ limit: 50 })
+      .then((data) => {
+        if (!active) return;
+        setNotifications(data._embedded.notifications);
+        setUnreadNotifications(data.unreadCount);
+      })
+      .catch(() => {
+        if (!active) return;
+        setNotifications([]);
+        setUnreadNotifications(0);
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [member?.id, member?.calorieTarget, member?.subscription?.daysRemaining]);
 
   if (error) {
     return <div className="min-h-screen bg-gray-50 p-8 text-red-600">{error}</div>;
@@ -169,6 +179,7 @@ export function MemberProfile() {
     ? Math.round((member.subscription.daysRemaining / member.subscription.daysTotal) * 100)
     : 0;
   const visiblePayments = showAllPayments ? payments : payments.slice(0, 4);
+  const subscriptionStartedAt = member.subscription?.purchaseAt || member.subscription?.startedAt || member.joinedAt;
 
   const statCards = [
     { icon: Calendar, label: "Ngày thành viên", value: stats.memberDays.toLocaleString("vi-VN"), unit: "ngày", color: "text-blue-600", bg: "bg-blue-50" },
@@ -190,6 +201,20 @@ export function MemberProfile() {
     anchor.download = `${payment.invoice}.txt`;
     anchor.click();
     URL.revokeObjectURL(url);
+  }
+
+  async function handleMarkNotificationRead(notificationId: string) {
+    await markNotificationRead(notificationId).catch(() => null);
+    setNotifications((items) => items.map((item) => (
+      item.id === notificationId ? { ...item, readAt: item.readAt || new Date().toISOString() } : item
+    )));
+    setUnreadNotifications((count) => Math.max(0, count - 1));
+  }
+
+  async function handleMarkAllNotificationsRead() {
+    await markAllNotificationsRead().catch(() => null);
+    setNotifications((items) => items.map((item) => ({ ...item, readAt: item.readAt || new Date().toISOString() })));
+    setUnreadNotifications(0);
   }
 
   async function handleSaveSettings(event: FormEvent<HTMLFormElement>) {
@@ -272,11 +297,11 @@ export function MemberProfile() {
                       <span className="text-white/80" style={{ fontSize: "0.85rem", fontWeight: 600, letterSpacing: "0.08em" }}>{config.label} MEMBERSHIP</span>
                     </div>
                     <h2 className="mb-1 text-white" style={{ fontSize: "1.8rem", fontWeight: 800 }}>{member.name}</h2>
-                    <p className="text-white/70" style={{ fontSize: "0.875rem" }}>Thành viên từ: {formatDate(member.joinedAt)}</p>
+                    <p className="text-white/70" style={{ fontSize: "0.875rem" }}>Mua gói từ: {formatDate(subscriptionStartedAt)}</p>
                     <div className="mt-2 flex items-center gap-2">
                       <div className="h-2 w-2 animate-pulse rounded-full bg-green-300" />
                       <span className="text-green-200" style={{ fontSize: "0.8rem" }}>
-                        {member.subscription?.status ?? "active"} · Hết hạn: {formatDate(member.subscription?.renewsAt)}
+                        {formatSubscriptionStatus(member.subscription?.status)} · Hết hạn: {formatDate(member.subscription?.renewsAt)}
                       </span>
                     </div>
                   </div>
@@ -352,14 +377,48 @@ export function MemberProfile() {
 
             {activeNav === "notifications" && (
               <section className="rounded-3xl border border-gray-100 bg-white p-6 shadow-sm">
-                <h3 className="mb-5 text-gray-900" style={{ fontSize: "1.1rem", fontWeight: 700 }}>Thông báo của bạn</h3>
+                <div className="mb-5 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                  <div>
+                    <h3 className="text-gray-900" style={{ fontSize: "1.1rem", fontWeight: 700 }}>Thông báo của bạn</h3>
+                    <p className="mt-1 text-sm text-gray-500">{unreadNotifications} thông báo chưa đọc từ backend.</p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => void handleMarkAllNotificationsRead()}
+                    className="inline-flex items-center justify-center gap-2 rounded-xl bg-green-600 px-4 py-2.5 text-sm font-bold text-white hover:bg-green-700"
+                  >
+                    <CheckCheck className="h-4 w-4" />
+                    Đánh dấu tất cả đã đọc
+                  </button>
+                </div>
                 <div className="space-y-3">
-                  {notifications.map((item) => (
-                    <div key={item.title} className="rounded-2xl border border-green-100 bg-green-50 px-4 py-3">
-                      <p className="font-semibold text-gray-900">{item.title}</p>
-                      <p className="mt-1 text-sm leading-6 text-gray-600">{item.text}</p>
+                  {notifications.length ? notifications.map((item) => (
+                    <div key={item.id} className={`rounded-2xl border px-4 py-3 ${item.readAt ? "border-gray-100 bg-gray-50" : "border-green-100 bg-green-50"}`}>
+                      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                        <div>
+                          <div className="flex items-center gap-2">
+                            {!item.readAt && <span className="h-2 w-2 rounded-full bg-green-500" />}
+                            <p className="font-semibold text-gray-900">{item.title}</p>
+                          </div>
+                          <p className="mt-1 text-sm leading-6 text-gray-600">{item.text}</p>
+                          <p className="mt-2 text-xs text-gray-400">{formatDate(item.createdAt)}</p>
+                        </div>
+                        {!item.readAt && (
+                          <button
+                            type="button"
+                            onClick={() => void handleMarkNotificationRead(item.id)}
+                            className="rounded-xl border border-green-200 bg-white px-3 py-2 text-xs font-bold text-green-700 hover:bg-green-50"
+                          >
+                            Đã đọc
+                          </button>
+                        )}
+                      </div>
                     </div>
-                  ))}
+                  )) : (
+                    <div className="rounded-2xl border border-gray-100 bg-gray-50 px-4 py-8 text-center text-sm text-gray-500">
+                      Chưa có thông báo nào.
+                    </div>
+                  )}
                 </div>
               </section>
             )}

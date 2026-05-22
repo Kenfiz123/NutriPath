@@ -127,6 +127,7 @@ export interface Member {
     billing: string;
     status: string;
     startedAt: string;
+    purchaseAt?: string | null;
     renewsAt?: string | null;
     daysTotal?: number;
     daysRemaining?: number;
@@ -412,6 +413,125 @@ export interface DashboardData {
   achievements: Array<{ id: string; label: string; description: string }>;
 }
 
+export interface NutritionReport {
+  range: {
+    from: string;
+    to: string;
+    days: number;
+    requestedDays: number;
+    limitedByPlan: boolean;
+  };
+  access: NonNullable<Member["access"]>;
+  targets: {
+    calories: number;
+    protein: number;
+    carbs: number;
+    fat: number;
+    waterGlasses: number;
+  };
+  totals: {
+    calories: number;
+    protein: number;
+    carbs: number;
+    fat: number;
+    waterGlasses: number;
+    burnedCalories: number;
+    activeMinutes: number;
+    mealCount: number;
+  };
+  averages: {
+    calories: number;
+    protein: number;
+    carbs: number;
+    fat: number;
+    waterGlasses: number;
+    burnedCalories: number;
+    activeMinutes: number;
+  };
+  adherence: {
+    trackedDays: number;
+    trackedPct: number;
+    onTargetDays: number;
+    onTargetPct: number;
+    waterDoneDays: number;
+    waterDonePct: number;
+  };
+  daily: Array<{
+    date: string;
+    calories: number;
+    calorieTarget: number;
+    calorieDelta: number;
+    protein: number;
+    carbs: number;
+    fat: number;
+    waterGlasses: number;
+    waterTarget: number;
+    burnedCalories: number;
+    activeMinutes: number;
+    mealCount: number;
+    onTarget: boolean;
+    waterDone: boolean;
+  }>;
+  mealBreakdown: Array<{ id: string; name: string; calories: number; count: number }>;
+  topFoods: Array<{ name: string; calories: number; count: number }>;
+  insights: string[];
+  generatedAt: string;
+}
+
+export interface ReportExport {
+  filename: string;
+  mimeType: string;
+  content: string;
+  generatedAt: string;
+}
+
+export interface AppNotification {
+  id: string;
+  memberId: string;
+  key: string;
+  type: string;
+  title: string;
+  text: string;
+  priority: "low" | "normal" | "high" | string;
+  actionHref?: string | null;
+  readAt?: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface WeeklyCoachPlan {
+  id: string;
+  memberId: string;
+  title: string;
+  startDate: string;
+  endDate: string;
+  targetCalories: number;
+  macroTargets: Member["macroTargets"];
+  summary: string;
+  actionSteps: string[];
+  days: Array<{
+    date: string;
+    label: string;
+    targetCalories: number;
+    focus: string;
+    meals: Array<{
+      name: string;
+      time: string;
+      suggestion: string;
+      calories: number;
+    }>;
+  }>;
+  generatedAt: string;
+  generatedBy: string;
+}
+
+export interface NotificationsResponse {
+  _embedded: { notifications: AppNotification[] };
+  unreadCount: number;
+  total: number;
+  count: number;
+}
+
 export interface Recipe {
   id: string;
   name: string;
@@ -514,6 +634,8 @@ export interface CheckoutQuote {
   discountCode: string | null;
   discountAmount: number;
   total: number;
+  trialDays?: number;
+  originalTotal?: number;
 }
 
 export interface PaymentPayload {
@@ -522,6 +644,7 @@ export interface PaymentPayload {
   billing: "monthly" | "annual";
   paymentMethod: "card" | "momo" | "zalopay" | "bank";
   discountCode?: string;
+  trialDays?: number;
 }
 
 export interface ChatMessage {
@@ -701,6 +824,56 @@ export function getDashboard(date = getLocalDateString()) {
   return apiFetch<DashboardData>(`/api/members/${getCurrentMemberId()}/dashboard?date=${encodeURIComponent(date)}`);
 }
 
+export function getNutritionReport(options: { days?: number; endDate?: string } = {}) {
+  const params = new URLSearchParams();
+  if (options.days) params.set("days", String(options.days));
+  if (options.endDate) params.set("endDate", options.endDate);
+  const query = params.toString();
+  return apiFetch<NutritionReport>(`/api/members/${getCurrentMemberId()}/reports/nutrition${query ? `?${query}` : ""}`);
+}
+
+export function exportNutritionReport(options: { days?: number; endDate?: string } = {}) {
+  const params = new URLSearchParams();
+  if (options.days) params.set("days", String(options.days));
+  if (options.endDate) params.set("endDate", options.endDate);
+  const query = params.toString();
+  return apiFetch<ReportExport>(`/api/members/${getCurrentMemberId()}/reports/export${query ? `?${query}` : ""}`);
+}
+
+export function getNotifications(options: { limit?: number; unread?: boolean } = {}) {
+  const params = new URLSearchParams();
+  if (options.limit) params.set("limit", String(options.limit));
+  if (options.unread) params.set("unread", "true");
+  const query = params.toString();
+  return apiFetch<NotificationsResponse>(`/api/members/${getCurrentMemberId()}/notifications${query ? `?${query}` : ""}`);
+}
+
+export function markNotificationRead(notificationId: string, read = true) {
+  return apiFetch<AppNotification>(`/api/members/${getCurrentMemberId()}/notifications/${notificationId}`, {
+    method: "PATCH",
+    body: { read },
+  });
+}
+
+export function markAllNotificationsRead() {
+  return apiFetch<{ updated: number; unreadCount: number }>(`/api/members/${getCurrentMemberId()}/notifications/read-all`, {
+    method: "PATCH",
+  });
+}
+
+export function createWeeklyCoachPlan(payload: { startDate?: string } = {}) {
+  return apiFetch<{ plan: WeeklyCoachPlan }>("/api/ai/coach-weekly-plan", {
+    method: "POST",
+    body: payload,
+  });
+}
+
+export function getWeeklyCoachPlans() {
+  return apiFetch<{ count: number; _embedded: { coachPlans: WeeklyCoachPlan[] } }>(
+    `/api/members/${getCurrentMemberId()}/coach-plans`,
+  );
+}
+
 export function calculateCalories(payload: CalorieCalculationInput) {
   return apiFetch<CalorieCalculation>("/api/calculations/calorie", {
     method: "POST",
@@ -811,10 +984,10 @@ export function getPlans(billing: "monthly" | "annual") {
   return apiFetch<{ _embedded: { plans: Plan[] } }>(`/api/plans?billing=${billing}`);
 }
 
-export function getCheckoutQuote(planId: "vip" | "svip", billing: "monthly" | "annual", discountCode = "") {
+export function getCheckoutQuote(planId: "vip" | "svip", billing: "monthly" | "annual", discountCode = "", trialDays = 0) {
   return apiFetch<{ quote: CheckoutQuote }>("/api/checkout/quote", {
     method: "POST",
-    body: { planId, billing, discountCode },
+    body: { planId, billing, discountCode, trialDays },
   });
 }
 
@@ -871,6 +1044,22 @@ export function getAdminUsers(filters: { search?: string; role?: string; status?
   return apiFetch<AdminUsersResponse>(`/api/admin/users${query ? `?${query}` : ""}`);
 }
 
+
+export function updateAdminUser(memberId: string, payload: {
+  name?: string;
+  email?: string;
+  role?: "member" | "moderator" | "admin";
+  status?: string;
+  tier?: "free" | "vip" | "svip";
+  calorieTarget?: number;
+  waterTargetGlasses?: number;
+  subscription?: Partial<NonNullable<Member["subscription"]>>;
+}) {
+  return apiFetch<Member>(`/api/members/${memberId}`, {
+    method: "PATCH",
+    body: payload,
+  });
+}
 
 export function getAdminContent() {
   return apiFetch<AdminContent>("/api/admin/content");
