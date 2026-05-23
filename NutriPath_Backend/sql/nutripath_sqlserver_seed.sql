@@ -453,7 +453,31 @@ INSERT INTO dbo.Foods (id, name, category, calories, protein, carbs, fat, portio
 (N'food-012', N'Canh rau muống', N'Canh', 60, 3, 8, 1, N'1 bát (250ml)'),
 (N'food-013', N'Bún bò Huế tô nhỏ', N'Bún', 380, 24, 50, 8, N'1 tô nhỏ (450ml)'),
 (N'food-014', N'Bánh mì kẹp thịt', N'Bánh mì', 320, 18, 38, 10, N'1 ổ (120g)'),
-(N'food-015', N'Xôi đậu xanh', N'Xôi', 280, 8, 52, 4, N'1 gói (200g)');
+(N'food-015', N'Xôi đậu xanh', N'Xôi', 280, 8, 52, 4, N'1 gói (200g)'),
+(N'food-101', N'Coca-Cola lon', N'Đồ uống', 139, 0, 35, 0, N'1 lon (330ml)'),
+(N'food-102', N'Pepsi lon', N'Đồ uống', 141, 0, 35, 0, N'1 lon (330ml)'),
+(N'food-103', N'7Up lon', N'Đồ uống', 140, 0, 35, 0, N'1 lon (330ml)'),
+(N'food-104', N'Sprite lon', N'Đồ uống', 140, 0, 35, 0, N'1 lon (330ml)'),
+(N'food-105', N'Sting dâu chai', N'Đồ uống', 198, 0, 49, 0, N'1 chai (330ml)'),
+(N'food-106', N'Revive chai', N'Đồ uống', 120, 0, 30, 0, N'1 chai (500ml)'),
+(N'food-107', N'Number 1 chai', N'Đồ uống', 165, 0, 41, 0, N'1 chai (330ml)'),
+(N'food-108', N'C2 trà xanh chai', N'Đồ uống', 120, 0, 30, 0, N'1 chai (455ml)'),
+(N'food-109', N'Trà xanh Không Độ chai', N'Đồ uống', 140, 0, 35, 0, N'1 chai (455ml)'),
+(N'food-110', N'Twister cam chai', N'Đồ uống', 150, 0, 36, 0, N'1 chai (320ml)'),
+(N'food-111', N'Trà sữa trân châu size M', N'Đồ uống', 450, 6, 72, 14, N'1 ly size M (500ml)'),
+(N'food-112', N'Trà sữa trân châu size L', N'Đồ uống', 620, 8, 98, 20, N'1 ly size L (700ml)'),
+(N'food-113', N'Trà sữa matcha size M', N'Đồ uống', 420, 7, 66, 13, N'1 ly size M (500ml)'),
+(N'food-114', N'Trà sữa matcha size L', N'Đồ uống', 590, 9, 92, 18, N'1 ly size L (700ml)'),
+(N'food-115', N'Trà sữa ít đường size M', N'Đồ uống', 330, 6, 50, 11, N'1 ly size M (500ml)'),
+(N'food-116', N'Trà sữa ít đường size L', N'Đồ uống', 470, 8, 72, 16, N'1 ly size L (700ml)'),
+(N'food-117', N'Trà ô long sữa size M', N'Đồ uống', 380, 6, 58, 12, N'1 ly size M (500ml)'),
+(N'food-118', N'Trà ô long sữa size L', N'Đồ uống', 540, 8, 82, 17, N'1 ly size L (700ml)'),
+(N'food-119', N'Trà đào cam sả size M', N'Đồ uống', 180, 0, 44, 0, N'1 ly size M (500ml)'),
+(N'food-120', N'Trà đào cam sả size L', N'Đồ uống', 250, 0, 61, 0, N'1 ly size L (700ml)'),
+(N'food-121', N'Trà tắc mật ong size M', N'Đồ uống', 150, 0, 38, 0, N'1 ly size M (500ml)'),
+(N'food-122', N'Trà tắc mật ong size L', N'Đồ uống', 210, 0, 52, 0, N'1 ly size L (700ml)'),
+(N'food-123', N'Trà chanh size M', N'Đồ uống', 120, 0, 30, 0, N'1 ly size M (500ml)'),
+(N'food-124', N'Trà chanh size L', N'Đồ uống', 170, 0, 43, 0, N'1 ly size L (700ml)');
 
 INSERT INTO dbo.MealLogs (id, member_id, log_date, water_glasses, steps, burned_calories, active_minutes) VALUES
 (N'log-mem-001-2026-03-13', N'mem-001', '2026-03-13', 5, 6420, 320, 45);

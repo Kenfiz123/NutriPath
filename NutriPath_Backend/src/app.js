@@ -192,6 +192,38 @@ function round(value, digits = 0) {
   return Math.round(value * factor) / factor;
 }
 
+const WATER_GLASS_ML = 250;
+
+function extractMillilitersFromPortion(portion) {
+  const text = String(portion || "").toLowerCase().replace(",", ".");
+  const match = text.match(/(\d+(?:\.\d+)?)\s*(ml|l|lit|lít)\b/u);
+  if (!match) return 0;
+  const amount = Number(match[1]);
+  if (!Number.isFinite(amount) || amount <= 0) return 0;
+  return match[2] === "ml" ? amount : amount * 1000;
+}
+
+function getDrinkWaterEquivalentGlasses(food, quantity = 1) {
+  const category = normalizeVietnameseText(food?.category || "");
+  if (category !== normalizeVietnameseText("Đồ uống")) return 0;
+  const ml = Number(food?.volumeMl || food?.hydrationMl || 0) || extractMillilitersFromPortion(food?.portion);
+  if (!ml) return 0;
+  return round((ml * Math.max(0.1, Number(quantity) || 1)) / WATER_GLASS_ML, 1);
+}
+
+function updateWaterGoalStatus(log, member) {
+  log.goals = log.goals.map((goal) => goal.id === "water"
+    ? { ...goal, done: (Number(log.waterGlasses) || 0) >= (member.waterTargetGlasses || 8) }
+    : goal);
+}
+
+function applyWaterEquivalent(log, member, deltaGlasses) {
+  const delta = Number(deltaGlasses) || 0;
+  if (!delta) return;
+  log.waterGlasses = round(Math.max(0, (Number(log.waterGlasses) || 0) + delta), 1);
+  updateWaterGoalStatus(log, member);
+}
+
 function isTruthyQuery(value) {
   return value === "true" || value === "1" || value === "yes";
 }
@@ -3156,10 +3188,12 @@ route("GET", "/api/members/:memberId/payments", async ({ req, store, params }) =
 });
 
 route("GET", "/api/foods", async ({ req, store, url }) => {
-  const search = (url.searchParams.get("search") || "").toLowerCase();
+  const searchRaw = url.searchParams.get("search") || "";
+  const search = normalizeVietnameseText(searchRaw);
   const category = url.searchParams.get("category");
   const foods = store.db.foods.filter((food) => {
-    const matchSearch = !search || food.name.toLowerCase().includes(search);
+    const haystack = normalizeVietnameseText(`${food.name} ${food.category} ${food.portion}`);
+    const matchSearch = !search || haystack.includes(search);
     const matchCategory = !category || food.category === category;
     return matchSearch && matchCategory;
   });
@@ -3169,7 +3203,7 @@ route("GET", "/api/foods", async ({ req, store, url }) => {
     itemMapper: (food) => foodResource(req, food),
     links: { create: link(req, "/api/foods", "POST") },
     meta: {
-      filters: { search, category },
+      filters: { search: searchRaw, category },
       categories,
       pagination: {
         page: page.page,
@@ -3397,9 +3431,7 @@ route("PATCH", "/api/members/:memberId/meal-logs/:date/water", async ({ req, sto
   const log = ensureMealLog(store, member.id, params.date);
   requireFields(body, ["waterGlasses"]);
   log.waterGlasses = Math.max(0, Number(body.waterGlasses));
-  log.goals = log.goals.map((goal) => goal.id === "water"
-    ? { ...goal, done: log.waterGlasses >= (member.waterTargetGlasses || 8) }
-    : goal);
+  updateWaterGoalStatus(log, member);
   if (log.waterGlasses >= (member.waterTargetGlasses || 8)) {
     upsertNotification(store, member.id, "water-done", "Đã đạt mục tiêu nước", `Bạn đã hoàn thành ${log.waterGlasses}/${member.waterTargetGlasses || 8} ly nước trong ngày ${params.date}.`, {
       key: `${member.id}:water-done:${params.date}`,
@@ -3424,20 +3456,26 @@ route("POST", "/api/members/:memberId/meal-logs/:date/meals/:mealId/items", asyn
     if (!source) notFound(req, "Food not found.");
   }
   const quantity = Math.max(0.1, Number(body.quantity || 1));
+  const category = body.category || source?.category || null;
+  const portion = body.portion || source?.portion || "1 phần";
+  const waterEquivalentGlasses = getDrinkWaterEquivalentGlasses({ ...source, ...body, category, portion }, quantity);
   const item = {
     id: store.nextId("item", meal.items),
     foodId: source?.id || body.foodId || null,
     name: body.name || source?.name,
+    category,
     calories: round(Number(body.calories ?? source?.calories ?? 0) * quantity, 1),
     protein: round(Number(body.protein ?? source?.protein ?? 0) * quantity, 1),
     carbs: round(Number(body.carbs ?? source?.carbs ?? 0) * quantity, 1),
     fat: round(Number(body.fat ?? source?.fat ?? 0) * quantity, 1),
-    portion: body.portion || source?.portion || "1 phần",
+    portion,
     quantity,
+    waterEquivalentGlasses,
   };
   if (!item.name) badRequest("Either foodId or name is required.");
   assertMealItemQuota(member, log);
   meal.items.push(item);
+  applyWaterEquivalent(log, member, waterEquivalentGlasses);
   log.goals = log.goals.map((goal) => goal.id === "journal" ? { ...goal, done: true } : goal);
   upsertNotification(store, member.id, "meal-added", "Đã thêm món vào nhật ký", `${item.name} đã được ghi vào ${meal.name} ngày ${params.date}.`, {
     key: `${member.id}:meal-added:${params.date}`,
@@ -3454,9 +3492,12 @@ route("DELETE", "/api/members/:memberId/meal-logs/:date/meals/:mealId/items/:ite
   const log = ensureMealLog(store, member.id, params.date);
   const meal = log.meals.find((entry) => entry.id === params.mealId);
   if (!meal) notFound(req, "Meal section not found.");
-  const before = meal.items.length;
+  const item = meal.items.find((entry) => entry.id === params.itemId);
+  if (!item) notFound(req, "Meal item not found.");
+  const source = item.foodId ? getFood(store.db, item.foodId) : null;
+  const waterEquivalentGlasses = Number(item.waterEquivalentGlasses) || getDrinkWaterEquivalentGlasses({ ...source, ...item, category: item.category || source?.category }, item.quantity);
   meal.items = meal.items.filter((item) => item.id !== params.itemId);
-  if (meal.items.length === before) notFound(req, "Meal item not found.");
+  applyWaterEquivalent(log, member, -waterEquivalentGlasses);
   await saveMealLogChanges(store, log);
   return mealLogResource(req, log, member);
 });
