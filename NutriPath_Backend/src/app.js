@@ -1,6 +1,7 @@
 import http from "node:http";
 import crypto from "node:crypto";
 import { existsSync, readFileSync } from "node:fs";
+import { registerControllers } from "./controllers/index.js";
 import { createStore, cloneRecord } from "./store.js";
 import { apiLinks, collectionResponse, currentLink, errorResponse, link } from "./hateoas.js";
 import {
@@ -46,6 +47,10 @@ const GEMINI_RPM_LIMIT = Number(process.env.GEMINI_RPM_LIMIT || 5);
 const GEMINI_RPD_LIMIT = Number(process.env.GEMINI_RPD_LIMIT || 20);
 const GROQ_RPM_LIMIT = Number(process.env.GROQ_RPM_LIMIT || 30);
 const GROQ_RPD_LIMIT = Number(process.env.GROQ_RPD_LIMIT || 1000);
+const KIMI_RPM_LIMIT = Number(process.env.KIMI_RPM_LIMIT || 30);
+const KIMI_RPD_LIMIT = Number(process.env.KIMI_RPD_LIMIT || 1000);
+const DEEPSEEK_RPM_LIMIT = Number(process.env.DEEPSEEK_RPM_LIMIT || 30);
+const DEEPSEEK_RPD_LIMIT = Number(process.env.DEEPSEEK_RPD_LIMIT || 1000);
 const AI_SLOT3_RPM_LIMIT = Number(process.env.AI_SLOT3_RPM_LIMIT || 30);
 const AI_SLOT3_RPD_LIMIT = Number(process.env.AI_SLOT3_RPD_LIMIT || 1000);
 const CHAT_PLAN_LIMITS = {
@@ -115,6 +120,8 @@ const CHAT_BLOCKED_PATTERNS = [
 const SENSITIVE_OUTPUT_PATTERNS = [
   /GEMINI_API_KEY/i,
   /GROQ_API_KEY/i,
+  /KIMI_API_KEY/i,
+  /DEEPSEEK_API_KEY/i,
   /AI_SLOT3_API_KEY/i,
   /NUTRIPATH_SQL_PASSWORD/i,
   /database/i,
@@ -284,7 +291,7 @@ function serviceUnavailable(message, details) {
 
 function requireFields(body, fields) {
   const missing = fields.filter((field) => body[field] === undefined || body[field] === null || body[field] === "");
-  if (missing.length) badRequest("Missing required fields.", { missing });
+  if (missing.length) badRequest("Thiếu trường bắt buộc.", { missing });
 }
 
 function initialsFromName(name) {
@@ -392,7 +399,7 @@ function requireSession(req, store) {
 function requireAdminSession(req, store) {
   const active = requireSession(req, store);
   if (String(active.member.role || "").toLowerCase() !== "admin") {
-    forbidden("Ban khong co quyen truy cap Admin Dashboard.");
+    forbidden("Bạn không có quyền truy cập Admin Dashboard.");
   }
   return active;
 }
@@ -489,7 +496,7 @@ function assertMemberSessionAccess(req, store, memberId) {
   const member = getMember(store.db, memberId);
   if (!member) notFound(req, "Member not found.");
   if (sessionMember.id !== member.id && sessionMember.role?.toLowerCase() !== "admin") {
-    forbidden("Ban khong duoc xem du lieu cua thanh vien nay.");
+    forbidden("Bạn không được xem dữ liệu của thành viên này.");
   }
   return { sessionMember, member };
 }
@@ -1154,7 +1161,7 @@ function getMealItemCount(log) {
 
 function getMealHistoryDayDelta(dateString) {
   const selected = parseDate(dateString);
-  if (!selected) badRequest("Ngay meal log khong hop le.");
+  if (!selected) badRequest("Ngày nhật ký bữa ăn không hợp lệ.");
   const today = parseDate(toLocalDateString()) || new Date();
   return Math.floor((today.getTime() - selected.getTime()) / (24 * 60 * 60 * 1000));
 }
@@ -1163,7 +1170,7 @@ function assertMealLogAccess(member, dateString) {
   const access = getMembershipAccess(member);
   const dayDelta = getMealHistoryDayDelta(dateString);
   if (dayDelta >= access.mealHistoryDays) {
-    forbidden(`Goi ${access.tier.toUpperCase()} chi mo nhat ky va bao cao trong ${access.mealHistoryDays} ngay gan nhat. Nang cap de xem du lieu cu hon.`, {
+    forbidden(`Gói ${access.tier.toUpperCase()} chỉ mở nhật ký và báo cáo trong ${access.mealHistoryDays} ngày gần nhất. Nâng cấp để xem dữ liệu cũ hơn.`, {
       tier: access.tier,
       mealHistoryDays: access.mealHistoryDays,
       analyticsWindowDays: access.analyticsWindowDays,
@@ -1176,7 +1183,7 @@ function assertMealItemQuota(member, log, additionalItems = 1) {
   const access = getMembershipAccess(member);
   const nextCount = getMealItemCount(log) + additionalItems;
   if (nextCount > access.mealItemsPerDay) {
-    forbidden(`Goi ${access.tier.toUpperCase()} chi cho toi da ${access.mealItemsPerDay} mon moi ngay trong Meal Tracker.`, {
+    forbidden(`Gói ${access.tier.toUpperCase()} chỉ cho tối đa ${access.mealItemsPerDay} món mỗi ngày trong Meal Tracker.`, {
       tier: access.tier,
       mealItemsPerDay: access.mealItemsPerDay,
       currentItems: getMealItemCount(log),
@@ -1684,6 +1691,28 @@ function getAiProviders() {
       model: process.env.GROQ_MODEL || "llama-3.1-8b-instant",
       rpmLimit: GROQ_RPM_LIMIT,
       rpdLimit: GROQ_RPD_LIMIT,
+    });
+  }
+  if (process.env.KIMI_API_KEY) {
+    providers.push({
+      name: "kimi-backup",
+      type: "openai-compatible",
+      apiKey: process.env.KIMI_API_KEY,
+      baseUrl: process.env.KIMI_BASE_URL || "https://api.moonshot.ai/v1",
+      model: process.env.KIMI_MODEL || "kimi-k2.6",
+      rpmLimit: KIMI_RPM_LIMIT,
+      rpdLimit: KIMI_RPD_LIMIT,
+    });
+  }
+  if (process.env.DEEPSEEK_API_KEY) {
+    providers.push({
+      name: "deepseek-backup",
+      type: "openai-compatible",
+      apiKey: process.env.DEEPSEEK_API_KEY,
+      baseUrl: process.env.DEEPSEEK_BASE_URL || "https://api.deepseek.com",
+      model: process.env.DEEPSEEK_MODEL || "deepseek-v4-flash",
+      rpmLimit: DEEPSEEK_RPM_LIMIT,
+      rpdLimit: DEEPSEEK_RPD_LIMIT,
     });
   }
   if (process.env.AI_SLOT3_API_KEY && process.env.AI_SLOT3_BASE_URL && process.env.AI_SLOT3_MODEL) {
@@ -2465,7 +2494,7 @@ async function callAiProviderForText(provider, prompt) {
 async function generatePersonalizedRecipe(store, member, prompt, answers) {
   const providers = getAiProviders();
   if (!providers.length) {
-    serviceUnavailable("Chua cau hinh AI provider de tao cong thuc ca nhan hoa.");
+    serviceUnavailable("Chưa cấu hình AI provider để tạo công thức cá nhân hóa.");
   }
 
   const aiPrompt = buildPersonalizedRecipePrompt(store, member, prompt, answers);
@@ -2492,7 +2521,7 @@ async function generatePersonalizedRecipe(store, member, prompt, answers) {
   if (lastQuota) {
     tooManyRequests(geminiQuotaMessage(lastQuota), lastQuota);
   }
-  serviceUnavailable("AI hien chua tao duoc cong thuc ca nhan hoa. Hay thu lai sau.");
+  serviceUnavailable("AI hiện chưa tạo được công thức cá nhân hóa. Hãy thử lại sau.");
 }
 
 function parseFoodPhotoImage(body) {
@@ -2508,19 +2537,19 @@ function parseFoodPhotoImage(body) {
 
   if (mimeType === "image/jpg") mimeType = "image/jpeg";
   if (!["image/jpeg", "image/png", "image/webp"].includes(mimeType)) {
-    badRequest("Anh mon an phai la JPEG, PNG hoac WEBP.");
+    badRequest("Ảnh món ăn phải là JPEG, PNG hoặc WEBP.");
   }
   if (!base64 || !/^[a-z0-9+/=\s]+$/i.test(base64)) {
-    badRequest("Du lieu anh khong hop le.");
+    badRequest("Dữ liệu ảnh không hợp lệ.");
   }
 
   const compactBase64 = base64.replace(/\s/g, "");
   const bytes = Buffer.byteLength(compactBase64, "base64");
   if (bytes > 5 * 1024 * 1024) {
-    badRequest("Anh qua lon. Vui long chon anh duoi 5MB.");
+    badRequest("Ảnh quá lớn. Vui lòng chọn ảnh dưới 5MB.");
   }
   if (bytes < 1024) {
-    badRequest("Anh qua nho hoac khong doc duoc.");
+    badRequest("Ảnh quá nhỏ hoặc không đọc được.");
   }
 
   return { mimeType, base64: compactBase64, bytes };
@@ -2636,7 +2665,7 @@ async function refineFoodPhotoEstimateForSvip(store, member, baseEstimate, notes
 async function estimateFoodPhotoCalories(store, member, image, notes = "") {
   const provider = getAiProviders().find((item) => item.type === "gemini");
   if (!provider) {
-    serviceUnavailable("Chua cau hinh Gemini vision de nhan dien calo tu anh.");
+    serviceUnavailable("Chưa cấu hình Gemini Vision để nhận diện calo từ ảnh.");
   }
 
   const prompt = [
@@ -2667,12 +2696,12 @@ async function estimateFoodPhotoCalories(store, member, image, notes = "") {
         retryAfterSeconds: 60,
       });
     }
-    serviceUnavailable("AI hien chua doc duoc anh mon an. Hay thu lai sau.");
+    serviceUnavailable("AI hiện chưa đọc được ảnh món ăn. Hãy thử lại sau.");
   }
 
   const json = extractJsonObject(text);
   if (!json) {
-    serviceUnavailable("AI chua tra ve du lieu calo hop le. Hay thu lai voi anh ro hon.");
+    serviceUnavailable("AI chưa trả về dữ liệu calo hợp lệ. Hãy thử lại với ảnh rõ hơn.");
   }
   const baseEstimate = normalizeFoodPhotoEstimate(json, {
     analysisMode: "standard_ai_vision",
@@ -2729,11 +2758,7 @@ async function generateSafeGeminiChatResponse(store, member, text, options = {})
       continue;
     }
 
-    const { response, payload, text: providerText } = provider.type === "gemini"
-      ? await callGeminiProvider(provider, prompt)
-      : provider.type === "groq"
-        ? await callGroqProvider(provider, prompt)
-        : await callOpenAiCompatibleProvider(provider, prompt);
+    const { response, payload, text: providerText } = await callAiProviderForText(provider, prompt);
     if (!response.ok) {
       if (response.status !== 429) releaseGeminiQuota(provider);
       console.error(`${provider.type} ${provider.name} API error:`, payload?.error?.message || response.statusText);
@@ -2760,1418 +2785,182 @@ async function generateSafeGeminiChatResponse(store, member, text, options = {})
   return lastQuota ? { reply: geminiQuotaMessage(lastQuota), intent: null } : null;
 }
 
-route("GET", "/", async ({ req }) => ({
-  name: "NutriPath Backend",
-  description: "REST API using HAL-style HATEOAS links.",
-  _links: {
-    self: currentLink(req),
-    api: link(req, "/api"),
-    docs: link(req, "/api"),
-  },
-}));
-
-route("GET", "/api", async ({ req }) => ({
-  name: "NutriPath API",
-  version: "1.0.0",
-  mediaType: "application/hal+json",
-  _links: {
-    self: currentLink(req),
-    health: link(req, "/api/health"),
-    auth: link(req, "/api/auth/me"),
-    login: link(req, "/api/auth/login", "POST"),
-    register: link(req, "/api/auth/register", "POST"),
-    logout: link(req, "/api/auth/logout", "POST"),
-    members: link(req, "/api/members"),
-    foods: link(req, "/api/foods"),
-    recipes: link(req, "/api/recipes"),
-    plans: link(req, "/api/plans"),
-    faqs: link(req, "/api/faqs"),
-    calorieCalculator: link(req, "/api/calculations/calorie", "POST"),
-    checkoutQuote: link(req, "/api/checkout/quote", "POST"),
-    payments: link(req, "/api/payments", "POST"),
-    chat: link(req, "/api/chat/messages", "POST"),
-    adminOverview: link(req, "/api/admin/overview"),
-  },
-}));
-
-route("GET", "/api/health", async ({ req, store }) => ({
-  status: "ok",
-  dbPath: store.filePath,
-  time: new Date().toISOString(),
-  _links: apiLinks(req),
-}));
-
-route("POST", "/api/dev/reset", async ({ req, store }) => {
-  await store.reset();
-  return {
-    status: "reset",
-    _links: {
-      self: currentLink(req),
-      api: link(req, "/api"),
-    },
-  };
-});
-
-route("GET", "/api/calculations/activity-levels", async ({ req, store }) => collectionResponse(
-  req,
-  "activityLevels",
-  store.db.activityLevels,
-  { itemMapper: (item) => ({ ...item, _links: { self: link(req, `/api/calculations/activity-levels#${item.id}`) } }) },
-));
-
-route("GET", "/api/calculations/exercise-types", async ({ req, store }) => collectionResponse(
-  req,
-  "exerciseTypes",
-  store.db.exerciseTypes,
-  { itemMapper: (item) => ({ ...item, _links: { self: link(req, `/api/calculations/exercise-types#${item.id}`) } }) },
-));
-
-route("POST", "/api/calculations/calorie", async ({ req, store, body }) => ({
-  ...calculateCalories(store.db, body),
-  _links: {
-    self: currentLink(req),
-    activityLevels: link(req, "/api/calculations/activity-levels"),
-    exerciseTypes: link(req, "/api/calculations/exercise-types"),
-    login: link(req, "/api/auth/login", "POST"),
-  },
-}));
-
-route("POST", "/api/members/:memberId/nutrition-profile", async ({ req, store, params, body }) => {
-  const { member: sessionMember } = requireSession(req, store);
-  const member = getMember(store.db, params.memberId);
-  if (!member) notFound(req, "Member not found.");
-  if (sessionMember.id !== member.id && sessionMember.role?.toLowerCase() !== "admin") {
-    forbidden("Ban khong duoc cap nhat ho so dinh duong cua thanh vien nay.");
-  }
-
-  const calculation = calculateCalories(store.db, body);
-  const updatedMember = await saveMemberNutritionProfile(store, member, calculation);
-  let aiInsight = null;
-  if (getMembershipAccess(updatedMember).aiCoach) {
-    aiInsight = await generateSvipCalorieInsight(store, updatedMember, calculation);
-    if (updatedMember.nutritionProfile) {
-      updatedMember.nutritionProfile.aiInsight = aiInsight;
-      await store.save();
-    }
-  }
-  upsertNotification(store, updatedMember.id, "nutrition-profile", "Đã cập nhật hồ sơ dinh dưỡng", `Mục tiêu mới: ${updatedMember.calorieTarget} kcal/ngày, protein ${updatedMember.macroTargets.protein}g.`, {
-    key: `${updatedMember.id}:nutrition-profile:${toLocalDateString()}`,
-    actionHref: "/calculator",
-  });
-  await store.save();
-
-  return {
-    saved: true,
-    member: memberResource(req, updatedMember, store.db),
-    calculation: aiInsight ? { ...calculation, aiInsight } : calculation,
-    _links: {
-      self: currentLink(req),
-      member: link(req, `/api/members/${updatedMember.id}`),
-      profile: link(req, `/api/members/${updatedMember.id}/profile`),
-      dashboard: link(req, `/api/members/${updatedMember.id}/dashboard`),
-      calorieCalculator: link(req, "/api/calculations/calorie", "POST"),
-    },
-  };
-});
-
-route("POST", "/api/auth/register", async ({ req, store, body }) => {
-  requireFields(body, ["name", "email", "password"]);
-  const email = normalizeEmail(body.email);
-  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) badRequest("Email không hợp lệ.");
-
-  const password = String(body.password);
-  if (password.length < 6) badRequest("Mật khẩu cần ít nhất 6 ký tự.");
-
-  const credentials = ensureAuthCredentials(store.db);
-  if (findCredentialByEmail(store.db, email)) {
-    conflict("Email này đã có tài khoản đăng nhập.");
-  }
-
-  let member = findMemberByEmail(store.db, email);
-  const isNewMember = !member;
-  if (!member) {
-    member = memberFromRegistration(store, { ...body, email });
-  }
-
-  const hashed = hashPassword(password);
-  const credential = {
-    id: store.nextId("auth", credentials),
-    memberId: member.id,
-    email,
-    passwordHash: hashed.passwordHash,
-    passwordSalt: hashed.passwordSalt,
-    createdAt: new Date().toISOString(),
-  };
-
-  if (store.dataSource === "sqlserver") {
-    if (isNewMember) await insertSqlServerAuthMember(member, credential);
-    else await insertSqlServerCredential(credential);
-    await store.reload();
-    member = getMember(store.db, credential.memberId);
-  } else {
-    if (isNewMember) store.db.members.push(member);
-    credentials.push(credential);
-    await store.save();
-  }
-
-  return authSessionResponse(req, member, store.db);
-});
-
-route("POST", "/api/auth/login", async ({ req, store, body }) => {
-  requireFields(body, ["email", "password"]);
-  const email = normalizeEmail(body.email);
-  const credential = findCredentialByEmail(store.db, email);
-
-  if (!credential || !verifyPassword(body.password, credential)) {
-    unauthorized("Email hoặc mật khẩu không đúng.");
-  }
-
-  const member = getMember(store.db, credential.memberId) || findMemberByEmail(store.db, email);
-  if (!member) unauthorized("Tài khoản chưa gắn với hồ sơ thành viên.");
-
-  return authSessionResponse(req, member, store.db);
-});
-
-route("GET", "/api/auth/me", async ({ req, store }) => {
-  const { member } = requireSession(req, store);
-  return {
-    member: memberResource(req, member, store.db),
-    _links: {
-      self: currentLink(req),
-      logout: link(req, "/api/auth/logout", "POST"),
-      dashboard: link(req, `/api/members/${member.id}/dashboard`),
-      profile: link(req, `/api/members/${member.id}/profile`),
-    },
-  };
-});
-
-route("POST", "/api/auth/logout", async ({ req }) => {
-  const token = getBearerToken(req);
-  if (token) sessions.delete(token);
-  return {
-    loggedOut: true,
-    _links: {
-      self: currentLink(req),
-      login: link(req, "/api/auth/login", "POST"),
-      register: link(req, "/api/auth/register", "POST"),
-      api: link(req, "/api"),
-    },
-  };
-});
-
-route("GET", "/api/members", async ({ req, store, url }) => {
-  const search = (url.searchParams.get("search") || "").toLowerCase();
-  const tier = url.searchParams.get("tier");
-  const members = store.db.members.filter((member) => {
-    const matchSearch = !search || member.name.toLowerCase().includes(search) || member.email.toLowerCase().includes(search);
-    const matchTier = !tier || member.tier === tier;
-    return matchSearch && matchTier;
-  });
-
-  return collectionResponse(req, "members", members, {
-    itemMapper: (member) => memberResource(req, member, store.db),
-    links: { create: link(req, "/api/members", "POST") },
-    meta: { filters: { search, tier } },
-  });
-});
-
-route("POST", "/api/members", async ({ req, store, body }) => {
-  requireFields(body, ["name", "email"]);
-  const member = {
-    id: store.nextId("mem", store.db.members),
-    name: body.name,
-    email: body.email,
-    initials: body.initials || body.name.split(" ").map((part) => part[0]).join("").slice(0, 2).toUpperCase(),
-    role: "member",
-    status: "active",
-    tier: body.tier || "free",
-    gender: body.gender || "female",
-    age: Number(body.age || 25),
-    weightKg: Number(body.weightKg || 65),
-    heightCm: Number(body.heightCm || 168),
-    activityLevel: body.activityLevel || "light",
-    goal: body.goal || "maintain",
-    joinedAt: new Date().toISOString().slice(0, 10),
-    calorieTarget: Number(body.calorieTarget || 1800),
-    macroTargets: body.macroTargets || { protein: 120, carbs: 220, fat: 60 },
-    waterTargetGlasses: Number(body.waterTargetGlasses || 8),
-    subscription: { planId: body.tier || "free", billing: "monthly", status: "active", startedAt: new Date().toISOString().slice(0, 10), renewsAt: null },
-    stats: { memberDays: 0, savedRecipes: 0, aiConversations: 0, trackedCalories: 0, streakDays: 0 },
-  };
-  store.db.members.push(member);
-  await store.save();
-  return memberResource(req, member, store.db);
-});
-
-route("GET", "/api/members/:id", async ({ req, store, params }) => {
-  const member = getMember(store.db, params.id);
-  if (!member) notFound(req, "Member not found.");
-  return memberResource(req, member, store.db);
-});
-
-route("PATCH", "/api/members/:id", async ({ req, store, params, body }) => {
-  const { sessionMember, member } = assertMemberSessionAccess(req, store, params.id);
-  const isAdmin = sessionMember.role?.toLowerCase() === "admin";
-  const allowed = new Set(isAdmin
-    ? ["name", "email", "calorieTarget", "waterTargetGlasses", "role", "status", "tier", "subscription", "macroTargets"]
-    : ["name", "email", "calorieTarget", "waterTargetGlasses"]);
-
-  if (body.calorieTarget !== undefined) {
-    const target = Number(body.calorieTarget);
-    if (!Number.isFinite(target) || target < 1200 || target > 5000) badRequest("Mục tiêu calo phải nằm trong khoảng 1200-5000 kcal/ngày.");
-    body.calorieTarget = Math.round(target);
-  }
-  if (body.waterTargetGlasses !== undefined) {
-    const target = Number(body.waterTargetGlasses);
-    if (!Number.isFinite(target) || target < 1 || target > 20) badRequest("Mục tiêu nước phải nằm trong khoảng 1-20 ly/ngày.");
-    body.waterTargetGlasses = Math.round(target);
-  }
-
-  for (const [key, value] of Object.entries(body || {})) {
-    if (allowed.has(key)) member[key] = value;
-  }
-  if (body.name) member.initials = initialsFromName(member.name);
-  await store.save();
-  return memberResource(req, member, store.db);
-});
-
-route("DELETE", "/api/members/:id", async ({ req, store, params }) => {
-  const before = store.db.members.length;
-  store.db.members = store.db.members.filter((member) => member.id !== params.id);
-  if (store.db.members.length === before) notFound(req, "Member not found.");
-  await store.save();
-  return {
-    deleted: params.id,
-    _links: {
-      collection: link(req, "/api/members"),
-      api: link(req, "/api"),
-    },
-  };
-});
-
-route("GET", "/api/members/:memberId/profile", async ({ req, store, params }) => {
-  const member = getMember(store.db, params.memberId);
-  if (!member) notFound(req, "Member not found.");
-  const plan = getPlan(store.db, member.subscription?.planId || member.tier);
-  const payments = store.db.payments.filter((payment) => payment.memberId === member.id);
-  return {
-    member: memberResource(req, member, store.db),
-    plan: plan ? planResource(req, plan) : null,
-    benefits: plan?.features || [],
-    billingHistory: payments.map((payment) => paymentResource(req, payment)),
-    _links: {
-      self: currentLink(req),
-      member: link(req, `/api/members/${member.id}`),
-      payments: link(req, `/api/members/${member.id}/payments`),
-      plans: link(req, "/api/plans"),
-      checkout: link(req, "/api/payments", "POST"),
-    },
-  };
-});
-
-route("GET", "/api/members/:memberId/notifications", async ({ req, store, params, url }) => {
-  const { member } = assertMemberSessionAccess(req, store, params.memberId);
-  const notifications = syncMemberNotifications(store, member);
-  await store.save();
-  const unreadOnly = url.searchParams.get("unread") === "true";
-  const limit = Math.max(1, Math.min(Number(url.searchParams.get("limit") || 30), 100));
-  const visible = notifications
-    .filter((notification) => !unreadOnly || !notification.readAt)
-    .slice(0, limit);
-  return collectionResponse(req, "notifications", visible, {
-    itemMapper: (notification) => notificationResource(req, notification),
-    links: {
-      member: link(req, `/api/members/${member.id}`),
-      markAllRead: link(req, `/api/members/${member.id}/notifications/read-all`, "PATCH"),
-    },
-    meta: {
-      unreadCount: notifications.filter((notification) => !notification.readAt).length,
-      total: notifications.length,
-    },
-  });
-});
-
-route("PATCH", "/api/members/:memberId/notifications/read-all", async ({ req, store, params }) => {
-  const { member } = assertMemberSessionAccess(req, store, params.memberId);
-  const now = new Date().toISOString();
-  const notifications = ensureNotifications(store.db).filter((notification) => notification.memberId === member.id);
-  for (const notification of notifications) {
-    notification.readAt ||= now;
-    notification.updatedAt = now;
-  }
-  await store.save();
-  return {
-    updated: notifications.length,
-    unreadCount: 0,
-    _links: {
-      notifications: link(req, `/api/members/${member.id}/notifications`),
-    },
-  };
-});
-
-route("PATCH", "/api/members/:memberId/notifications/:id", async ({ req, store, params, body }) => {
-  const { member } = assertMemberSessionAccess(req, store, params.memberId);
-  const notification = ensureNotifications(store.db).find((item) => item.memberId === member.id && item.id === params.id);
-  if (!notification) notFound(req, "Notification not found.");
-  const now = new Date().toISOString();
-  if (body.read === false) {
-    notification.readAt = null;
-  } else {
-    notification.readAt = now;
-  }
-  notification.updatedAt = now;
-  await store.save();
-  return notificationResource(req, notification);
-});
-
-route("GET", "/api/members/:memberId/dashboard", async ({ req, store, params, url }) => {
-  const member = getMember(store.db, params.memberId);
-  if (!member) notFound(req, "Member not found.");
-  const selectedDate = parseDate(url.searchParams.get("date")) || new Date();
-  const date = toLocalDateString(selectedDate);
-  assertMealLogAccess(member, date);
-  const log = ensureMealLog(store, member.id, date);
-  const summary = summarizeMealLog(log, member);
-  await saveMealLogChanges(store, log);
-
-  return {
-    date,
-    greeting: `Xin chào, ${member.name}`,
-    member: memberResource(req, member, store.db),
-    nutrition: summary,
-    mealLog: mealLogResource(req, log, member),
-    weeklyProgress: buildWeeklyProgress(store.db, member, selectedDate),
-    tips: buildDashboardTips(log, summary),
-    achievements: buildDashboardAchievements(store.db, member, log, summary, selectedDate),
-    _links: {
-      self: currentLink(req),
-      member: link(req, `/api/members/${member.id}`),
-      mealLog: link(req, `/api/members/${member.id}/meal-logs/${date}`),
-      foods: link(req, "/api/foods"),
-      recipes: link(req, "/api/recipes"),
-      chat: link(req, "/api/chat/messages", "POST"),
-    },
-  };
-});
-
-route("GET", "/api/members/:memberId/personalized-recipes", async ({ req, store, params }) => {
-  const { member } = assertMemberSessionAccess(req, store, params.memberId);
-  const recipes = ensurePersonalizedRecipes(store.db)
-    .filter((recipe) => recipe.memberId === member.id)
-    .sort((a, b) => String(b.savedAt || b.generatedAt || "").localeCompare(String(a.savedAt || a.generatedAt || "")));
-
-  return collectionResponse(req, "recipes", recipes, {
-    path: `/api/members/${member.id}/personalized-recipes`,
-    itemMapper: (recipe) => personalizedRecipeResource(req, recipe),
-    links: {
-      member: link(req, `/api/members/${member.id}`),
-      generate: link(req, "/api/ai/personalized-recipes", "POST"),
-    },
-  });
-});
-
-route("GET", "/api/members/:memberId/personalized-recipes/:recipeId", async ({ req, store, params }) => {
-  const { member } = assertMemberSessionAccess(req, store, params.memberId);
-  const recipe = ensurePersonalizedRecipes(store.db).find((item) => item.memberId === member.id && item.id === params.recipeId);
-  if (!recipe) notFound(req, "Personalized recipe not found.");
-  return personalizedRecipeResource(req, recipe);
-});
-
-route("GET", "/api/members/:memberId/payments", async ({ req, store, params }) => {
-  const member = getMember(store.db, params.memberId);
-  if (!member) notFound(req, "Member not found.");
-  const payments = store.db.payments.filter((payment) => payment.memberId === member.id);
-  return collectionResponse(req, "payments", payments, {
-    itemMapper: (payment) => paymentResource(req, payment),
-    links: { create: link(req, "/api/payments", "POST"), member: link(req, `/api/members/${member.id}`) },
-  });
-});
-
-route("GET", "/api/foods", async ({ req, store, url }) => {
-  const searchRaw = url.searchParams.get("search") || "";
-  const search = normalizeVietnameseText(searchRaw);
-  const category = url.searchParams.get("category");
-  const foods = store.db.foods.filter((food) => {
-    const haystack = normalizeVietnameseText(`${food.name} ${food.category} ${food.portion}`);
-    const matchSearch = !search || haystack.includes(search);
-    const matchCategory = !category || food.category === category;
-    return matchSearch && matchCategory;
-  });
-  const page = paginateItems(url, foods, { defaultLimit: 50, maxLimit: 200 });
-  const categories = [...new Set(store.db.foods.map((food) => food.category))].sort();
-  return collectionResponse(req, "foods", page.items, {
-    itemMapper: (food) => foodResource(req, food),
-    links: { create: link(req, "/api/foods", "POST") },
-    meta: {
-      filters: { search: searchRaw, category },
-      categories,
-      pagination: {
-        page: page.page,
-        limit: page.limit,
-        total: page.total,
-        totalPages: page.totalPages,
-      },
-    },
-  });
-});
-
-route("POST", "/api/foods", async ({ req, store, body }) => {
-  requireAdminSession(req, store);
-  requireFields(body, ["name", "calories", "protein", "carbs", "fat", "portion"]);
-  const food = {
-    id: store.nextId("food", store.db.foods),
-    name: body.name,
-    category: body.category || "Khác",
-    calories: Number(body.calories),
-    protein: Number(body.protein),
-    carbs: Number(body.carbs),
-    fat: Number(body.fat),
-    portion: body.portion,
-  };
-  if ([food.calories, food.protein, food.carbs, food.fat].some((value) => Number.isNaN(value) || value < 0)) {
-    badRequest("Thong tin dinh duong khong hop le.");
-  }
-  store.db.foods.push(food);
-  await store.save();
-  return foodResource(req, food);
-});
-
-route("GET", "/api/foods/:id", async ({ req, store, params }) => {
-  const food = getFood(store.db, params.id);
-  if (!food) notFound(req, "Food not found.");
-  return foodResource(req, food);
-});
-
-route("GET", "/api/nutrition/custom-food/ingredients", async ({ req, url }) => {
-  const search = normalizeVietnameseText(url.searchParams.get("search") || "");
-  const ingredients = VIETNAM_NUTRITION_INGREDIENTS.filter((item) => {
-    if (!search) return true;
-    const haystack = normalizeVietnameseText([item.name, ...(item.aliases || [])].join(" "));
-    return haystack.includes(search);
-  });
-
-  return collectionResponse(req, "ingredients", ingredients, {
-    links: { estimate: link(req, "/api/nutrition/custom-food/estimate", "POST") },
-    meta: {
-      units: CUSTOM_FOOD_UNITS,
-      examples: [
-        "Cơm gà áp chảo: 1 chén cơm, 1 miếng ức gà, 1 muỗng cà phê dầu ăn, một ít rau.",
-        "Bánh mì trứng: 1 ổ bánh mì, 1 quả trứng, 1 muỗng cà phê mayonnaise.",
-        "Canh rau: 1 bát rau xanh, 1 muỗng cà phê nước mắm.",
-      ],
-    },
-  });
-});
-
-route("POST", "/api/nutrition/custom-food/estimate", async ({ req, store, body }) => {
-  requireSession(req, store);
-  const result = estimateCustomCookedFood(body);
-  return {
-    ...result,
-    logic: {
-      formula: "Calories = gram × kcal_per_100g / 100",
-      macroFormula: "Macro = gram × macro_per_100g / 100",
-      servingFormula: "Per serving = total / number_of_servings",
-      reminder: "Kết quả là ước tính, có thể dao động theo cách nấu và khẩu phần thực tế.",
-    },
-    _links: {
-      self: currentLink(req),
-      ingredients: link(req, "/api/nutrition/custom-food/ingredients"),
-    },
-  };
-});
-
-route("PATCH", "/api/foods/:id", async ({ req, store, params, body }) => {
-  requireAdminSession(req, store);
-  const food = getFood(store.db, params.id);
-  if (!food) notFound(req, "Food not found.");
-  Object.assign(food, body, { id: food.id });
-  await store.save();
-  return foodResource(req, food);
-});
-
-route("DELETE", "/api/foods/:id", async ({ req, store, params }) => {
-  requireAdminSession(req, store);
-  const before = store.db.foods.length;
-  store.db.foods = store.db.foods.filter((food) => food.id !== params.id);
-  if (store.db.foods.length === before) notFound(req, "Food not found.");
-  await store.save();
-  return { deleted: params.id, _links: { collection: link(req, "/api/foods") } };
-});
-
-route("GET", "/api/members/:memberId/meal-logs", async ({ req, store, params, url }) => {
-  const member = getMember(store.db, params.memberId);
-  if (!member) notFound(req, "Member not found.");
-  const date = url.searchParams.get("date");
-  if (date) assertMealLogAccess(member, date);
-  const access = getMembershipAccess(member);
-  const logs = store.db.mealLogs.filter((log) => {
-    if (log.memberId !== member.id) return false;
-    if (date && log.date !== date) return false;
-    return getMealHistoryDayDelta(log.date) < access.mealHistoryDays;
-  });
-  return collectionResponse(req, "mealLogs", logs, {
-    itemMapper: (log) => mealLogResource(req, log, member),
-    links: {
-      member: link(req, `/api/members/${member.id}`),
-      create: link(req, `/api/members/${member.id}/meal-logs`, "POST"),
-    },
-    meta: { access },
-  });
-});
-
-route("POST", "/api/members/:memberId/meal-logs", async ({ req, store, params, body }) => {
-  const member = getMember(store.db, params.memberId);
-  if (!member) notFound(req, "Member not found.");
-  requireFields(body, ["date"]);
-  assertMealLogAccess(member, body.date);
-  const existing = store.db.mealLogs.find((log) => log.memberId === member.id && log.date === body.date);
-  if (existing) return mealLogResource(req, existing, member);
-  const log = ensureMealLog(store, member.id, body.date);
-  await saveMealLogChanges(store, log);
-  return mealLogResource(req, log, member);
-});
-
-route("GET", "/api/members/:memberId/meal-logs/:date", async ({ req, store, params }) => {
-  const member = getMember(store.db, params.memberId);
-  if (!member) notFound(req, "Member not found.");
-  assertMealLogAccess(member, params.date);
-  const log = ensureMealLog(store, member.id, params.date);
-  await saveMealLogChanges(store, log);
-  return mealLogResource(req, log, member);
-});
-
-route("GET", "/api/members/:memberId/reports/nutrition", async ({ req, store, params, url }) => {
-  const { member } = assertMemberSessionAccess(req, store, params.memberId);
-  const days = Number(url.searchParams.get("days") || member.access?.analyticsWindowDays || getMembershipAccess(member).analyticsWindowDays);
-  const endDate = url.searchParams.get("endDate") || toLocalDateString();
-  if (url.searchParams.get("endDate") && !parseDate(endDate)) badRequest("Ngay ket thuc bao cao khong hop le.");
-  return buildNutritionReport(req, store.db, member, { days, endDate });
-});
-
-route("GET", "/api/members/:memberId/reports/export", async ({ req, store, params, url }) => {
-  const { member } = assertMemberSessionAccess(req, store, params.memberId);
-  const access = getMembershipAccess(member);
-  if (!access.reportExports) {
-    forbidden("Tinh nang xuat bao cao chi danh cho goi SVIP.", {
-      tier: access.tier,
-      reportExports: access.reportExports,
-    });
-  }
-  const days = Number(url.searchParams.get("days") || access.analyticsWindowDays);
-  const endDate = url.searchParams.get("endDate") || toLocalDateString();
-  if (url.searchParams.get("endDate") && !parseDate(endDate)) badRequest("Ngay ket thuc bao cao khong hop le.");
-  const report = buildNutritionReport(req, store.db, member, { days, endDate });
-  return {
-    filename: `nutripath-report-${member.id}-${report.range.from}-${report.range.to}.csv`,
-    mimeType: "text/csv;charset=utf-8",
-    content: buildReportCsv(report),
-    generatedAt: report.generatedAt,
-    _links: {
-      report: link(req, `/api/members/${member.id}/reports/nutrition?days=${report.range.days}&endDate=${encodeURIComponent(report.range.to)}`),
-      member: link(req, `/api/members/${member.id}`),
-    },
-  };
-});
-
-route("GET", "/api/members/:memberId/custom-foods", async ({ req, store, params, url }) => {
-  const { member } = assertMemberSessionAccess(req, store, params.memberId);
-  const search = normalizeVietnameseText(url.searchParams.get("search") || "");
-  const foods = ensurePersonalFoods(store.db)
-    .filter((food) => {
-      if (food.memberId !== member.id) return false;
-      if (!search) return true;
-      return normalizeVietnameseText(`${food.name} ${food.portion}`).includes(search);
-    })
-    .sort((a, b) => String(b.updatedAt || b.createdAt || "").localeCompare(String(a.updatedAt || a.createdAt || "")));
-
-  return collectionResponse(req, "customFoods", foods, {
-    itemMapper: (food) => customFoodResource(req, food),
-    links: { create: link(req, `/api/members/${member.id}/custom-foods`, "POST") },
-  });
-});
-
-route("POST", "/api/members/:memberId/custom-foods", async ({ req, store, params, body }) => {
-  const { member } = assertMemberSessionAccess(req, store, params.memberId);
-  const addableItem = body.addableItem || body.estimate?.addableItem || body;
-  requireFields(addableItem, ["name", "calories", "protein", "carbs", "fat", "portion"]);
-
-  const now = new Date().toISOString();
-  const savedFood = {
-    id: store.nextId("custom-food", ensurePersonalFoods(store.db)),
-    memberId: member.id,
-    name: String(addableItem.name).trim(),
-    calories: round(Number(addableItem.calories), 1),
-    protein: round(Number(addableItem.protein), 1),
-    carbs: round(Number(addableItem.carbs), 1),
-    fat: round(Number(addableItem.fat), 1),
-    portion: String(addableItem.portion || "1 phần tự nấu"),
-    servings: Number(body.estimate?.servings || body.servings || 1),
-    cookingMethod: String(body.estimate?.cookingMethod || body.cookingMethod || ""),
-    ingredients: body.estimate?.ingredients || body.ingredients || [],
-    confidence: body.estimate?.confidence || body.confidence || null,
-    disclaimer: body.estimate?.disclaimer || "Món tự nấu đã lưu là ước tính, có thể dao động theo khẩu phần thực tế.",
-    createdAt: now,
-    updatedAt: now,
-  };
-
-  if ([savedFood.calories, savedFood.protein, savedFood.carbs, savedFood.fat].some((value) => Number.isNaN(value) || value < 0)) {
-    badRequest("Thông tin dinh dưỡng của món cá nhân không hợp lệ.");
-  }
-
-  ensurePersonalFoods(store.db).unshift(savedFood);
-  await store.save();
-  return customFoodResource(req, savedFood);
-});
-
-route("PATCH", "/api/members/:memberId/meal-logs/:date/water", async ({ req, store, params, body }) => {
-  const member = getMember(store.db, params.memberId);
-  if (!member) notFound(req, "Member not found.");
-  assertMealLogAccess(member, params.date);
-  const log = ensureMealLog(store, member.id, params.date);
-  requireFields(body, ["waterGlasses"]);
-  log.waterGlasses = Math.max(0, Number(body.waterGlasses));
-  updateWaterGoalStatus(log, member);
-  if (log.waterGlasses >= (member.waterTargetGlasses || 8)) {
-    upsertNotification(store, member.id, "water-done", "Đã đạt mục tiêu nước", `Bạn đã hoàn thành ${log.waterGlasses}/${member.waterTargetGlasses || 8} ly nước trong ngày ${params.date}.`, {
-      key: `${member.id}:water-done:${params.date}`,
-      actionHref: "/dashboard",
-    });
-  }
-  await saveMealLogChanges(store, log);
-  return mealLogResource(req, log, member);
-});
-
-route("POST", "/api/members/:memberId/meal-logs/:date/meals/:mealId/items", async ({ req, store, params, body }) => {
-  const member = getMember(store.db, params.memberId);
-  if (!member) notFound(req, "Member not found.");
-  assertMealLogAccess(member, params.date);
-  const log = ensureMealLog(store, member.id, params.date);
-  const meal = log.meals.find((entry) => entry.id === params.mealId);
-  if (!meal) notFound(req, "Meal section not found.");
-
-  let source = null;
-  if (body.foodId) {
-    source = getFood(store.db, body.foodId);
-    if (!source) notFound(req, "Food not found.");
-  }
-  const quantity = Math.max(0.1, Number(body.quantity || 1));
-  const category = body.category || source?.category || null;
-  const portion = body.portion || source?.portion || "1 phần";
-  const waterEquivalentGlasses = getDrinkWaterEquivalentGlasses({ ...source, ...body, category, portion }, quantity);
-  const item = {
-    id: store.nextId("item", meal.items),
-    foodId: source?.id || body.foodId || null,
-    name: body.name || source?.name,
-    category,
-    calories: round(Number(body.calories ?? source?.calories ?? 0) * quantity, 1),
-    protein: round(Number(body.protein ?? source?.protein ?? 0) * quantity, 1),
-    carbs: round(Number(body.carbs ?? source?.carbs ?? 0) * quantity, 1),
-    fat: round(Number(body.fat ?? source?.fat ?? 0) * quantity, 1),
-    portion,
-    quantity,
-    waterEquivalentGlasses,
-  };
-  if (!item.name) badRequest("Either foodId or name is required.");
-  assertMealItemQuota(member, log);
-  meal.items.push(item);
-  applyWaterEquivalent(log, member, waterEquivalentGlasses);
-  log.goals = log.goals.map((goal) => goal.id === "journal" ? { ...goal, done: true } : goal);
-  upsertNotification(store, member.id, "meal-added", "Đã thêm món vào nhật ký", `${item.name} đã được ghi vào ${meal.name} ngày ${params.date}.`, {
-    key: `${member.id}:meal-added:${params.date}`,
-    actionHref: "/tracker",
-  });
-  await saveMealLogChanges(store, log);
-  return mealLogResource(req, log, member);
-});
-
-route("DELETE", "/api/members/:memberId/meal-logs/:date/meals/:mealId/items/:itemId", async ({ req, store, params }) => {
-  const member = getMember(store.db, params.memberId);
-  if (!member) notFound(req, "Member not found.");
-  assertMealLogAccess(member, params.date);
-  const log = ensureMealLog(store, member.id, params.date);
-  const meal = log.meals.find((entry) => entry.id === params.mealId);
-  if (!meal) notFound(req, "Meal section not found.");
-  const item = meal.items.find((entry) => entry.id === params.itemId);
-  if (!item) notFound(req, "Meal item not found.");
-  const source = item.foodId ? getFood(store.db, item.foodId) : null;
-  const waterEquivalentGlasses = Number(item.waterEquivalentGlasses) || getDrinkWaterEquivalentGlasses({ ...source, ...item, category: item.category || source?.category }, item.quantity);
-  meal.items = meal.items.filter((item) => item.id !== params.itemId);
-  applyWaterEquivalent(log, member, -waterEquivalentGlasses);
-  await saveMealLogChanges(store, log);
-  return mealLogResource(req, log, member);
-});
-
-route("POST", "/api/ai/food-photo-estimate", async ({ req, store, body }) => {
-  const { member } = requireSession(req, store);
-  enforceSafeChatRateLimit(req, member);
-  const image = parseFoodPhotoImage(body);
-  const estimate = await estimateFoodPhotoCalories(store, member, image, body.notes || "");
-  return {
-    estimate,
-    addableItem: {
-      name: estimate.dishName,
-      calories: estimate.calories,
-      protein: estimate.protein,
-      carbs: estimate.carbs,
-      fat: estimate.fat,
-      portion: estimate.portion,
-      quantity: 1,
-    },
-    _links: {
-      self: currentLink(req),
-      mealLogs: link(req, `/api/members/${member.id}/meal-logs`),
-      foods: link(req, "/api/foods"),
-    },
-  };
-});
-
-route("GET", "/api/recipes", async ({ req, store, url }) => {
-  const activeSession = getActiveSession(req, store);
-  const access = getMembershipAccess(activeSession?.member || null);
-  const search = (url.searchParams.get("search") || "").toLowerCase();
-  const tag = url.searchParams.get("tag");
-  const maxCalories = Number(url.searchParams.get("maxCalories") || 0);
-  const difficulty = Number(url.searchParams.get("difficulty") || 0);
-  const filteredRecipes = store.db.recipes.filter((recipe) => {
-    const matchSearch = !search || recipe.name.toLowerCase().includes(search)
-      || recipe.ingredients.some((ingredient) => ingredient.name.toLowerCase().includes(search));
-    const matchTag = !tag || tag === "Tất cả" || recipe.tags.includes(tag);
-    const matchCalories = !maxCalories || recipe.calories <= maxCalories;
-    const matchDifficulty = !difficulty || recipe.difficulty === difficulty;
-    return matchSearch && matchTag && matchCalories && matchDifficulty;
-  });
-  const accessibleRecipes = access.recipeLimit ? filteredRecipes.slice(0, access.recipeLimit) : filteredRecipes;
-  const page = paginateItems(url, accessibleRecipes, { defaultLimit: 24, maxLimit: 100 });
-  const tags = [...new Set(store.db.recipes.flatMap((recipe) => recipe.tags))].sort();
-  return collectionResponse(req, "recipes", page.items, {
-    itemMapper: (recipe) => recipeResource(req, recipe),
-    links: { create: link(req, "/api/recipes", "POST") },
-    meta: {
-      filters: { search, tag, maxCalories: maxCalories || null, difficulty: difficulty || null },
-      tags,
-      pagination: {
-        page: page.page,
-        limit: page.limit,
-        total: page.total,
-        totalPages: page.totalPages,
-      },
-      access: {
-        tier: access.tier,
-        recipeLimit: access.recipeLimit,
-        totalAvailable: filteredRecipes.length,
-        upgradeRequired: Boolean(access.recipeLimit && filteredRecipes.length > accessibleRecipes.length),
-      },
-    },
-  });
-});
-
-route("POST", "/api/recipes", async ({ req, store, body }) => {
-  requireFields(body, ["name", "calories", "timeMinutes", "servings"]);
-  const recipe = {
-    id: store.nextId("recipe", store.db.recipes),
-    name: body.name,
-    image: body.image || "",
-    timeMinutes: Number(body.timeMinutes),
-    calories: Number(body.calories),
-    difficulty: Number(body.difficulty || 1),
-    tags: Array.isArray(body.tags) ? body.tags : [],
-    servings: Number(body.servings),
-    ingredients: Array.isArray(body.ingredients) ? body.ingredients : [],
-    steps: Array.isArray(body.steps) ? body.steps : [],
-    nutrition: body.nutrition || { protein: 0, carbs: 0, fat: 0, fiber: 0 },
-  };
-  store.db.recipes.push(recipe);
-  await store.save();
-  return recipeResource(req, recipe);
-});
-
-route("POST", "/api/ai/personalized-recipes", async ({ req, store, body }) => {
-  const active = requireSession(req, store);
-  const member = active.member;
-  const access = getMembershipAccess(member);
-  if (!access.aiCoach) {
-    forbidden("Cong thuc ca nhan hoa do AI tao chi mo cho goi SVIP.", {
-      requiredTier: "svip",
-      tier: access.tier,
-    });
-  }
-
-  const prompt = String(body.prompt || "").trim();
-  const answers = body.answers && typeof body.answers === "object" ? body.answers : {};
-  if (!prompt && Object.keys(answers).length === 0) {
-    badRequest("Vui long nhap muc tieu hoac tra loi cau hoi ca nhan hoa.");
-  }
-
-  const questions = getPersonalizedRecipeQuestions(prompt, answers);
-  if (questions.length) {
-    return {
-      status: "needs_questions",
-      questions,
-      message: "Minh can them vai thong tin de ca nhan hoa cong thuc ro hon.",
-      _links: {
-        self: currentLink(req),
-        generate: link(req, "/api/ai/personalized-recipes", "POST"),
-      },
-    };
-  }
-
-  const generatedRecipe = await generatePersonalizedRecipe(store, member, prompt, answers);
-  const recipe = savePersonalizedRecipe(store, member, generatedRecipe);
-  await store.save();
-  return {
-    status: "recipe",
-    recipe: personalizedRecipeResource(req, recipe),
-    _links: {
-      self: currentLink(req),
-      recipes: link(req, "/api/recipes"),
-      savedRecipes: link(req, `/api/members/${member.id}/personalized-recipes`),
-      chat: link(req, "/api/chat/messages", "POST"),
-    },
-  };
-});
-
-route("POST", "/api/ai/coach-weekly-plan", async ({ req, store, body }) => {
-  const { member } = requireSession(req, store);
-  const access = getMembershipAccess(member);
-  if (!access.aiCoach) {
-    forbidden("AI Coach ke hoach tuan chi danh cho goi SVIP.", {
-      requiredTier: "svip",
-      tier: access.tier,
-    });
-  }
-  const plan = buildWeeklyCoachPlan(store, member, { startDate: body.startDate, req });
-  ensureCoachPlans(store.db).unshift(plan);
-  upsertNotification(store, member.id, "weekly-coach-plan", "AI Coach đã tạo kế hoạch tuần", `Kế hoạch từ ${plan.startDate} đến ${plan.endDate} đã sẵn sàng trên dashboard.`, {
-    key: `${member.id}:weekly-coach-plan:${plan.startDate}`,
-    actionHref: "/dashboard",
-    priority: "high",
-  });
-  await store.save();
-  return {
-    plan,
-    _links: {
-      self: currentLink(req),
-      dashboard: link(req, `/api/members/${member.id}/dashboard`),
-    },
-  };
-});
-
-route("GET", "/api/members/:memberId/coach-plans", async ({ req, store, params }) => {
-  const { member } = assertMemberSessionAccess(req, store, params.memberId);
-  const plans = ensureCoachPlans(store.db)
-    .filter((plan) => plan.memberId === member.id)
-    .sort((a, b) => String(b.generatedAt || "").localeCompare(String(a.generatedAt || "")));
-  return collectionResponse(req, "coachPlans", plans, {
-    links: {
-      create: link(req, "/api/ai/coach-weekly-plan", "POST"),
-      member: link(req, `/api/members/${member.id}`),
-    },
-  });
-});
-
-route("GET", "/api/recipes/:id", async ({ req, store, params }) => {
-  const recipe = getRecipe(store.db, params.id);
-  if (!recipe) notFound(req, "Recipe not found.");
-  return recipeResource(req, recipe);
-});
-
-route("PATCH", "/api/recipes/:id", async ({ req, store, params, body }) => {
-  const recipe = getRecipe(store.db, params.id);
-  if (!recipe) notFound(req, "Recipe not found.");
-  Object.assign(recipe, body, { id: recipe.id });
-  await store.save();
-  return recipeResource(req, recipe);
-});
-
-route("DELETE", "/api/recipes/:id", async ({ req, store, params }) => {
-  const before = store.db.recipes.length;
-  store.db.recipes = store.db.recipes.filter((recipe) => recipe.id !== params.id);
-  if (store.db.recipes.length === before) notFound(req, "Recipe not found.");
-  await store.save();
-  return { deleted: params.id, _links: { collection: link(req, "/api/recipes") } };
-});
-
-route("GET", "/api/plans", async ({ req, store, url }) => {
-  const billing = url.searchParams.get("billing") || "monthly";
-  const plans = store.db.plans.map((plan) => {
-    const quoted = buildQuote(store.db, { planId: plan.id, billing: billing === "annual" ? "annual" : "monthly" });
-    return { ...plan, pricePreview: quoted, _links: planResource(req, plan)._links };
-  });
-  return collectionResponse(req, "plans", plans, {
-    itemMapper: (plan) => plan,
-    meta: { billing },
-    links: { quote: link(req, "/api/checkout/quote", "POST") },
-  });
-});
-
-route("GET", "/api/plans/:id", async ({ req, store, params }) => {
-  const plan = getPlan(store.db, params.id);
-  if (!plan) notFound(req, "Plan not found.");
-  return planResource(req, plan);
-});
-
-route("GET", "/api/faqs", async ({ req, store }) => collectionResponse(
-  req,
-  "faqs",
-  store.db.faqs,
-  { itemMapper: (faq) => ({ ...faq, _links: { self: link(req, `/api/faqs#${faq.id}`) } }) },
-));
-
-route("POST", "/api/checkout/quote", async ({ req, store, body }) => ({
-  quote: buildQuote(store.db, body),
-  _links: {
-    self: currentLink(req),
-    plans: link(req, "/api/plans"),
-    pay: link(req, "/api/payments", "POST"),
-  },
-}));
-
-route("POST", "/api/payments", async ({ req, store, body }) => {
-  const { member: sessionMember } = requireSession(req, store);
-  requireFields(body, ["memberId", "planId", "billing", "paymentMethod"]);
-  let member = getMember(store.db, body.memberId);
-  if (!member) notFound(req, "Member not found.");
-  if (sessionMember.id !== member.id && sessionMember.role?.toLowerCase() !== "admin") {
-    forbidden("Ban khong duoc thanh toan thay cho thanh vien nay.");
-  }
-  const plan = getPlan(store.db, body.planId);
-  if (!plan) notFound(req, "Plan not found.");
-  const quote = buildQuote(store.db, body);
-  const now = new Date();
-  const todayString = toLocalDateString(now);
-  const trialDays = quote.trialDays || 0;
-  const existingSubscription = getSubscriptionSnapshot(store.db, member);
-  const sameActivePlan = existingSubscription.planId === plan.id && ["active", "trialing"].includes(existingSubscription.status);
-  const startedAt = sameActivePlan ? (existingSubscription.startedAt || todayString) : todayString;
-  const currentRenewal = parseDate(existingSubscription.renewsAt);
-  const renewalBase = !trialDays && sameActivePlan && currentRenewal && currentRenewal > parseDate(todayString)
-    ? currentRenewal
-    : now;
-  const renews = new Date(renewalBase);
-  if (trialDays) {
-    renews.setDate(renews.getDate() + trialDays);
-  } else {
-    renews.setMonth(renews.getMonth() + (body.billing === "annual" ? 12 : 1));
-  }
-  const renewsAt = toLocalDateString(renews);
-  const daysTotal = daysBetweenDates(startedAt, renewsAt) || trialDays || (body.billing === "annual" ? 365 : 30);
-  const daysRemaining = Math.max(0, daysBetweenDates(todayString, renewsAt) ?? daysTotal);
-  const payment = {
-    id: store.nextId("pay", store.db.payments),
-    memberId: member.id,
-    invoice: `INV-${now.getFullYear()}-${String(store.db.payments.length + 1).padStart(4, "0")}`,
-    planId: plan.id,
-    billing: body.billing,
-    paymentMethod: body.paymentMethod,
-    amount: quote.total,
-    currency: "VND",
-    status: trialDays ? "trial" : "paid",
-    paidAt: now.toISOString(),
-  };
-  member.tier = plan.id;
-  member.subscription = {
-    planId: plan.id,
-    billing: body.billing,
-    status: trialDays ? "trialing" : "active",
-    startedAt,
-    purchaseAt: startedAt,
-    renewsAt,
-    daysTotal,
-    daysRemaining,
-  };
-  upsertNotification(store, member.id, "membership-payment", trialDays ? "Đã kích hoạt dùng thử" : "Gói thành viên đã được kích hoạt", `${plan.name} ${body.billing === "annual" ? "năm" : "tháng"} có hiệu lực đến ${renewsAt}.`, {
-    key: `${member.id}:membership-payment:${payment.id}`,
-    actionHref: "/member",
-    priority: "high",
-  });
-
-  if (store.dataSource === "sqlserver") {
-    await saveSqlServerPaymentAndSubscription(member, payment, member.subscription);
-    await store.reload();
-    member = getMember(store.db, body.memberId);
-  } else {
-    store.db.payments.unshift(payment);
-    await store.save();
-  }
-
-  return {
-    payment: paymentResource(req, payment),
-    member: memberResource(req, member, store.db),
-    quote,
-    note: "Card number, CVV and other sensitive payment details are intentionally not stored.",
-    _links: {
-      self: link(req, `/api/payments/${payment.id}`),
-      profile: link(req, `/api/members/${member.id}/profile`),
-      dashboard: link(req, `/api/members/${member.id}/dashboard`),
-    },
-  };
-});
-
-route("GET", "/api/payments/:id", async ({ req, store, params }) => {
-  const payment = store.db.payments.find((item) => item.id === params.id);
-  if (!payment) notFound(req, "Payment not found.");
-  return paymentResource(req, payment);
-});
-
-route("GET", "/api/chat/quick-replies", async ({ req, store }) => {
-  const activeSession = getActiveSession(req, store);
-  return {
-    quickReplies: getSafeChatQuickReplies(activeSession?.member || null),
-    _links: {
-      self: currentLink(req),
-      sendMessage: link(req, "/api/chat/messages", "POST"),
-    },
-  };
-});
-
-route("GET", "/api/chat/history", async ({ req, store, url }) => {
-  const activeSession = getActiveSession(req, store);
-  const member = activeSession?.member || (url.searchParams.get("memberId") ? getMember(store.db, url.searchParams.get("memberId")) : null);
-  if (!member) {
-    return {
-      messages: [],
-      quickReplies: getSafeChatQuickReplies(null),
-      _links: {
-        self: currentLink(req),
-        sendMessage: link(req, "/api/chat/messages", "POST"),
-      },
-    };
-  }
-
-  return {
-    messages: getMemberChatHistory(store.db, member.id),
-    quickReplies: getSafeChatQuickReplies(member),
-    _links: {
-      self: currentLink(req),
-      sendMessage: link(req, "/api/chat/messages", "POST"),
-      member: link(req, `/api/members/${member.id}`),
-    },
-  };
-});
-
-route("POST", "/api/chat/messages", async ({ req, store, body }) => {
-  requireFields(body, ["text"]);
-  const activeSession = getActiveSession(req, store);
-  const member = activeSession?.member || (body.memberId ? getMember(store.db, body.memberId) : null);
-  const chatMode = body.mode === "coach" ? "coach" : "assistant";
-  const time = new Date().toISOString();
-
-  if (isChatAdminKey(body.text)) {
-    if (!activeSession) unauthorized("Bạn cần đăng nhập để bật keyAdmin.");
-    activeSession.session.chatAdminOverride = true;
-    const messages = [
-      {
-        id: store.nextId("msg", []),
-        sender: "user",
-        text: "[keyAdmin đã nhập]",
-        time,
-      },
-      {
-        id: store.nextId("msg", []),
-        sender: "ai",
-        text: "Đã bật keyAdmin cho phiên đăng nhập hiện tại. Giới hạn ký tự và rate limit chat tạm thời được bỏ qua cho đến lần đăng nhập tiếp.",
-        time,
-      },
-    ];
-    saveMemberChatMessages(store, activeSession.member, messages);
-    await store.save();
-    return {
-      messages,
-      adminOverride: true,
-      quickReplies: getSafeChatQuickReplies(activeSession.member),
-      _links: {
-        self: currentLink(req),
-        quickReplies: link(req, "/api/chat/quick-replies"),
-      },
-    };
-  }
-
-  if (chatMode === "coach") {
-    if (!member) unauthorized("Ban can dang nhap de dung AI Coach SVIP.");
-    if (!getMembershipAccess(member).aiCoach) {
-      forbidden("AI Coach ca nhan hoa hien chi mo cho goi SVIP. Ban van co the dung NutriBot thuong hoac nang cap de mo khoa AI Coach.", {
-        requiredTier: "svip",
-        tier: getMembershipAccess(member).tier,
-      });
-    }
-  }
-
-  const adminOverride = Boolean(activeSession?.session?.chatAdminOverride);
-  const { cleaned, blocked } = validateSafeChatInput(body.text, member, { adminOverride });
-  if (blocked) {
-    logDangerousChat(store, req, member, cleaned, blocked.reason);
-    await store.save();
-    forbidden(chatBlockMessage(blocked.reason), {
-      reason: blocked.reason,
-    });
-  }
-  enforceSafeChatRateLimit(req, member, { adminOverride });
-  const aiResult = await generateSafeGeminiChatResponse(store, member, cleaned, { mode: chatMode });
-  const chatIntent = aiResult?.intent || parseCalorieGoalIntentFromText(cleaned);
-  const intentResult = await applyChatIntent(store, activeSession?.member || null, chatIntent);
-  const aiText = intentResult?.reply
-    || aiResult?.reply
-    || safeCannedChatResponse(store.db, cleaned);
-  const userMessage = {
-    id: store.nextId("msg", []),
-    sender: "user",
-    text: cleaned,
-    time,
-  };
-  const aiMessage = {
-    id: store.nextId("msg", []),
-    sender: "ai",
-    text: aiText,
-    time,
-  };
-  if (member) {
-    member.stats.aiConversations = (member.stats.aiConversations || 0) + 1;
-    saveMemberChatMessages(store, member, [userMessage, aiMessage]);
-    await store.save();
-  }
-  return {
-    messages: [userMessage, aiMessage],
-    mode: chatMode,
-    adminOverride,
-    intent: chatIntent?.intent,
-    dailyCalorieGoal: intentResult?.dailyCalorieGoal,
-    member: intentResult?.member ? memberResource(req, intentResult.member, store.db) : undefined,
-    quickReplies: getSafeChatQuickReplies(member),
-    _links: {
-      self: currentLink(req),
-      quickReplies: link(req, "/api/chat/quick-replies"),
-      member: member ? link(req, `/api/members/${member.id}`) : undefined,
-      recipes: link(req, "/api/recipes"),
-      calorieCalculator: link(req, "/api/calculations/calorie", "POST"),
-    },
-  };
-});
-
-route("GET", "/api/admin/overview", async ({ req, store }) => {
-  requireAdminSession(req, store);
-  return {
-    ...buildAdminOverview(store.db),
-    _links: {
-      self: currentLink(req),
-      users: link(req, "/api/admin/users"),
-      content: link(req, "/api/admin/content"),
-      analytics: link(req, "/api/admin/analytics"),
-      aiSettings: link(req, "/api/admin/settings/ai"),
-      security: link(req, "/api/admin/security"),
-    },
-  };
-});
-
-route("GET", "/api/admin/users", async ({ req, store, url }) => {
-  requireAdminSession(req, store);
-  const search = (url.searchParams.get("search") || "").toLowerCase();
-  const role = url.searchParams.get("role");
-  const status = url.searchParams.get("status");
-  const normalizeFilter = (value) => String(value || "").normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase().trim();
-  const normalizedRole = normalizeFilter(role);
-  const normalizedStatus = normalizeFilter(status);
-  const allUsers = getAdminUsersData(store.db);
-  const users = allUsers.filter((user) => {
-    const matchSearch = !search || user.name.toLowerCase().includes(search) || user.email.toLowerCase().includes(search);
-    const matchRole = !normalizedRole || normalizedRole === "tat ca" || normalizeFilter(user.role) === normalizedRole;
-    const matchStatus = !normalizedStatus || normalizedStatus === "tat ca" || normalizeFilter(user.status) === normalizedStatus;
-    return matchSearch && matchRole && matchStatus;
-  });
-  return collectionResponse(req, "users", users, {
-    itemMapper: (user) => ({ ...user, _links: { self: link(req, `/api/admin/users/${user.id}`) } }),
-    links: { overview: link(req, "/api/admin/overview") },
-    meta: {
-      total: allUsers.length,
-      filters: {
-        search: url.searchParams.get("search") || "",
-        role: role || "Tất cả",
-        status: status || "Tất cả",
-      },
-      roleBreakdown: [
-        { role: "User", count: allUsers.filter((user) => user.role === "User").length },
-        { role: "Moderator", count: allUsers.filter((user) => user.role === "Moderator").length },
-        { role: "Admin", count: allUsers.filter((user) => user.role === "Admin").length },
-      ],
-    },
-  });
-});
-
-route("GET", "/api/admin/content", async ({ req, store, url }) => {
-  requireAdminSession(req, store);
-  const foodPage = paginateItems(url, store.db.foods, { defaultLimit: 100, maxLimit: 300 });
-  const recipePage = paginateItems(url, store.db.recipes, { defaultLimit: 100, maxLimit: 300 });
-  return {
-    foods: foodPage.items.map((food) => foodResource(req, food)),
-    recipes: recipePage.items.map((recipe) => recipeResource(req, recipe)),
-    mealPlans: store.db.plans.map((plan) => ({
-      id: plan.id,
-      name: plan.name,
-      target: plan.description,
-      calories: plan.pricePreview?.monthlyPrice || plan.monthlyPrice || 0,
-      meals: plan.features.filter((feature) => feature.included).length,
-      status: plan.id === "free" ? "public" : "active",
-    })),
-    _links: {
-      self: currentLink(req),
-      foods: link(req, "/api/foods"),
-      recipes: link(req, "/api/recipes"),
-      overview: link(req, "/api/admin/overview"),
-    },
-    pagination: {
-      foods: {
-        page: foodPage.page,
-        limit: foodPage.limit,
-        total: foodPage.total,
-        totalPages: foodPage.totalPages,
-      },
-      recipes: {
-        page: recipePage.page,
-        limit: recipePage.limit,
-        total: recipePage.total,
-        totalPages: recipePage.totalPages,
-      },
-    },
-  };
-});
-
-route("GET", "/api/admin/analytics", async ({ req, store }) => {
-  requireAdminSession(req, store);
-  const today = parseDate(toLocalDateString()) || new Date();
-  const labels = ["CN", "T2", "T3", "T4", "T5", "T6", "T7"];
-  const dailyMeals = Array.from({ length: 7 }, (_, index) => {
-    const current = addDays(today, -(6 - index));
-    const date = toLocalDateString(current);
-    const logs = (store.db.mealLogs || []).filter((log) => log.date === date);
-    return {
-      day: labels[current.getDay()],
-      meals: logs.reduce((sum, log) => sum + getMealItemCount(log), 0),
-    };
-  });
-
-  const macroTotals = (store.db.mealLogs || []).reduce((sum, log) => {
-    const summary = summarizeMealLog(log, getMember(store.db, log.memberId));
-    sum.carbs += summary.totals.carbs;
-    sum.protein += summary.totals.protein;
-    sum.fat += summary.totals.fat;
-    return sum;
-  }, { carbs: 0, protein: 0, fat: 0 });
-  const totalMacros = macroTotals.carbs + macroTotals.protein + macroTotals.fat;
-  const nutritionShare = [
-    { name: "Carbs", value: totalMacros ? round((macroTotals.carbs / totalMacros) * 100, 1) : 0 },
-    { name: "Protein", value: totalMacros ? round((macroTotals.protein / totalMacros) * 100, 1) : 0 },
-    { name: "Ch?t b?o", value: totalMacros ? round((macroTotals.fat / totalMacros) * 100, 1) : 0 },
-  ];
-
-  const dishCounts = new Map();
-  for (const log of store.db.mealLogs || []) {
-    for (const meal of log.meals || []) {
-      for (const item of meal.items || []) {
-        const key = item.name;
-        const current = dishCounts.get(key) || {
-          dish: item.name,
-          searches: 0,
-          calories: item.calories || 0,
-          category: item.category || "Kh?c",
-        };
-        current.searches += item.quantity || 1;
-        dishCounts.set(key, current);
-      }
-    }
-  }
-
-  const topDishes = [...dishCounts.values()]
-    .sort((a, b) => b.searches - a.searches)
-    .slice(0, 10)
-    .map((dish, index) => ({
-      rank: index + 1,
-      ...dish,
-    }));
-
-  return {
-    dailyMeals,
-    nutritionShare,
-    topDishes,
-    _links: {
-      self: currentLink(req),
-      overview: link(req, "/api/admin/overview"),
-      users: link(req, "/api/admin/users"),
-    },
-  };
-});
-
-route("GET", "/api/admin/system", async ({ req, store }) => {
-  requireAdminSession(req, store);
-  return {
-    services: store.db.admin.systemServices,
-    _links: {
-      self: currentLink(req),
-      overview: link(req, "/api/admin/overview"),
-    },
-  };
-});
-
-route("GET", "/api/admin/settings/ai", async ({ req, store }) => {
-  requireAdminSession(req, store);
-  return {
-    settings: store.db.admin.aiSettings,
-    _links: {
-      self: currentLink(req),
-      update: link(req, "/api/admin/settings/ai", "PATCH"),
-      overview: link(req, "/api/admin/overview"),
-    },
-  };
-});
-
-route("PATCH", "/api/admin/settings/ai", async ({ req, store, body }) => {
-  requireAdminSession(req, store);
-  store.db.admin.aiSettings = { ...store.db.admin.aiSettings, ...body };
-  await store.save();
-  return {
-    settings: store.db.admin.aiSettings,
-    _links: {
-      self: link(req, "/api/admin/settings/ai"),
-      update: link(req, "/api/admin/settings/ai", "PATCH"),
-    },
-  };
-});
-
-route("GET", "/api/admin/security", async ({ req, store }) => {
-  requireAdminSession(req, store);
-  return {
-    security: store.db.admin.security,
-    _links: {
-      self: currentLink(req),
-      update: link(req, "/api/admin/security", "PATCH"),
-      aiSafetyLogs: link(req, "/api/admin/ai-safety-logs"),
-      overview: link(req, "/api/admin/overview"),
-    },
-  };
-});
-
-route("GET", "/api/admin/ai-safety-logs", async ({ req, store }) => {
-  requireAdminSession(req, store);
-  return {
-    logs: store.db.aiSafetyLogs || [],
-    _links: {
-      self: currentLink(req),
-      security: link(req, "/api/admin/security"),
-      overview: link(req, "/api/admin/overview"),
-    },
-  };
-});
-
-route("PATCH", "/api/admin/security", async ({ req, store, body }) => {
-  requireAdminSession(req, store);
-  store.db.admin.security = { ...store.db.admin.security, ...body };
-  await store.save();
-  return {
-    security: store.db.admin.security,
-    _links: {
-      self: link(req, "/api/admin/security"),
-      update: link(req, "/api/admin/security", "PATCH"),
-    },
-  };
+registerControllers({
+  CUSTOM_FOOD_UNITS,
+  VIETNAM_NUTRITION_INGREDIENTS,
+  addDays,
+  adminColorForMember,
+  apiLinks,
+  applyChatIntent,
+  applyNutritionCalculationToMember,
+  applyWaterEquivalent,
+  assertMealItemQuota,
+  assertMealLogAccess,
+  assertMemberSessionAccess,
+  assertNumberInRange,
+  authSessionResponse,
+  badRequest,
+  buildAdminOverview,
+  buildAdvancedNutritionContext,
+  buildCalculationWarnings,
+  buildDashboardAchievements,
+  buildDashboardTips,
+  buildNutritionProfile,
+  buildNutritionReport,
+  buildPersonalizedRecipePrompt,
+  buildQuote,
+  buildReportCsv,
+  buildSafeChatHistoryContext,
+  buildSafeNutritionContext,
+  buildSvipCalorieInsightPrompt,
+  buildSvipFoodPhotoRefinementPrompt,
+  buildWeeklyCoachPlan,
+  buildWeeklyProgress,
+  calculateCalories,
+  callAiProviderForText,
+  callGeminiProvider,
+  callGeminiVisionProvider,
+  callGroqProvider,
+  callOpenAiCompatibleProvider,
+  canUseAdvancedAiContext,
+  cannedChatResponse,
+  chatBlockMessage,
+  chatHistoryResource,
+  collectionResponse,
+  conflict,
+  countTrackedMealDays,
+  csvValue,
+  currentLink,
+  customFoodResource,
+  dateToUtcDay,
+  daysBetweenDates,
+  earliestDateString,
+  enforceSafeChatRateLimit,
+  ensureAuthCredentials,
+  ensureChatHistory,
+  ensureCoachPlans,
+  ensureMealLog,
+  ensureNotifications,
+  ensurePersonalFoods,
+  ensurePersonalizedRecipes,
+  errorResponse,
+  estimateCustomCookedFood,
+  estimateFoodPhotoCalories,
+  extractGeminiText,
+  extractJsonObject,
+  extractMillilitersFromPortion,
+  findCredentialByEmail,
+  findMemberByEmail,
+  foodResource,
+  forbidden,
+  geminiQuotaMessage,
+  generatePersonalizedRecipe,
+  generateSafeGeminiChatResponse,
+  generateSvipCalorieInsight,
+  getActiveSession,
+  getAdminUsersData,
+  getAiProviders,
+  getBearerToken,
+  getChatAdminKey,
+  getClientIp,
+  getDrinkWaterEquivalentGlasses,
+  getFatPct,
+  getFood,
+  getGeminiRateState,
+  getGoalDelta,
+  getMealHistoryDayDelta,
+  getMealItemCount,
+  getMember,
+  getMemberChatHistory,
+  getMembershipAccess,
+  getNormalizedTier,
+  getPersonalizedRecipeQuestions,
+  getPlan,
+  getPlanPayments,
+  getProteinPerKg,
+  getRecipe,
+  getRecipeImageUrl,
+  getSafeCalorieMinimum,
+  getSafeChatLimits,
+  getSafeChatQuickReplies,
+  getSafeChatTier,
+  getSubscriptionSnapshot,
+  hashPassword,
+  initialsFromName,
+  insertSqlServerAuthMember,
+  insertSqlServerCredential,
+  isChatAdminKey,
+  isSameLocalDate,
+  isTruthyQuery,
+  link,
+  loadEnvFile,
+  localizePersonalizedRecipe,
+  localizePersonalizedRecipeText,
+  logDangerousChat,
+  makeEmptyReportLog,
+  matchRoute,
+  mealLogResource,
+  memberFromRegistration,
+  memberResource,
+  normalizeChatIntent,
+  normalizeEmail,
+  normalizeFoodPhotoEstimate,
+  normalizeForPolicy,
+  normalizeIngredient,
+  normalizeMealLogLabels,
+  normalizePath,
+  normalizePersonalizedRecipe,
+  normalizeSvipCalorieInsight,
+  normalizeVietnameseText,
+  notFound,
+  notificationResource,
+  paginateItems,
+  parseCalorieGoalIntentFromText,
+  parseChatIntent,
+  parseDate,
+  parseFoodPhotoImage,
+  paymentResource,
+  personalizedRecipeResource,
+  planLabel,
+  planResource,
+  readBody,
+  recipeResource,
+  redactSensitiveText,
+  refineFoodPhotoEstimateForSvip,
+  releaseGeminiQuota,
+  reportDateRange,
+  requireAdminSession,
+  requireFields,
+  requireSession,
+  reserveGeminiQuota,
+  roleLabel,
+  round,
+  route,
+  safeCannedChatResponse,
+  saveMealLogChanges,
+  saveMemberChatMessages,
+  saveMemberNutritionProfile,
+  savePersonalizedRecipe,
+  saveSqlServerMealLog,
+  saveSqlServerMemberNutritionProfile,
+  saveSqlServerPaymentAndSubscription,
+  sendJson,
+  serviceUnavailable,
+  sessions,
+  splitPath,
+  startOfWeek,
+  summarizeMealLog,
+  syncMemberNotifications,
+  toLocalDateString,
+  tooManyRequests,
+  unauthorized,
+  updateMemberDailyCalorieGoal,
+  updateSqlServerMemberCalorieGoal,
+  updateWaterGoalStatus,
+  upsertNotification,
+  validateSafeChatInput,
+  validateSafeChatOutput,
+  verifyPassword,
 });
 
 export async function createServer(options = {}) {

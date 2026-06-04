@@ -16,6 +16,46 @@ const UNIT_FALLBACK_GRAMS = {
   nam: 30,
 };
 
+const UNIT_TEXT_ALIASES = {
+  g: "gram",
+  gam: "gram",
+  gram: "gram",
+  grams: "gram",
+  chen: "chen",
+  chen_com: "chen",
+  bat: "bat",
+  bat_com: "bat",
+  to: "to",
+  to_vua: "to",
+  muong_ca_phe: "muong_ca_phe",
+  muong_cafe: "muong_ca_phe",
+  muong_tra: "muong_ca_phe",
+  mcf: "muong_ca_phe",
+  tsp: "muong_ca_phe",
+  teaspoon: "muong_ca_phe",
+  muong_canh: "muong_canh",
+  muong_soup: "muong_canh",
+  mc: "muong_canh",
+  tbsp: "muong_canh",
+  tablespoon: "muong_canh",
+  qua: "qua",
+  trai: "qua",
+  mieng: "mieng",
+  mieng_vua: "mieng",
+  long_ban_tay: "mieng",
+  bang_long_ban_tay: "mieng",
+  lat: "lat",
+  phan_nho: "phan_nho",
+  phan_vua: "phan_vua",
+  phan_lon: "phan_lon",
+  mot_it: "mot_it",
+  it: "mot_it",
+  nua_qua: "nua_qua",
+  nua_trai: "nua_qua",
+  nam: "nam",
+  nam_tay: "nam",
+};
+
 export const CUSTOM_FOOD_UNITS = [
   { id: "gram", label: "gram", shortLabel: "g", description: "Nhập khối lượng rõ ràng, độ tin cậy cao" },
   { id: "chen", label: "chén", shortLabel: "chén", description: "Thường dùng cho cơm, bún, rau" },
@@ -97,6 +137,48 @@ export function normalizeVietnameseText(value) {
     .trim();
 }
 
+function repairPossibleMojibake(value) {
+  const text = String(value || "");
+  if (!/[ÃÄÂ]/.test(text)) return text;
+  try {
+    const repaired = Buffer.from(text, "latin1").toString("utf8");
+    return repaired.includes("�") ? text : repaired;
+  } catch {
+    return text;
+  }
+}
+
+function normalizeUnitId(value) {
+  const repaired = repairPossibleMojibake(value);
+  const normalized = normalizeVietnameseText(repaired)
+    .replace(/[^a-z0-9]+/g, " ")
+    .trim();
+  if (!normalized) return "gram";
+
+  const unitId = normalized.replace(/\s+/g, "_");
+  if (UNIT_FALLBACK_GRAMS[unitId] || CUSTOM_FOOD_UNITS.some((unit) => unit.id === unitId)) {
+    return unitId;
+  }
+
+  if (UNIT_TEXT_ALIASES[unitId]) return UNIT_TEXT_ALIASES[unitId];
+  if (normalized.includes("muong ca phe") || normalized.includes("muong cafe")) return "muong_ca_phe";
+  if (normalized.includes("muong canh") || normalized.includes("muong soup")) return "muong_canh";
+  if (normalized.includes("chen")) return "chen";
+  if (normalized.includes("bat")) return "bat";
+  if (normalized.includes("to")) return "to";
+  if (normalized.includes("mieng") || normalized.includes("long ban tay")) return "mieng";
+  if (normalized.includes("lat")) return "lat";
+  if (normalized.includes("nua") && (normalized.includes("qua") || normalized.includes("trai"))) return "nua_qua";
+  if (normalized.includes("mot it") || normalized === "it") return "mot_it";
+  if (normalized.includes("nam")) return "nam";
+  if (normalized.includes("qua") || normalized.includes("trai")) return "qua";
+  if (normalized.includes("phan nho")) return "phan_nho";
+  if (normalized.includes("phan lon")) return "phan_lon";
+  if (normalized.includes("phan")) return "phan_vua";
+
+  return unitId;
+}
+
 function getUnitLabel(unitId) {
   return CUSTOM_FOOD_UNITS.find((unit) => unit.id === unitId)?.label || unitId || "đơn vị";
 }
@@ -120,8 +202,9 @@ export function findNutritionIngredient(inputName) {
 }
 
 function resolveGrams(unit, quantity, ingredient) {
-  if (unit === "gram") return quantity;
-  const gramsPerUnit = ingredient.defaultUnits?.[unit] || UNIT_FALLBACK_GRAMS[unit];
+  const unitId = normalizeUnitId(unit);
+  if (unitId === "gram") return quantity;
+  const gramsPerUnit = ingredient.defaultUnits?.[unitId] || UNIT_FALLBACK_GRAMS[unitId];
   if (!gramsPerUnit) return null;
   return quantity * gramsPerUnit;
 }
@@ -267,7 +350,7 @@ export function estimateCustomCookedFood(payload = {}) {
 
   for (const row of inputIngredients) {
     const inputName = String(row.name || "").trim();
-    const unit = String(row.unit || "gram");
+    const unit = normalizeUnitId(row.unit || "gram");
     const quantity = Number(row.quantity || 0);
     const matched = findNutritionIngredient(inputName);
 

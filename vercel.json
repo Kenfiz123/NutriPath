@@ -1,0 +1,14 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "version": 2,
+  "framework": "vite",
+  "installCommand": "npm ci --prefix NutriPath_Figma",
+  "buildCommand": "npm run build --prefix NutriPath_Figma",
+  "outputDirectory": "NutriPath_Figma/dist",
+  "rewrites": [
+    {
+      "source": "/(.*)",
+      "destination": "/index.html"
+    }
+  ]
+}
