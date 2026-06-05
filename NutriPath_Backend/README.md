@@ -14,7 +14,7 @@ Mặc định API chạy ở:
 http://127.0.0.1:8080
 ```
 
-Không cần `npm install` vì backend chỉ dùng Node.js built-in modules.
+Chạy `npm install` nếu dùng Supabase PostgreSQL hoặc deploy production; local JSON mode vẫn chỉ dùng Node.js built-in modules.
 
 ## Chạy với dữ liệu SQL Server
 
@@ -28,6 +28,25 @@ node src/server.js
 ```
 
 Khi đó FE vẫn gọi các API cũ, nhưng dữ liệu được load từ SQL Server lúc backend khởi động.
+
+## Chạy với Supabase PostgreSQL
+
+NutriPath hỗ trợ Supabase PostgreSQL bằng adapter JSONB để giữ nguyên toàn bộ API hiện tại.
+Backend sẽ tự tạo và seed dòng state đầu tiên nếu bảng chưa có dữ liệu.
+
+1. Tạo project Supabase.
+2. Mở SQL Editor và chạy file `sql/nutripath_supabase_app_state.sql`.
+3. Lấy connection string ở Supabase Database Settings, ưu tiên pooler URI cho server deploy.
+4. Cấu hình backend:
+
+```powershell
+$env:NUTRIPATH_DATA_SOURCE="supabase"
+$env:SUPABASE_DATABASE_URL="postgresql://postgres.xxxxxx:[PASSWORD]@aws-0-xxx.pooler.supabase.com:6543/postgres"
+$env:NUTRIPATH_SUPABASE_TABLE="public.nutripath_app_state"
+node src/server.js
+```
+
+Trên Render/Railway, đặt các biến môi trường tương tự trong dashboard. Không commit connection string hoặc database password.
 
 ## HATEOAS
 

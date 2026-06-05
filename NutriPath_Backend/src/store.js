@@ -4,6 +4,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { seedData } from "./data/seed.js";
 import { loadSqlServerData } from "./sqlserver-import.js";
+import { loadSupabaseData, persistSupabaseData, resetSupabaseData } from "./supabase-postgres-store.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -25,7 +26,8 @@ async function ensureFile(filePath) {
 }
 
 export async function createStore(options = {}) {
-  if ((options.dataSource || process.env.NUTRIPATH_DATA_SOURCE) === "sqlserver") {
+  const dataSource = String(options.dataSource || process.env.NUTRIPATH_DATA_SOURCE || "json").toLowerCase();
+  if (dataSource === "sqlserver") {
     let cache = await loadSqlServerData();
 
     return {
@@ -43,6 +45,36 @@ export async function createStore(options = {}) {
       },
       async reset() {
         cache = await loadSqlServerData();
+        return cache;
+      },
+      nextId(prefix, collection) {
+        const next = Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
+        const id = `${prefix}-${next}`;
+        if (!Array.isArray(collection) || !collection.some((item) => item.id === id)) return id;
+        return `${prefix}-${next}-${collection.length + 1}`;
+      },
+    };
+  }
+
+  if (["supabase", "postgres", "postgresql"].includes(dataSource)) {
+    let cache = await loadSupabaseData();
+
+    return {
+      filePath: "supabase:postgresql",
+      dataSource: "supabase",
+      get db() {
+        return cache;
+      },
+      async reload() {
+        cache = await loadSupabaseData();
+        return cache;
+      },
+      async save() {
+        await persistSupabaseData(cache);
+        return cache;
+      },
+      async reset() {
+        cache = await resetSupabaseData();
         return cache;
       },
       nextId(prefix, collection) {

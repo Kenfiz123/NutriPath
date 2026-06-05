@@ -119,11 +119,13 @@ cd NutriPath_Backend && npm run start
 |---|---|---|
 | `PORT` | `8080` | Port cho API server |
 | `CORS_ORIGIN` | `http://127.0.0.1:5173` | Allowed CORS origin (Frontend URL) |
-| `NUTRIPATH_DATA_SOURCE` | `json` | Nguồn dữ liệu: `json` hoặc `sqlserver` |
+| `NUTRIPATH_DATA_SOURCE` | `json` | Nguồn dữ liệu: `json`, `sqlserver` hoặc `supabase` |
 | `NUTRIPATH_DB` | `./data/db.json` | Đường dẫn file JSON database |
 | `NUTRIPATH_SQL_SERVER` | `localhost` | SQL Server hostname |
 | `NUTRIPATH_SQL_DATABASE` | `NutriPath` | Tên database SQL Server |
 | `NUTRIPATH_SQL_TRUST_CERT` | `false` | Trust self-signed SSL cert |
+| `SUPABASE_DATABASE_URL` | *(trống)* | PostgreSQL/pooler connection string từ Supabase |
+| `NUTRIPATH_SUPABASE_TABLE` | `public.nutripath_app_state` | Bảng JSONB state khi dùng Supabase |
 | `GEMINI_API_KEY` | *(trống)* | Google Gemini API key (cho AI Chat) |
 | `GEMINI_MODEL` | `gemini-2.5-flash` | Model Gemini sử dụng |
 | `GEMINI_RPM_LIMIT` | `5` | Rate limit requests/phút cho Gemini |
@@ -161,7 +163,7 @@ Backend sử dụng **Node.js built-in modules** (không cần `npm install`). A
 
 - Mỗi response đều có `_links` để client biết các action khả dụng
 - Collection responses dùng `_embedded` để chứa danh sách items
-- Hỗ trợ **dual-mode data**: JSON file (dev nhanh) hoặc SQL Server (production)
+- Hỗ trợ **multi-mode data**: JSON file (dev nhanh), SQL Server hoặc Supabase PostgreSQL (production)
 
 ### Frontend — React SPA
 
@@ -416,7 +418,7 @@ node src/server.js
 - **Backend không có `node_modules`**: Chỉ dùng Node.js built-in modules, không cần `npm install`
 - **Data file bị gitignore**: `data/db.json` không được commit, sẽ tự tạo lần chạy đầu
 - **File `.env` bị gitignore**: Mỗi dev cần tạo từ `.env.example`
-- **Dual-mode data**: Cùng API, có thể chuyển giữa JSON và SQL Server qua env
+- **Multi-mode data**: Cùng API, có thể chuyển giữa JSON, SQL Server và Supabase PostgreSQL qua env
 - **Admin page (85KB)**: File `Admin.tsx` khá lớn, cân nhắc chia nhỏ nếu cần mở rộng
 - **Khi sửa SQL logic**: Luôn đồng bộ với các hàm trong `app.js` và `sqlserver-import.js`
 
