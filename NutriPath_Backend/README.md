@@ -14,6 +14,8 @@ Mặc định API chạy ở:
 http://127.0.0.1:8080
 ```
 
+Khi deploy Render/production, backend tự bind `0.0.0.0` để Render detect port. Local vẫn mặc định `127.0.0.1`; có thể override bằng `HOST`.
+
 Chạy `npm install` nếu dùng Supabase PostgreSQL hoặc deploy production; local JSON mode vẫn chỉ dùng Node.js built-in modules.
 
 ## Chạy với dữ liệu SQL Server
