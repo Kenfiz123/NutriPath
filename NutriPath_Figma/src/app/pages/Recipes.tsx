@@ -19,6 +19,18 @@ function handleRecipeImageError(event: SyntheticEvent<HTMLImageElement>) {
   }
 }
 
+function formatCookingStep(step: string, index: number) {
+  const [rawTitle, ...detailParts] = step.split(":");
+  const title = rawTitle.trim();
+  const detail = detailParts.join(":").trim();
+
+  if (detail && title.length <= 42) {
+    return { title, detail };
+  }
+
+  return { title: `Bước ${index + 1}`, detail: step.trim() };
+}
+
 export function Recipes() {
   const { session } = useAuth();
   const [search, setSearch] = useState("");
@@ -417,16 +429,29 @@ export function Recipes() {
                 </div>
               </div>
 
-              <h3 className="text-gray-900 mb-4" style={{ fontSize: "1rem", fontWeight: 700 }}>Hướng dẫn nấu</h3>
+              <div className="mb-4 flex flex-col gap-1">
+                <h3 className="text-gray-900" style={{ fontSize: "1rem", fontWeight: 800 }}>Hướng dẫn nấu chi tiết</h3>
+                <p className="text-gray-500" style={{ fontSize: "0.82rem", lineHeight: 1.5 }}>
+                  {isPersonalizedRecipe(selectedRecipe)
+                    ? "Công thức AI được trình bày theo từng thao tác, thời lượng, cách canh lửa và dấu hiệu món đã đạt."
+                    : "Làm theo thứ tự từng bước để giữ đúng hương vị, kết cấu và khẩu phần."}
+                </p>
+              </div>
               <div className="space-y-3">
-                {selectedRecipe.steps.map((step, i) => (
-                  <div key={step} className="flex gap-4 p-4 bg-green-50 rounded-2xl border border-green-100">
-                    <div className="w-8 h-8 bg-green-600 rounded-xl flex items-center justify-center flex-shrink-0 shadow-sm">
-                      <span className="text-white" style={{ fontSize: "0.85rem", fontWeight: 700 }}>{i + 1}</span>
+                {selectedRecipe.steps.map((step, i) => {
+                  const stepContent = formatCookingStep(step, i);
+                  return (
+                    <div key={`${i}-${step}`} className="flex gap-4 rounded-2xl border border-green-100 bg-green-50 p-4">
+                      <div className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-xl bg-green-600 shadow-sm">
+                        <span className="text-white" style={{ fontSize: "0.88rem", fontWeight: 800 }}>{i + 1}</span>
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <p className="mb-1 text-green-800" style={{ fontSize: "0.86rem", fontWeight: 800 }}>{stepContent.title}</p>
+                        <p className="whitespace-pre-line text-gray-700" style={{ fontSize: "0.9rem", lineHeight: 1.75 }}>{stepContent.detail}</p>
+                      </div>
                     </div>
-                    <p className="text-gray-700 mt-0.5" style={{ fontSize: "0.875rem", lineHeight: 1.6 }}>{step}</p>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
 
               {isPersonalizedRecipe(selectedRecipe) && selectedRecipe.notes.length > 0 && (
