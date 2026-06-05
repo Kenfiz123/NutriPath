@@ -35,7 +35,7 @@ try {
   const email = `flow-${Date.now()}@example.com`;
   const password = "Flow@123456";
 
-  const { json: registered } = await request("/api/auth/register", {
+  const { json: registered } = await request("//api/auth/register", {
     method: "POST",
     body: JSON.stringify({ name: "Flow Test", email, password }),
   });

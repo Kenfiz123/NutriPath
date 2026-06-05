@@ -29,6 +29,9 @@ try {
   assert.ok(api._links.members);
   assert.ok(api._links.calorieCalculator);
 
+  const healthWithDoubleSlash = await request("//api/health");
+  assert.equal(healthWithDoubleSlash.status, "ok");
+
   const dashboard = await request("/api/members/mem-001/dashboard?date=2026-03-13");
   assert.equal(dashboard.member.id, "mem-001");
   assert.ok(dashboard.mealLog._links.updateWater);

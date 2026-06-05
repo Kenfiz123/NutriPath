@@ -138,8 +138,8 @@ function route(method, pattern, handler) {
 }
 
 function normalizePath(pathname) {
-  if (pathname === "/") return "/";
-  return pathname.replace(/\/+$/, "");
+  const collapsedPath = String(pathname || "/").replace(/\/{2,}/g, "/");
+  return collapsedPath.replace(/\/+$/, "") || "/";
 }
 
 function splitPath(value) {
@@ -2973,7 +2973,9 @@ export async function createServer(options = {}) {
         return;
       }
 
-      const requestUrl = new URL(req.url, `http://${req.headers.host || "127.0.0.1:8080"}`);
+      const rawUrl = req.url || "/";
+      const safeUrl = rawUrl.startsWith("//") ? rawUrl.replace(/^\/+/, "/") : rawUrl;
+      const requestUrl = new URL(safeUrl, `http://${req.headers.host || "127.0.0.1:8080"}`);
       const pathname = normalizePath(requestUrl.pathname);
       const matched = routes.find((candidate) => candidate.method === req.method && matchRoute(candidate.pattern, pathname));
 

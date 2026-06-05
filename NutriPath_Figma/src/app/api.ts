@@ -1,5 +1,11 @@
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? "http://127.0.0.1:8080";
+const DEFAULT_API_BASE_URL = "http://127.0.0.1:8080";
+const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL ?? DEFAULT_API_BASE_URL).replace(/\/+$/, "");
 const SESSION_KEY = "nutripath_session";
+
+function buildApiUrl(path: string) {
+  const normalizedPath = path.startsWith("/") ? path : `/${path}`;
+  return `${API_BASE_URL}${normalizedPath}`;
+}
 
 function getLocalDateString(date = new Date()) {
   const year = date.getFullYear();
@@ -73,7 +79,7 @@ export async function apiFetch<T>(path: string, options: { method?: string; body
   const token = options.auth === false ? null : getStoredSession()?.token;
   if (token) headers.Authorization = `Bearer ${token}`;
 
-  const response = await fetch(`${API_BASE_URL}${path}`, {
+  const response = await fetch(buildApiUrl(path), {
     method: options.method ?? "GET",
     headers,
     body: options.body ? JSON.stringify(options.body) : undefined,
