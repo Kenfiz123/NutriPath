@@ -1,4 +1,5 @@
 import http from "node:http";
+import https from "node:https";
 import crypto from "node:crypto";
 import { existsSync, readFileSync } from "node:fs";
 import { registerControllers } from "./controllers/index.js";
@@ -431,6 +432,133 @@ function getSupabaseUserName(payload) {
   ).trim();
 }
 
+function getErrorSummary(error) {
+  return {
+    name: error?.name || "Error",
+    code: error?.code || error?.cause?.code || "",
+    message: error?.message || String(error || "Unknown error"),
+  };
+}
+
+function supabaseAuthServiceError(projectUrl, fetchError, fallbackError = null) {
+  const host = (() => {
+    try {
+      return new URL(projectUrl).host;
+    } catch {
+      return "";
+    }
+  })();
+  const details = {
+    host,
+    fetchError: getErrorSummary(fetchError),
+    ...(fallbackError ? { fallbackError: getErrorSummary(fallbackError) } : {}),
+  };
+  const errorCode = details.fallbackError?.code
+    || details.fetchError.code
+    || details.fallbackError?.name
+    || details.fetchError.name;
+  serviceUnavailable(
+    `Không kết nối được Supabase Auth để xác thực đăng nhập${errorCode ? ` (${errorCode})` : ""}. Kiểm tra SUPABASE_URL trên backend và outbound network của Render.`,
+    details,
+  );
+}
+
+function requestSupabaseUserWithHttps(projectUrl, anonKey, token, timeoutMs) {
+  return new Promise((resolve, reject) => {
+    let url;
+    try {
+      url = new URL("/auth/v1/user", `${projectUrl}/`);
+    } catch (error) {
+      reject(error);
+      return;
+    }
+
+    const req = https.request(
+      url,
+      {
+        method: "GET",
+        timeout: timeoutMs,
+        headers: {
+          Accept: "application/json",
+          apikey: anonKey,
+          Authorization: `Bearer ${token}`,
+        },
+      },
+      (res) => {
+        const chunks = [];
+        res.on("data", (chunk) => chunks.push(chunk));
+        res.on("end", () => {
+          let payload = null;
+          try {
+            const raw = Buffer.concat(chunks).toString("utf8");
+            payload = raw ? JSON.parse(raw) : null;
+          } catch {
+            payload = null;
+          }
+          resolve({
+            ok: res.statusCode >= 200 && res.statusCode < 300,
+            status: res.statusCode || 0,
+            statusText: res.statusMessage || "",
+            payload,
+            transport: "https",
+          });
+        });
+      },
+    );
+
+    req.on("timeout", () => req.destroy(Object.assign(new Error("Supabase Auth request timed out."), { code: "ETIMEDOUT" })));
+    req.on("error", reject);
+    req.end();
+  });
+}
+
+async function requestSupabaseUser(projectUrl, anonKey, token) {
+  const timeoutMs = Math.max(3000, Number(process.env.SUPABASE_AUTH_TIMEOUT_MS || 10000));
+  let authUrl;
+  try {
+    authUrl = new URL("/auth/v1/user", `${projectUrl}/`).toString();
+  } catch (error) {
+    serviceUnavailable("SUPABASE_URL không hợp lệ trên backend.", { projectUrl, error: getErrorSummary(error) });
+  }
+
+  let fetchError = null;
+  let timer = null;
+  try {
+    const controller = new AbortController();
+    timer = setTimeout(() => controller.abort(), timeoutMs);
+    const response = await fetch(authUrl, {
+      signal: controller.signal,
+      headers: {
+        apikey: anonKey,
+        Authorization: `Bearer ${token}`,
+      },
+    });
+    return {
+      ok: response.ok,
+      status: response.status,
+      statusText: response.statusText,
+      payload: await response.json().catch(() => null),
+      transport: "fetch",
+    };
+  } catch (error) {
+    fetchError = error;
+    console.warn("Supabase Auth fetch failed, retrying with node:https:", getErrorSummary(error));
+  } finally {
+    if (timer) clearTimeout(timer);
+  }
+
+  try {
+    return await requestSupabaseUserWithHttps(projectUrl, anonKey, token, timeoutMs);
+  } catch (fallbackError) {
+    console.error("Supabase Auth verification request failed:", {
+      projectHost: new URL(authUrl).host,
+      fetchError: getErrorSummary(fetchError),
+      fallbackError: getErrorSummary(fallbackError),
+    });
+    supabaseAuthServiceError(projectUrl, fetchError, fallbackError);
+  }
+}
+
 async function verifySupabaseAccessToken(accessToken) {
   const token = String(accessToken || "").trim();
   if (token.length < 20) badRequest("Supabase access token không hợp lệ.");
@@ -450,26 +578,10 @@ async function verifySupabaseAccessToken(accessToken) {
     });
   }
 
-  let response;
-  try {
-    response = await fetch(`${projectUrl}/auth/v1/user`, {
-      headers: {
-        apikey: anonKey,
-        Authorization: `Bearer ${token}`,
-      },
-    });
-  } catch (error) {
-    console.error("Supabase Auth verification request failed:", {
-      message: error?.message,
-      code: error?.code,
-    });
-    serviceUnavailable("Không kết nối được Supabase Auth để xác thực đăng nhập.");
-  }
-
-  const payload = await response.json().catch(() => null);
-
-  if (!response.ok) {
-    unauthorized(payload?.msg || payload?.message || "Phiên Supabase không hợp lệ hoặc đã hết hạn.");
+  const supabaseResult = await requestSupabaseUser(projectUrl, anonKey, token);
+  const payload = supabaseResult.payload;
+  if (!supabaseResult.ok) {
+    unauthorized(payload?.msg || payload?.message || supabaseResult.statusText || "Phiên Supabase không hợp lệ hoặc đã hết hạn.");
   }
 
   const email = normalizeEmail(payload?.email);
