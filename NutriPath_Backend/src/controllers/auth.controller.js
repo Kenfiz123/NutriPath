@@ -53,6 +53,7 @@ export function registerAuthRoutes(ctx) {
     earliestDateString,
     enforceSafeChatRateLimit,
     ensureAuthCredentials,
+    ensureMembers,
     ensureOAuthIdentities,
     ensureChatHistory,
     ensureCoachPlans,
@@ -243,6 +244,8 @@ export function registerAuthRoutes(ctx) {
     requireFields(body, ["accessToken"]);
     const supabaseUser = await verifySupabaseAccessToken(body.accessToken);
     const email = normalizeEmail(supabaseUser.email);
+    if (!supabaseUser.id) badRequest("Supabase user id không hợp lệ.");
+
     const credential = findCredentialByEmail(store.db, email);
     let member = findMemberByEmail(store.db, email) || (credential ? getMember(store.db, credential.memberId) : null);
     const isNewMember = !member;
@@ -295,9 +298,18 @@ export function registerAuthRoutes(ctx) {
         member = getMember(store.db, oauthCredential.memberId);
       }
     } else {
-      if (isNewMember) store.db.members.push(member);
+      if (isNewMember) ensureMembers(store.db).push(member);
       upsertIdentity();
-      await store.save();
+      try {
+        await store.save();
+      } catch (error) {
+        console.error("Supabase OAuth member sync failed:", {
+          dataSource: store.dataSource,
+          message: error?.message,
+          code: error?.code,
+        });
+        serviceUnavailable("Không thể lưu hồ sơ đăng nhập Supabase. Kiểm tra SUPABASE_DATABASE_URL và NUTRIPATH_SUPABASE_TABLE trên backend.");
+      }
     }
 
     if (!member) unauthorized("Không thể đồng bộ tài khoản Supabase với hồ sơ NutriPath.");
