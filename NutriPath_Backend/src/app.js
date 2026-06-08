@@ -391,12 +391,18 @@ function inferSupabaseProjectUrlFromDatabaseUrl() {
 function getSupabaseAuthConfig() {
   const projectUrl = normalizeSupabaseProjectUrl(
     process.env.SUPABASE_URL
+      || process.env.SUPABASE_PROJECT_URL
+      || process.env.SUPABASE_REST_URL
       || process.env.NUTRIPATH_SUPABASE_URL
+      || process.env.NUTRIPATH_SUPABASE_PROJECT_URL
       || process.env.VITE_SUPABASE_URL
       || inferSupabaseProjectUrlFromDatabaseUrl(),
   );
   const anonKey = process.env.SUPABASE_ANON_KEY
     || process.env.SUPABASE_PUBLISHABLE_KEY
+    || process.env.SUPABASE_PUBLIC_KEY
+    || process.env.NUTRIPATH_SUPABASE_ANON_KEY
+    || process.env.NUTRIPATH_SUPABASE_PUBLISHABLE_KEY
     || process.env.VITE_SUPABASE_ANON_KEY
     || process.env.VITE_SUPABASE_PUBLISHABLE_KEY
     || "";
@@ -426,8 +432,16 @@ async function verifySupabaseAccessToken(accessToken) {
 
   const { projectUrl, anonKey } = getSupabaseAuthConfig();
   if (!projectUrl || !anonKey) {
+    const missing = [
+      !projectUrl ? "SUPABASE_URL" : null,
+      !anonKey ? "SUPABASE_ANON_KEY" : null,
+    ].filter(Boolean);
     serviceUnavailable("Backend chưa cấu hình Supabase Auth.", {
-      requiredEnv: ["SUPABASE_URL", "SUPABASE_ANON_KEY"],
+      missing,
+      acceptedEnv: {
+        projectUrl: ["SUPABASE_URL", "SUPABASE_PROJECT_URL", "SUPABASE_REST_URL", "NUTRIPATH_SUPABASE_URL", "VITE_SUPABASE_URL"],
+        anonKey: ["SUPABASE_ANON_KEY", "SUPABASE_PUBLISHABLE_KEY", "SUPABASE_PUBLIC_KEY", "NUTRIPATH_SUPABASE_ANON_KEY", "VITE_SUPABASE_ANON_KEY"],
+      },
     });
   }
 
