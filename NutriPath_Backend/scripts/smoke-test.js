@@ -58,9 +58,10 @@ try {
 
   const water = await request("/api/members/mem-001/meal-logs/2026-03-13/water", {
     method: "PATCH",
-    body: JSON.stringify({ waterGlasses: 8 }),
+    body: JSON.stringify({ addWaterMl: 330 }),
   });
-  assert.equal(water.waterGlasses, 8);
+  assert.equal(water.waterMl, 1580);
+  assert.equal(water.waterGlasses, 6.3);
 
   const quote = await request("/api/checkout/quote", {
     method: "POST",

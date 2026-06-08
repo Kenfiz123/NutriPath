@@ -9,10 +9,10 @@ import {
   CartesianGrid, Tooltip, Cell
 } from "recharts";
 import {
+  addWaterIntake,
   createWeeklyCoachPlan,
   getDashboard,
   getWeeklyCoachPlans,
-  updateWater,
   type DashboardData,
   type WeeklyCoachPlan,
 } from "../api";
@@ -48,7 +48,8 @@ export function Dashboard() {
   const [dashboard, setDashboard] = useState<DashboardData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [waterGlasses, setWaterGlasses] = useState(5);
+  const [waterMl, setWaterMl] = useState(0);
+  const [waterInputMl, setWaterInputMl] = useState(250);
   const [coachPlan, setCoachPlan] = useState<WeeklyCoachPlan | null>(null);
   const [coachLoading, setCoachLoading] = useState(false);
   const [coachMessage, setCoachMessage] = useState<string | null>(null);
@@ -61,7 +62,7 @@ export function Dashboard() {
       .then((data) => {
         if (!active) return;
         setDashboard(data);
-        setWaterGlasses(data.mealLog.waterGlasses);
+        setWaterMl(data.mealLog.waterMl ?? Math.round(data.mealLog.waterGlasses * 250));
       })
       .catch((err) => {
         if (!active) return;
@@ -108,7 +109,8 @@ export function Dashboard() {
   const calorieTarget = dashboard.nutrition.targets.calories;
   const pct = calorieTarget > 0 ? Math.round((totalConsumed / calorieTarget) * 100) : 0;
   const remainingCalories = dashboard.nutrition.remainingCalories;
-  const waterTarget = dashboard.nutrition.targets.waterGlasses;
+  const waterTargetMl = dashboard.nutrition.targets.waterMl ?? Math.round(dashboard.nutrition.targets.waterGlasses * 250);
+  const waterProgressPct = waterTargetMl > 0 ? Math.min(100, Math.round((waterMl / waterTargetMl) * 100)) : 0;
   const weeklyData = dashboard.weeklyProgress;
   const membershipAccess = dashboard.member.access;
   const meals = dashboard.mealLog.meals
@@ -143,6 +145,20 @@ export function Dashboard() {
       setCoachMessage(err instanceof Error ? err.message : "Không tạo được kế hoạch tuần.");
     } finally {
       setCoachLoading(false);
+    }
+  };
+
+  const handleAddWater = async (amountMl = waterInputMl) => {
+    const safeAmount = Math.round(Number(amountMl) || 0);
+    if (!safeAmount || safeAmount < 1) return;
+    const previous = waterMl;
+    setWaterMl((current) => current + safeAmount);
+    try {
+      const updated = await addWaterIntake(dashboard.date, safeAmount);
+      setWaterMl(updated.waterMl ?? Math.round(updated.waterGlasses * 250));
+      setDashboard((current) => current ? { ...current, mealLog: updated, nutrition: updated.summary } : current);
+    } catch {
+      setWaterMl(previous);
     }
   };
 
@@ -230,29 +246,44 @@ export function Dashboard() {
                 <h3 className="text-gray-900" style={{ fontSize: "1rem", fontWeight: 700 }}>Lượng nước</h3>
                 <Droplets className="w-5 h-5 text-blue-500" />
               </div>
-              <div className="flex justify-center gap-2 flex-wrap mb-4">
-                {Array.from({ length: waterTarget }).map((_, i) => (
-                  <button
-                    key={i}
-                    onClick={() => {
-                      const next = i < waterGlasses ? i : i + 1;
-                      setWaterGlasses(next);
-                      updateWater(dashboard.date, next).catch(() => setWaterGlasses(dashboard.mealLog.waterGlasses));
-                    }}
-                    className={`w-9 h-9 rounded-xl flex items-center justify-center transition-all ${
-                      i < waterGlasses ? "bg-blue-500 text-white shadow-sm" : "bg-gray-100 text-gray-400 hover:bg-blue-100"
-                    }`}
-                    title={`${i + 1} ly`}
-                  >
-                    <Droplets className="w-4 h-4" />
-                  </button>
-                ))}
+              <div className="mb-4 h-3 overflow-hidden rounded-full bg-blue-50">
+                <div className="h-full rounded-full bg-blue-500 transition-all" style={{ width: `${waterProgressPct}%` }} />
               </div>
               <div className="text-center">
                 <p className="text-gray-900" style={{ fontSize: "1.4rem", fontWeight: 800 }}>
-                  {waterGlasses} <span className="text-gray-400" style={{ fontSize: "1rem", fontWeight: 400 }}>/ {waterTarget} ly</span>
+                  {waterMl.toLocaleString("vi-VN")}ml <span className="text-gray-400" style={{ fontSize: "1rem", fontWeight: 400 }}>/ {waterTargetMl.toLocaleString("vi-VN")}ml</span>
                 </p>
-                <p className="text-blue-500 mt-1" style={{ fontSize: "0.8rem" }}>{waterGlasses * 250}ml / {waterTarget * 250}ml</p>
+                <p className="text-blue-500 mt-1" style={{ fontSize: "0.8rem" }}>{waterProgressPct}% mục tiêu hôm nay</p>
+              </div>
+              <div className="mt-4 grid grid-cols-4 gap-2">
+                {[250, 330, 500, 700].map((amount) => (
+                  <button
+                    key={amount}
+                    onClick={() => void handleAddWater(amount)}
+                    className="rounded-xl border border-blue-100 bg-blue-50 px-2 py-2 text-blue-700 transition hover:bg-blue-100"
+                    style={{ fontSize: "0.78rem", fontWeight: 700 }}
+                  >
+                    +{amount}ml
+                  </button>
+                ))}
+              </div>
+              <div className="mt-3 flex gap-2">
+                <input
+                  type="number"
+                  min={1}
+                  max={3000}
+                  value={waterInputMl}
+                  onChange={(event) => setWaterInputMl(Number(event.target.value))}
+                  className="min-w-0 flex-1 rounded-xl border border-gray-200 bg-gray-50 px-3 py-2 outline-none focus:border-blue-400"
+                  style={{ fontSize: "0.85rem" }}
+                />
+                <button
+                  onClick={() => void handleAddWater()}
+                  className="rounded-xl bg-blue-600 px-4 py-2 text-white transition hover:bg-blue-700"
+                  style={{ fontSize: "0.85rem", fontWeight: 700 }}
+                >
+                  Ghi
+                </button>
               </div>
             </div>
 

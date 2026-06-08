@@ -191,7 +191,7 @@ export function Reports() {
             { label: "Calo TB/ngày", value: report.averages.calories, unit: "kcal", icon: Flame, tone: "text-orange-600 bg-orange-50 dark:bg-orange-500/10 dark:text-orange-300" },
             { label: "Ngày có ghi bữa", value: `${report.adherence.trackedDays}/${report.range.days}`, unit: "ngày", icon: CalendarDays, tone: "text-green-600 bg-green-50 dark:bg-green-500/10 dark:text-green-300" },
             { label: "Đạt mục tiêu calo", value: `${report.adherence.onTargetPct}%`, unit: "trong kỳ", icon: TrendingUp, tone: "text-blue-600 bg-blue-50 dark:bg-blue-500/10 dark:text-blue-300" },
-            { label: "Nước TB/ngày", value: report.averages.waterGlasses, unit: "ly", icon: Droplets, tone: "text-cyan-600 bg-cyan-50 dark:bg-cyan-500/10 dark:text-cyan-300" },
+            { label: "Nước TB/ngày", value: report.averages.waterMl, unit: "ml", icon: Droplets, tone: "text-cyan-600 bg-cyan-50 dark:bg-cyan-500/10 dark:text-cyan-300" },
           ].map(({ label, value, unit, icon: Icon, tone }) => (
             <div key={label} className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-800 dark:bg-slate-900">
               <div className="flex items-center justify-between">

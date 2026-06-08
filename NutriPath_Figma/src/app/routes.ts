@@ -46,6 +46,9 @@ const MemberProfile = lazyWithRetry(() => import("./pages/MemberProfile"), (modu
 const Reports = lazyWithRetry(() => import("./pages/Reports"), (module) => module.Reports);
 const Login = lazyWithRetry(() => import("./pages/Login"), (module) => module.Login);
 const Register = lazyWithRetry(() => import("./pages/Register"), (module) => module.Register);
+const AuthCallback = lazyWithRetry(() => import("./pages/AuthCallback"), (module) => module.AuthCallback);
+const PrivacyPolicy = lazyWithRetry(() => import("./pages/PrivacyPolicy"), (module) => module.PrivacyPolicy);
+const DataDeletion = lazyWithRetry(() => import("./pages/DataDeletion"), (module) => module.DataDeletion);
 
 function PageFallback() {
   return createElement(
@@ -134,6 +137,9 @@ function adminComponent(Component: LazyExoticComponent<ComponentType>) {
 const PublicLanding = lazyComponent(LandingPage);
 const PublicLogin = lazyComponent(Login);
 const PublicRegister = lazyComponent(Register);
+const PublicAuthCallback = lazyComponent(AuthCallback);
+const PublicPrivacyPolicy = lazyComponent(PrivacyPolicy);
+const PublicDataDeletion = lazyComponent(DataDeletion);
 const PublicCalculator = lazyComponent(CalorieCalculator);
 const PublicRecipes = lazyComponent(Recipes);
 const PublicPricingPlans = lazyComponent(PricingPlans);
@@ -154,6 +160,9 @@ export const router = createBrowserRouter([
       { index: true, Component: PublicLanding },
       { path: "login", Component: PublicLogin },
       { path: "register", Component: PublicRegister },
+      { path: "auth/callback", Component: PublicAuthCallback },
+      { path: "privacy", Component: PublicPrivacyPolicy },
+      { path: "data-deletion", Component: PublicDataDeletion },
       { path: "dashboard", Component: ProtectedDashboard },
       { path: "calculator", Component: PublicCalculator },
       { path: "tracker", Component: ProtectedMealTracker },

@@ -1,3 +1,5 @@
+import crypto from "node:crypto";
+
 export function registerAuthRoutes(ctx) {
   const {
     CUSTOM_FOOD_UNITS,
@@ -51,6 +53,7 @@ export function registerAuthRoutes(ctx) {
     earliestDateString,
     enforceSafeChatRateLimit,
     ensureAuthCredentials,
+    ensureOAuthIdentities,
     ensureChatHistory,
     ensureCoachPlans,
     ensureMealLog,
@@ -174,7 +177,8 @@ export function registerAuthRoutes(ctx) {
     upsertNotification,
     validateSafeChatInput,
     validateSafeChatOutput,
-    verifyPassword
+    verifyPassword,
+    verifySupabaseAccessToken
   } = ctx;
 
   route("POST", "/api/auth/register", async ({ req, store, body }) => {
@@ -232,6 +236,71 @@ export function registerAuthRoutes(ctx) {
     const member = getMember(store.db, credential.memberId) || findMemberByEmail(store.db, email);
     if (!member) unauthorized("Tài khoản chưa gắn với hồ sơ thành viên.");
 
+    return authSessionResponse(req, member, store.db);
+  });
+
+  route("POST", "/api/auth/supabase", async ({ req, store, body }) => {
+    requireFields(body, ["accessToken"]);
+    const supabaseUser = await verifySupabaseAccessToken(body.accessToken);
+    const email = normalizeEmail(supabaseUser.email);
+    const credential = findCredentialByEmail(store.db, email);
+    let member = findMemberByEmail(store.db, email) || (credential ? getMember(store.db, credential.memberId) : null);
+    const isNewMember = !member;
+
+    if (!member) {
+      member = memberFromRegistration(store, {
+        email,
+        name: supabaseUser.name,
+        goal: "maintain",
+      });
+    }
+
+    const upsertIdentity = () => {
+      const identities = ensureOAuthIdentities(store.db);
+      const now = new Date().toISOString();
+      const existing = identities.find((identity) => identity.providerUserId === supabaseUser.id)
+        || identities.find((identity) => normalizeEmail(identity.email) === email && identity.providerName === supabaseUser.provider);
+      const nextIdentity = {
+        id: existing?.id || store.nextId("oauth", identities),
+        memberId: member.id,
+        provider: "supabase",
+        providerName: supabaseUser.provider,
+        providerUserId: supabaseUser.id,
+        email,
+        name: supabaseUser.name,
+        avatarUrl: supabaseUser.avatarUrl,
+        emailConfirmedAt: supabaseUser.emailConfirmedAt,
+        lastLoginAt: now,
+        createdAt: existing?.createdAt || now,
+      };
+
+      if (existing) Object.assign(existing, nextIdentity);
+      else identities.push(nextIdentity);
+    };
+
+    if (store.dataSource === "sqlserver") {
+      if (isNewMember) {
+        const fallbackSecret = crypto.randomUUID ? crypto.randomUUID() : `${Date.now()}-${Math.random()}`;
+        const hashed = hashPassword(`supabase-oauth:${supabaseUser.id}:${fallbackSecret}`);
+        const oauthCredential = {
+          id: store.nextId("auth", ensureAuthCredentials(store.db)),
+          memberId: member.id,
+          email,
+          passwordHash: hashed.passwordHash,
+          passwordSalt: hashed.passwordSalt,
+          createdAt: new Date().toISOString(),
+        };
+        await insertSqlServerAuthMember(member, oauthCredential);
+        await store.reload();
+        member = getMember(store.db, oauthCredential.memberId);
+      }
+    } else {
+      if (isNewMember) store.db.members.push(member);
+      upsertIdentity();
+      await store.save();
+    }
+
+    if (!member) unauthorized("Không thể đồng bộ tài khoản Supabase với hồ sơ NutriPath.");
     return authSessionResponse(req, member, store.db);
   });
 

@@ -223,11 +223,15 @@ export interface Food {
   fat: number;
   portion: string;
   category?: string;
+  volumeMl?: number;
+  hydrationMl?: number;
 }
 
 export interface MealItem extends Food {
   quantity: number;
   foodId?: string;
+  waterEquivalentMl?: number;
+  waterEquivalentGlasses?: number;
 }
 
 export interface MealSection {
@@ -257,6 +261,7 @@ export interface MealLog {
     remainingItemsForDay: number;
   };
   waterGlasses: number;
+  waterMl: number;
   activity: {
     steps: number;
     burnedCalories: number;
@@ -277,6 +282,7 @@ export interface MealLog {
       carbs: number;
       fat: number;
       waterGlasses: number;
+      waterMl: number;
     };
     remainingCalories: number;
     calorieProgressPct: number;
@@ -433,6 +439,7 @@ export interface NutritionReport {
     protein: number;
     carbs: number;
     fat: number;
+    waterMl: number;
     waterGlasses: number;
   };
   totals: {
@@ -440,6 +447,7 @@ export interface NutritionReport {
     protein: number;
     carbs: number;
     fat: number;
+    waterMl: number;
     waterGlasses: number;
     burnedCalories: number;
     activeMinutes: number;
@@ -450,6 +458,7 @@ export interface NutritionReport {
     protein: number;
     carbs: number;
     fat: number;
+    waterMl: number;
     waterGlasses: number;
     burnedCalories: number;
     activeMinutes: number;
@@ -470,7 +479,9 @@ export interface NutritionReport {
     protein: number;
     carbs: number;
     fat: number;
+    waterMl: number;
     waterGlasses: number;
+    waterTargetMl: number;
     waterTarget: number;
     burnedCalories: number;
     activeMinutes: number;
@@ -810,6 +821,14 @@ export function login(email: string, password: string) {
   });
 }
 
+export function loginWithSupabase(accessToken: string) {
+  return apiFetch<AuthSession>("/api/auth/supabase", {
+    method: "POST",
+    body: { accessToken },
+    auth: false,
+  });
+}
+
 export function register(payload: RegisterPayload) {
   return apiFetch<AuthSession>("/api/auth/register", {
     method: "POST",
@@ -958,10 +977,17 @@ export function deleteMealItem(date: string, mealId: string, itemId: string) {
   });
 }
 
-export function updateWater(date: string, waterGlasses: number) {
+export function updateWater(date: string, waterMl: number) {
   return apiFetch<MealLog>(`/api/members/${getCurrentMemberId()}/meal-logs/${encodeURIComponent(date)}/water`, {
     method: "PATCH",
-    body: { waterGlasses },
+    body: { waterMl },
+  });
+}
+
+export function addWaterIntake(date: string, addWaterMl: number) {
+  return apiFetch<MealLog>(`/api/members/${getCurrentMemberId()}/meal-logs/${encodeURIComponent(date)}/water`, {
+    method: "PATCH",
+    body: { addWaterMl },
   });
 }
 

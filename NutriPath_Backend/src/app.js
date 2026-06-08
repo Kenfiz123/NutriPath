@@ -201,6 +201,31 @@ function round(value, digits = 0) {
 
 const WATER_GLASS_ML = 250;
 
+function waterGlassesToMl(glasses) {
+  return Math.max(0, Math.round((Number(glasses) || 0) * WATER_GLASS_ML));
+}
+
+function waterMlToGlasses(ml) {
+  return round(Math.max(0, Number(ml) || 0) / WATER_GLASS_ML, 1);
+}
+
+function getLogWaterMl(log) {
+  const storedMl = Number(log?.waterMl);
+  if (Number.isFinite(storedMl) && storedMl >= 0) return Math.round(storedMl);
+  return waterGlassesToMl(log?.waterGlasses);
+}
+
+function getMemberWaterTargetMl(member) {
+  return waterGlassesToMl(member?.waterTargetGlasses || 8);
+}
+
+function setLogWaterMl(log, ml) {
+  const waterMl = Math.max(0, Math.round(Number(ml) || 0));
+  log.waterMl = waterMl;
+  log.waterGlasses = waterMlToGlasses(waterMl);
+  return waterMl;
+}
+
 function extractMillilitersFromPortion(portion) {
   const text = String(portion || "").toLowerCase().replace(",", ".");
   const match = text.match(/(\d+(?:\.\d+)?)\s*(ml|l|lit|lít)\b/u);
@@ -211,23 +236,31 @@ function extractMillilitersFromPortion(portion) {
 }
 
 function getDrinkWaterEquivalentGlasses(food, quantity = 1) {
+  return waterMlToGlasses(getDrinkWaterEquivalentMl(food, quantity));
+}
+
+function getDrinkWaterEquivalentMl(food, quantity = 1) {
   const category = normalizeVietnameseText(food?.category || "");
   if (category !== normalizeVietnameseText("Đồ uống")) return 0;
   const ml = Number(food?.volumeMl || food?.hydrationMl || 0) || extractMillilitersFromPortion(food?.portion);
   if (!ml) return 0;
-  return round((ml * Math.max(0.1, Number(quantity) || 1)) / WATER_GLASS_ML, 1);
+  return Math.max(0, Math.round(ml * Math.max(0.1, Number(quantity) || 1)));
 }
 
 function updateWaterGoalStatus(log, member) {
   log.goals = log.goals.map((goal) => goal.id === "water"
-    ? { ...goal, done: (Number(log.waterGlasses) || 0) >= (member.waterTargetGlasses || 8) }
+    ? { ...goal, done: getLogWaterMl(log) >= getMemberWaterTargetMl(member) }
     : goal);
 }
 
 function applyWaterEquivalent(log, member, deltaGlasses) {
-  const delta = Number(deltaGlasses) || 0;
-  if (!delta) return;
-  log.waterGlasses = round(Math.max(0, (Number(log.waterGlasses) || 0) + delta), 1);
+  applyWaterEquivalentMl(log, member, waterGlassesToMl(deltaGlasses));
+}
+
+function applyWaterEquivalentMl(log, member, deltaMl) {
+  const mlDelta = Math.round(Number(deltaMl) || 0);
+  if (!mlDelta) return;
+  setLogWaterMl(log, getLogWaterMl(log) + mlDelta);
   updateWaterGoalStatus(log, member);
 }
 
@@ -313,6 +346,11 @@ function ensureAuthCredentials(db) {
   return db.authCredentials;
 }
 
+function ensureOAuthIdentities(db) {
+  db.oauthIdentities ??= [];
+  return db.oauthIdentities;
+}
+
 function findCredentialByEmail(db, email) {
   const normalized = normalizeEmail(email);
   return ensureAuthCredentials(db).find((credential) => normalizeEmail(credential.email) === normalized);
@@ -334,6 +372,91 @@ function verifyPassword(password, credential) {
   const expected = Buffer.from(String(credential.passwordHash), "hex");
   const actual = Buffer.from(passwordHash, "hex");
   return expected.length === actual.length && crypto.timingSafeEqual(expected, actual);
+}
+
+function normalizeSupabaseProjectUrl(value) {
+  return String(value || "")
+    .trim()
+    .replace(/\/rest\/v1\/?$/i, "")
+    .replace(/\/auth\/v1\/?$/i, "")
+    .replace(/\/+$/, "");
+}
+
+function inferSupabaseProjectUrlFromDatabaseUrl() {
+  const databaseUrl = process.env.SUPABASE_DATABASE_URL || process.env.DATABASE_URL || process.env.POSTGRES_URL || "";
+  const match = String(databaseUrl).match(/postgres\.([a-z0-9-]+)(?=[:@])/i);
+  return match?.[1] ? `https://${match[1]}.supabase.co` : "";
+}
+
+function getSupabaseAuthConfig() {
+  const projectUrl = normalizeSupabaseProjectUrl(
+    process.env.SUPABASE_URL
+      || process.env.NUTRIPATH_SUPABASE_URL
+      || process.env.VITE_SUPABASE_URL
+      || inferSupabaseProjectUrlFromDatabaseUrl(),
+  );
+  const anonKey = process.env.SUPABASE_ANON_KEY
+    || process.env.SUPABASE_PUBLISHABLE_KEY
+    || process.env.VITE_SUPABASE_ANON_KEY
+    || process.env.VITE_SUPABASE_PUBLISHABLE_KEY
+    || "";
+  return { projectUrl, anonKey };
+}
+
+function getSupabaseUserProvider(payload) {
+  const identityProvider = payload?.identities?.find((identity) => identity?.provider)?.provider;
+  return String(payload?.app_metadata?.provider || identityProvider || "supabase").toLowerCase();
+}
+
+function getSupabaseUserName(payload) {
+  const metadata = payload?.user_metadata || {};
+  return String(
+    metadata.full_name
+      || metadata.name
+      || metadata.user_name
+      || metadata.preferred_username
+      || payload?.email?.split("@")[0]
+      || "NutriPath User",
+  ).trim();
+}
+
+async function verifySupabaseAccessToken(accessToken) {
+  const token = String(accessToken || "").trim();
+  if (token.length < 20) badRequest("Supabase access token không hợp lệ.");
+
+  const { projectUrl, anonKey } = getSupabaseAuthConfig();
+  if (!projectUrl || !anonKey) {
+    serviceUnavailable("Backend chưa cấu hình Supabase Auth.", {
+      requiredEnv: ["SUPABASE_URL", "SUPABASE_ANON_KEY"],
+    });
+  }
+
+  const response = await fetch(`${projectUrl}/auth/v1/user`, {
+    headers: {
+      apikey: anonKey,
+      Authorization: `Bearer ${token}`,
+    },
+  });
+  const payload = await response.json().catch(() => null);
+
+  if (!response.ok) {
+    unauthorized(payload?.msg || payload?.message || "Phiên Supabase không hợp lệ hoặc đã hết hạn.");
+  }
+
+  const email = normalizeEmail(payload?.email);
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+    badRequest("Tài khoản Supabase chưa có email hợp lệ.");
+  }
+
+  return {
+    id: String(payload.id || payload.sub || ""),
+    email,
+    name: getSupabaseUserName(payload),
+    provider: getSupabaseUserProvider(payload),
+    avatarUrl: payload?.user_metadata?.avatar_url || payload?.user_metadata?.picture || "",
+    emailConfirmedAt: payload?.email_confirmed_at || payload?.confirmed_at || null,
+    raw: payload,
+  };
 }
 
 function getBearerToken(req) {
@@ -513,6 +636,7 @@ function ensureMealLog(store, memberId, date) {
     id: store.nextId("log", db.mealLogs),
     memberId,
     date,
+    waterMl: 0,
     waterGlasses: 0,
     activity: { steps: 0, burnedCalories: 0, activeMinutes: 0 },
     goals: [
@@ -560,6 +684,7 @@ function summarizeMealLog(log, member) {
       carbs: member?.macroTargets?.carbs || 220,
       fat: member?.macroTargets?.fat || 60,
       waterGlasses: member?.waterTargetGlasses || 8,
+      waterMl: getMemberWaterTargetMl(member),
     },
     remainingCalories: target - round(totals.calories),
     calorieProgressPct: Math.min(100, Math.round((totals.calories / target) * 100)),
@@ -717,13 +842,15 @@ function buildNutritionReport(req, db, member, options = {}) {
       protein: summary.totals.protein,
       carbs: summary.totals.carbs,
       fat: summary.totals.fat,
-      waterGlasses: log.waterGlasses || 0,
+      waterMl: getLogWaterMl(log),
+      waterGlasses: waterMlToGlasses(getLogWaterMl(log)),
+      waterTargetMl: summary.targets.waterMl,
       waterTarget: summary.targets.waterGlasses,
       burnedCalories: log.activity?.burnedCalories || 0,
       activeMinutes: log.activity?.activeMinutes || 0,
       mealCount,
       onTarget: summary.totals.calories > 0 && Math.abs(calorieDelta) <= Math.max(100, target * 0.1),
-      waterDone: (log.waterGlasses || 0) >= summary.targets.waterGlasses,
+      waterDone: getLogWaterMl(log) >= summary.targets.waterMl,
     };
   });
 
@@ -732,6 +859,7 @@ function buildNutritionReport(req, db, member, options = {}) {
     sum.protein += day.protein;
     sum.carbs += day.carbs;
     sum.fat += day.fat;
+    sum.waterMl += day.waterMl;
     sum.waterGlasses += day.waterGlasses;
     sum.burnedCalories += day.burnedCalories;
     sum.activeMinutes += day.activeMinutes;
@@ -745,6 +873,7 @@ function buildNutritionReport(req, db, member, options = {}) {
     protein: 0,
     carbs: 0,
     fat: 0,
+    waterMl: 0,
     waterGlasses: 0,
     burnedCalories: 0,
     activeMinutes: 0,
@@ -786,6 +915,7 @@ function buildNutritionReport(req, db, member, options = {}) {
     protein: round(totals.protein / days, 1),
     carbs: round(totals.carbs / days, 1),
     fat: round(totals.fat / days, 1),
+    waterMl: round(totals.waterMl / days),
     waterGlasses: round(totals.waterGlasses / days, 1),
     burnedCalories: round(totals.burnedCalories / days),
     activeMinutes: round(totals.activeMinutes / days),
@@ -796,6 +926,7 @@ function buildNutritionReport(req, db, member, options = {}) {
     protein: member.macroTargets?.protein || 120,
     carbs: member.macroTargets?.carbs || 220,
     fat: member.macroTargets?.fat || 60,
+    waterMl: getMemberWaterTargetMl(member),
     waterGlasses: member.waterTargetGlasses || 8,
   };
 
@@ -843,6 +974,7 @@ function buildNutritionReport(req, db, member, options = {}) {
       protein: round(totals.protein, 1),
       carbs: round(totals.carbs, 1),
       fat: round(totals.fat, 1),
+      waterMl: round(totals.waterMl),
       waterGlasses: round(totals.waterGlasses, 1),
       burnedCalories: round(totals.burnedCalories),
       activeMinutes: round(totals.activeMinutes),
@@ -877,7 +1009,7 @@ function csvValue(value) {
 
 function buildReportCsv(report) {
   const rows = [
-    ["Ngày", "Calo", "Mục tiêu calo", "Protein", "Carbs", "Fat", "Nước", "Mục tiêu nước", "Kcal đốt", "Phút vận động", "Số món"],
+    ["Ngày", "Calo", "Mục tiêu calo", "Protein", "Carbs", "Fat", "Nước ml", "Mục tiêu nước ml", "Kcal đốt", "Phút vận động", "Số món"],
     ...report.daily.map((day) => [
       day.date,
       day.calories,
@@ -885,8 +1017,8 @@ function buildReportCsv(report) {
       day.protein,
       day.carbs,
       day.fat,
-      day.waterGlasses,
-      day.waterTarget,
+      day.waterMl,
+      day.waterTargetMl,
       day.burnedCalories,
       day.activeMinutes,
       day.mealCount,
@@ -909,7 +1041,7 @@ function buildWeeklyCoachPlan(store, member, options = {}) {
   const goalText = goal === "lose" ? "giảm mỡ bền vững" : goal === "gain" ? "tăng cân/tăng cơ lành mạnh" : "duy trì năng lượng ổn định";
   const recentReport = buildNutritionReport(options.req, store.db, member, { days: 7 });
   const proteinGap = recentReport.averages.protein < macroTargets.protein * 0.8;
-  const waterGap = recentReport.averages.waterGlasses < (member.waterTargetGlasses || 8) * 0.7;
+  const waterGap = recentReport.averages.waterMl < getMemberWaterTargetMl(member) * 0.7;
   const calorieLow = recentReport.averages.calories > 0 && recentReport.averages.calories < target * 0.8;
   const calorieHigh = recentReport.averages.calories > target * 1.1;
   const mealTemplates = [
@@ -954,7 +1086,7 @@ function buildWeeklyCoachPlan(store, member, options = {}) {
   const actionSteps = [
     `Giữ mục tiêu khoảng ${target} kcal/ngày cho mục tiêu ${goalText}.`,
     `Protein mục tiêu: ${macroTargets.protein}g/ngày; chia đều trong 3-4 bữa.`,
-    waterGap ? `Tăng nước lên ${member.waterTargetGlasses || 8} ly/ngày, chia theo buổi sáng - chiều - tối.` : "Duy trì lượng nước hiện tại, ưu tiên nước lọc và đồ uống ít đường.",
+    waterGap ? `Tăng nước lên khoảng ${getMemberWaterTargetMl(member).toLocaleString("vi-VN")}ml/ngày, chia theo buổi sáng - chiều - tối.` : "Duy trì lượng nước hiện tại, ưu tiên nước lọc, trà không đường và đồ uống 0 calo.",
     proteinGap ? "Mỗi bữa chính nên có một nguồn protein rõ ràng: trứng, ức gà, cá, thịt nạc hoặc đậu hũ." : "Protein gần ổn, tiếp tục giữ nguồn đạm nạc trong các bữa chính.",
     calorieHigh ? "Giảm dầu ăn, sốt và đồ uống ngọt trong tuần này." : calorieLow ? "Bổ sung thêm bữa phụ lành mạnh để tránh thiếu năng lượng." : "Theo dõi calo sau mỗi bữa để điều chỉnh khẩu phần trong ngày.",
   ];
@@ -980,13 +1112,13 @@ function buildDashboardTips(log, summary) {
   const calories = summary.totals.calories;
   const target = summary.targets.calories;
   const proteinPct = summary.targets.protein ? summary.totals.protein / summary.targets.protein : 0;
-  const waterPct = summary.targets.waterGlasses ? log.waterGlasses / summary.targets.waterGlasses : 0;
+  const waterPct = summary.targets.waterMl ? getLogWaterMl(log) / summary.targets.waterMl : 0;
 
   if (log.meals.every((meal) => meal.items.length === 0)) {
     tips.push("Hôm nay bạn chưa ghi bữa ăn nào. Hãy thêm bữa đầu tiên để dashboard phản ánh đúng tiến trình.");
   }
   if (waterPct < 0.6) {
-    tips.push("Lượng nước hôm nay còn thấp. Đặt mục tiêu uống thêm 1 ly trong giờ tới để tiến gần mục tiêu.");
+    tips.push("Lượng nước hôm nay còn thấp. Ghi thêm 250-500ml nước lọc, trà không đường hoặc đồ uống 0 calo trong giờ tới.");
   }
   if (proteinPct < 0.55 && calories > 0) {
     tips.push("Protein đang thấp so với mục tiêu. Ưu tiên thêm trứng, ức gà, cá hoặc đậu phụ ở bữa kế tiếp.");
@@ -1026,8 +1158,8 @@ function buildDashboardAchievements(db, member, log, summary, selectedDate) {
 
   achievements.push({
     id: "water",
-    label: `${log.waterGlasses}/${summary.targets.waterGlasses} ly nước`,
-    description: log.waterGlasses >= summary.targets.waterGlasses ? "Đã đạt mục tiêu nước hôm nay" : "Tiến độ nước hôm nay",
+    label: `${getLogWaterMl(log).toLocaleString("vi-VN")}/${summary.targets.waterMl.toLocaleString("vi-VN")} ml nước`,
+    description: getLogWaterMl(log) >= summary.targets.waterMl ? "Đã đạt mục tiêu nước hôm nay" : "Tiến độ nước hôm nay",
   });
 
   const calorieDelta = summary.targets.calories - summary.totals.calories;
@@ -1240,6 +1372,8 @@ function mealLogResource(req, log, member) {
   const itemCount = getMealItemCount(log);
   return {
     ...log,
+    waterMl: getLogWaterMl(log),
+    waterGlasses: waterMlToGlasses(getLogWaterMl(log)),
     summary,
     access: {
       ...access,
@@ -1864,7 +1998,7 @@ function syncMemberNotifications(store, member) {
     member.id,
     "nutrition-goal",
     "Mục tiêu hôm nay",
-    `Mục tiêu hiện tại của bạn là ${Number(member.calorieTarget || 1800).toLocaleString("vi-VN")} kcal/ngày và ${member.waterTargetGlasses || 8} ly nước.`,
+    `Mục tiêu hiện tại của bạn là ${Number(member.calorieTarget || 1800).toLocaleString("vi-VN")} kcal/ngày và khoảng ${getMemberWaterTargetMl(member).toLocaleString("vi-VN")}ml nước.`,
     { key: `${member.id}:nutrition-goal`, actionHref: "/dashboard" },
   );
 
@@ -1892,15 +2026,15 @@ function syncMemberNotifications(store, member) {
     );
   }
 
-  const waterTarget = member.waterTargetGlasses || 8;
-  const waterGlasses = todayLog?.waterGlasses || 0;
-  if (waterGlasses < waterTarget) {
+  const waterTargetMl = getMemberWaterTargetMl(member);
+  const waterMl = todayLog ? getLogWaterMl(todayLog) : 0;
+  if (waterMl < waterTargetMl) {
     upsertNotification(
       store,
       member.id,
       "water-reminder",
       "Nhắc uống nước",
-      `Bạn đã ghi ${waterGlasses}/${waterTarget} ly nước hôm nay.`,
+      `Bạn đã ghi ${waterMl.toLocaleString("vi-VN")}/${waterTargetMl.toLocaleString("vi-VN")}ml nước hôm nay.`,
       { key: `${member.id}:water-reminder:${today}`, actionHref: "/dashboard" },
     );
   }
@@ -2840,6 +2974,7 @@ registerControllers({
   applyChatIntent,
   applyNutritionCalculationToMember,
   applyWaterEquivalent,
+  applyWaterEquivalentMl,
   assertMealItemQuota,
   assertMealLogAccess,
   assertMemberSessionAccess,
@@ -2883,6 +3018,7 @@ registerControllers({
   earliestDateString,
   enforceSafeChatRateLimit,
   ensureAuthCredentials,
+  ensureOAuthIdentities,
   ensureChatHistory,
   ensureCoachPlans,
   ensureMealLog,
@@ -2910,13 +3046,16 @@ registerControllers({
   getChatAdminKey,
   getClientIp,
   getDrinkWaterEquivalentGlasses,
+  getDrinkWaterEquivalentMl,
   getFatPct,
   getFood,
   getGeminiRateState,
   getGoalDelta,
+  getLogWaterMl,
   getMealHistoryDayDelta,
   getMealItemCount,
   getMember,
+  getMemberWaterTargetMl,
   getMemberChatHistory,
   getMembershipAccess,
   getNormalizedTier,
@@ -2993,6 +3132,7 @@ registerControllers({
   sendJson,
   serviceUnavailable,
   sessions,
+  setLogWaterMl,
   splitPath,
   startOfWeek,
   summarizeMealLog,
@@ -3007,6 +3147,9 @@ registerControllers({
   validateSafeChatInput,
   validateSafeChatOutput,
   verifyPassword,
+  verifySupabaseAccessToken,
+  waterGlassesToMl,
+  waterMlToGlasses,
 });
 
 export async function createServer(options = {}) {

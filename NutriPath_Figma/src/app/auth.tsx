@@ -5,16 +5,24 @@ import {
   getStoredSession,
   getMe,
   login as apiLogin,
+  loginWithSupabase,
   logout as apiLogout,
   register as apiRegister,
   setStoredSession,
   type AuthSession,
   type RegisterPayload,
 } from "./api";
+import {
+  signInWithSocialProvider,
+  signOutSupabaseAuth,
+  type SocialAuthProvider,
+} from "./supabaseAuth";
 
 interface AuthContextValue {
   session: AuthSession | null;
   login(email: string, password: string): Promise<AuthSession>;
+  loginWithSocialProvider(provider: SocialAuthProvider, returnTo?: string): Promise<void>;
+  completeSocialLogin(accessToken: string): Promise<AuthSession>;
   register(payload: RegisterPayload): Promise<AuthSession>;
   logout(): Promise<void>;
 }
@@ -63,6 +71,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setSession(nextSession);
       return nextSession;
     },
+    async loginWithSocialProvider(provider, returnTo = "/dashboard") {
+      await signInWithSocialProvider(provider, returnTo);
+    },
+    async completeSocialLogin(accessToken) {
+      const nextSession = await loginWithSupabase(accessToken);
+      setStoredSession(nextSession);
+      setSession(nextSession);
+      return nextSession;
+    },
     async register(payload) {
       const nextSession = await apiRegister(payload);
       setStoredSession(nextSession);
@@ -73,6 +90,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       try {
         await apiLogout();
       } finally {
+        await signOutSupabaseAuth().catch(() => {});
         clearStoredSession();
         setSession(null);
       }

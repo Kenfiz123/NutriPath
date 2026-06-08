@@ -2,7 +2,7 @@ import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { existsSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { seedData } from "./data/seed.js";
+import { healthyBeverageFoods, healthyDrinkRecipes, seedData } from "./data/seed.js";
 import { loadSqlServerData } from "./sqlserver-import.js";
 import { loadSupabaseData, persistSupabaseData, resetSupabaseData } from "./supabase-postgres-store.js";
 
@@ -25,10 +25,36 @@ async function ensureFile(filePath) {
   await writeFile(filePath, JSON.stringify(seedData, null, 2), "utf8");
 }
 
+function normalizeCatalogData(db) {
+  if (!db || typeof db !== "object") return db;
+
+  if (Array.isArray(db.foods)) {
+    const healthyBeverageIds = new Set(healthyBeverageFoods.map((food) => food.id));
+    const retainedFoods = db.foods.filter((food) => !healthyBeverageIds.has(food.id));
+    db.foods = [...retainedFoods, ...clone(healthyBeverageFoods)];
+  }
+
+  if (Array.isArray(db.recipes)) {
+    const healthyRecipeIds = new Set(healthyDrinkRecipes.map((recipe) => recipe.id));
+    const retainedRecipes = db.recipes.filter((recipe) => !healthyRecipeIds.has(recipe.id));
+    db.recipes = [...retainedRecipes, ...clone(healthyDrinkRecipes)];
+  }
+
+  if (Array.isArray(db.mealLogs)) {
+    for (const log of db.mealLogs) {
+      if (log.waterMl === undefined && log.waterGlasses !== undefined) {
+        log.waterMl = Math.max(0, Math.round((Number(log.waterGlasses) || 0) * 250));
+      }
+    }
+  }
+
+  return db;
+}
+
 export async function createStore(options = {}) {
   const dataSource = String(options.dataSource || process.env.NUTRIPATH_DATA_SOURCE || "json").toLowerCase();
   if (dataSource === "sqlserver") {
-    let cache = await loadSqlServerData();
+    let cache = normalizeCatalogData(await loadSqlServerData());
 
     return {
       filePath: "sqlserver:NutriPath",
@@ -37,14 +63,14 @@ export async function createStore(options = {}) {
         return cache;
       },
       async reload() {
-        cache = await loadSqlServerData();
+        cache = normalizeCatalogData(await loadSqlServerData());
         return cache;
       },
       async save() {
         return cache;
       },
       async reset() {
-        cache = await loadSqlServerData();
+        cache = normalizeCatalogData(await loadSqlServerData());
         return cache;
       },
       nextId(prefix, collection) {
@@ -57,7 +83,7 @@ export async function createStore(options = {}) {
   }
 
   if (["supabase", "postgres", "postgresql"].includes(dataSource)) {
-    let cache = await loadSupabaseData();
+    let cache = normalizeCatalogData(await loadSupabaseData());
 
     return {
       filePath: "supabase:postgresql",
@@ -66,7 +92,7 @@ export async function createStore(options = {}) {
         return cache;
       },
       async reload() {
-        cache = await loadSupabaseData();
+        cache = normalizeCatalogData(await loadSupabaseData());
         return cache;
       },
       async save() {
@@ -74,7 +100,7 @@ export async function createStore(options = {}) {
         return cache;
       },
       async reset() {
-        cache = await resetSupabaseData();
+        cache = normalizeCatalogData(await resetSupabaseData());
         return cache;
       },
       nextId(prefix, collection) {
@@ -89,7 +115,7 @@ export async function createStore(options = {}) {
   const filePath = resolveDbPath(options.dbPath);
   await ensureFile(filePath);
 
-  let cache = JSON.parse(await readFile(filePath, "utf8"));
+  let cache = normalizeCatalogData(JSON.parse(await readFile(filePath, "utf8")));
 
   async function persist() {
     await mkdir(path.dirname(filePath), { recursive: true });
@@ -102,7 +128,7 @@ export async function createStore(options = {}) {
       return cache;
     },
     async reload() {
-      cache = JSON.parse(await readFile(filePath, "utf8"));
+      cache = normalizeCatalogData(JSON.parse(await readFile(filePath, "utf8")));
       return cache;
     },
     async save() {
@@ -110,7 +136,7 @@ export async function createStore(options = {}) {
       return cache;
     },
     async reset() {
-      cache = clone(seedData);
+      cache = normalizeCatalogData(clone(seedData));
       await persist();
       return cache;
     },

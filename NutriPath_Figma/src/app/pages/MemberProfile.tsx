@@ -122,7 +122,7 @@ export function MemberProfile() {
     name: "",
     email: "",
     calorieTarget: 1800,
-    waterTargetGlasses: 8,
+    waterTargetMl: 2000,
   });
 
   useEffect(() => {
@@ -136,7 +136,7 @@ export function MemberProfile() {
           name: data.member.name,
           email: data.member.email,
           calorieTarget: data.member.calorieTarget,
-          waterTargetGlasses: data.member.waterTargetGlasses,
+          waterTargetMl: Math.round(data.member.waterTargetGlasses * 250),
         });
         setError(null);
       })
@@ -220,7 +220,8 @@ export function MemberProfile() {
   async function handleSaveSettings(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const calorieTarget = Number(settingsForm.calorieTarget);
-    const waterTargetGlasses = Number(settingsForm.waterTargetGlasses);
+    const waterTargetMl = Number(settingsForm.waterTargetMl);
+    const waterTargetGlasses = Math.round((waterTargetMl / 250) * 10) / 10;
 
     if (!settingsForm.name.trim() || !settingsForm.email.trim()) {
       setStatusMessage("Tên và email không được để trống.");
@@ -230,8 +231,8 @@ export function MemberProfile() {
       setStatusMessage("Mục tiêu calo nên nằm trong khoảng 1200-5000 kcal/ngày.");
       return;
     }
-    if (waterTargetGlasses < 1 || waterTargetGlasses > 20) {
-      setStatusMessage("Mục tiêu nước nên nằm trong khoảng 1-20 ly/ngày.");
+    if (waterTargetMl < 500 || waterTargetMl > 5000) {
+      setStatusMessage("Mục tiêu nước nên nằm trong khoảng 500-5000ml/ngày.");
       return;
     }
 
@@ -441,8 +442,8 @@ export function MemberProfile() {
                     <input type="number" min={1200} max={5000} value={settingsForm.calorieTarget} onChange={(event) => setSettingsForm({ ...settingsForm, calorieTarget: Number(event.target.value) })} className="w-full rounded-xl border border-gray-200 bg-gray-50 px-4 py-3 outline-none focus:border-green-500" />
                   </label>
                   <label className="block">
-                    <span className="mb-1 block text-sm font-semibold text-gray-700">Mục tiêu nước/ngày</span>
-                    <input type="number" min={1} max={20} value={settingsForm.waterTargetGlasses} onChange={(event) => setSettingsForm({ ...settingsForm, waterTargetGlasses: Number(event.target.value) })} className="w-full rounded-xl border border-gray-200 bg-gray-50 px-4 py-3 outline-none focus:border-green-500" />
+                    <span className="mb-1 block text-sm font-semibold text-gray-700">Mục tiêu nước/ngày (ml)</span>
+                    <input type="number" min={500} max={5000} step={50} value={settingsForm.waterTargetMl} onChange={(event) => setSettingsForm({ ...settingsForm, waterTargetMl: Number(event.target.value) })} className="w-full rounded-xl border border-gray-200 bg-gray-50 px-4 py-3 outline-none focus:border-green-500" />
                   </label>
                   <div className="md:col-span-2 flex flex-wrap items-center justify-between gap-3">
                     {statusMessage ? <p className="text-sm font-semibold text-green-700">{statusMessage}</p> : <span />}

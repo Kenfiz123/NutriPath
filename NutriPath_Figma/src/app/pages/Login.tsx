@@ -2,9 +2,10 @@ import { FormEvent, useState } from "react";
 import { Link, useLocation, useNavigate } from "react-router";
 import { ArrowRight, Eye, EyeOff, Leaf, Lock, Mail } from "lucide-react";
 import { useAuth } from "../auth";
+import { isSupabaseAuthConfigured, type SocialAuthProvider } from "../supabaseAuth";
 
 export function Login() {
-  const { login } = useAuth();
+  const { login, loginWithSocialProvider } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
   const [email, setEmail] = useState("");
@@ -12,8 +13,10 @@ export function Login() {
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  const [socialSubmitting, setSocialSubmitting] = useState<SocialAuthProvider | null>(null);
 
   const from = (location.state as { from?: string } | null)?.from || "/dashboard";
+  const socialAuthReady = isSupabaseAuthConfigured();
 
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -27,6 +30,17 @@ export function Login() {
       setError(err instanceof Error ? err.message : "Không đăng nhập được.");
     } finally {
       setSubmitting(false);
+    }
+  };
+
+  const handleSocialLogin = async (provider: SocialAuthProvider) => {
+    setError(null);
+    setSocialSubmitting(provider);
+    try {
+      await loginWithSocialProvider(provider, from);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Không đăng nhập được bằng mạng xã hội.");
+      setSocialSubmitting(null);
     }
   };
 
@@ -112,7 +126,7 @@ export function Login() {
 
             <button
               type="submit"
-              disabled={submitting}
+              disabled={submitting || Boolean(socialSubmitting)}
               className="w-full flex items-center justify-center gap-2 rounded-xl bg-green-600 px-4 py-3.5 text-white hover:bg-green-700 transition-colors disabled:opacity-60"
               style={{ fontWeight: 800 }}
             >
@@ -120,6 +134,41 @@ export function Login() {
               <ArrowRight className="w-4 h-4" />
             </button>
           </form>
+
+          <div className="my-6 flex items-center gap-3">
+            <div className="h-px flex-1 bg-slate-200" />
+            <span className="text-xs font-bold uppercase tracking-wide text-slate-400">hoặc</span>
+            <div className="h-px flex-1 bg-slate-200" />
+          </div>
+
+          <div className="grid gap-3 sm:grid-cols-2">
+            <button
+              type="button"
+              disabled={!socialAuthReady || Boolean(socialSubmitting) || submitting}
+              onClick={() => void handleSocialLogin("google")}
+              className="flex items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-3 text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60"
+              style={{ fontWeight: 800 }}
+            >
+              <span className="flex h-6 w-6 items-center justify-center rounded-full border border-slate-200 text-sm text-red-500">G</span>
+              {socialSubmitting === "google" ? "Đang mở..." : "Google"}
+            </button>
+            <button
+              type="button"
+              disabled={!socialAuthReady || Boolean(socialSubmitting) || submitting}
+              onClick={() => void handleSocialLogin("facebook")}
+              className="flex items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-3 text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60"
+              style={{ fontWeight: 800 }}
+            >
+              <span className="flex h-6 w-6 items-center justify-center rounded-full bg-blue-600 text-sm text-white">f</span>
+              {socialSubmitting === "facebook" ? "Đang mở..." : "Facebook"}
+            </button>
+          </div>
+
+          {!socialAuthReady ? (
+            <p className="mt-3 text-center text-xs text-amber-600">
+              Cần cấu hình VITE_SUPABASE_URL và VITE_SUPABASE_ANON_KEY để bật Google/Facebook.
+            </p>
+          ) : null}
 
           <p className="text-center text-gray-500 mt-6" style={{ fontSize: "0.9rem" }}>
             Chưa có tài khoản?{" "}

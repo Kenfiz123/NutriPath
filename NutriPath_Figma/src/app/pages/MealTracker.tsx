@@ -15,6 +15,7 @@ import {
 } from "lucide-react";
 import { Cell, Pie, PieChart, ResponsiveContainer, Tooltip } from "recharts";
 import {
+  addWaterIntake,
   addMealItem,
   deleteMealItem,
   estimateCustomFood,
@@ -25,7 +26,6 @@ import {
   getPersonalizedRecipes,
   getSavedCustomFoods,
   saveCustomFoodEstimate,
-  updateWater,
   type AddMealItemPayload,
   type CustomFoodEstimateResponse,
   type CustomFoodIngredientInput,
@@ -131,6 +131,7 @@ export function MealTracker() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [saveStatus, setSaveStatus] = useState<"idle" | "saving" | "saved" | "error">("idle");
+  const [waterInputMl, setWaterInputMl] = useState(250);
   const [photoPreview, setPhotoPreview] = useState("");
   const [photoFileName, setPhotoFileName] = useState("");
   const [photoNotes, setPhotoNotes] = useState("");
@@ -181,7 +182,11 @@ export function MealTracker() {
   }, [showFoodSearch, addMode]);
 
   const totals = mealLog?.summary.totals ?? { calories: 0, protein: 0, carbs: 0, fat: 0 };
-  const targets = mealLog?.summary.targets ?? { calories: 1800, protein: 120, carbs: 220, fat: 60, waterGlasses: 8 };
+  const targets = mealLog?.summary.targets ?? { calories: 1800, protein: 120, carbs: 220, fat: 60, waterGlasses: 8, waterMl: 2000 };
+  const currentWaterMl = mealLog?.waterMl ?? Math.round((mealLog?.waterGlasses || 0) * 250);
+  const waterTargetMl = targets.waterMl ?? Math.round(targets.waterGlasses * 250);
+  const waterRemainingMl = Math.max(0, waterTargetMl - currentWaterMl);
+  const waterProgressPct = waterTargetMl > 0 ? Math.min(100, Math.round((currentWaterMl / waterTargetMl) * 100)) : 0;
   const trackerAccess = mealLog?.access;
   const isSvipAiPhotoMode = trackerAccess?.tier === "svip";
   const caloriePct = Math.min(Math.round((totals.calories / targets.calories) * 100), 100);
@@ -345,13 +350,19 @@ export function MealTracker() {
     }
   };
 
-  const handleWater = async (next: number) => {
+  const handleAddWater = async (amountMl = waterInputMl) => {
     if (!mealLog) return;
+    const safeAmount = Math.round(Number(amountMl) || 0);
+    if (!safeAmount || safeAmount < 1) return;
     const previous = mealLog;
     setSaveStatus("saving");
-    setMealLog({ ...mealLog, waterGlasses: next });
+    setMealLog({
+      ...mealLog,
+      waterMl: currentWaterMl + safeAmount,
+      waterGlasses: Math.round(((currentWaterMl + safeAmount) / 250) * 10) / 10,
+    });
     try {
-      const updated = await updateWater(dateKey, next);
+      const updated = await addWaterIntake(dateKey, safeAmount);
       setMealLog(updated);
       setSaveStatus("saved");
     } catch (err) {
@@ -764,16 +775,35 @@ export function MealTracker() {
                 <h3 className="text-gray-900" style={{ fontSize: "1rem", fontWeight: 700 }}>Nước uống</h3>
                 <Droplets className="h-5 w-5 text-blue-500" />
               </div>
-              <div className="mb-4 grid grid-cols-4 gap-2">
-                {Array.from({ length: targets.waterGlasses }).map((_, i) => (
-                  <button key={i} onClick={() => handleWater(i < mealLog.waterGlasses ? i : i + 1)} className={`flex aspect-square items-center justify-center rounded-xl transition-all ${i < mealLog.waterGlasses ? "bg-blue-500 text-white shadow-sm" : "bg-gray-100 text-gray-400 hover:bg-blue-100"}`}>
-                    <Droplets className="h-5 w-5" />
+              <div className="rounded-xl border border-blue-100 bg-blue-50 p-3 text-center">
+                <div className="mb-3 h-2 overflow-hidden rounded-full bg-white">
+                  <div className="h-full rounded-full bg-blue-500 transition-all" style={{ width: `${waterProgressPct}%` }} />
+                </div>
+                <p className="text-blue-700" style={{ fontSize: "1.2rem", fontWeight: 800 }}>{currentWaterMl.toLocaleString("vi-VN")}ml</p>
+                <p className="text-blue-500" style={{ fontSize: "0.78rem" }}>
+                  Mục tiêu {waterTargetMl.toLocaleString("vi-VN")}ml · còn {waterRemainingMl.toLocaleString("vi-VN")}ml
+                </p>
+              </div>
+              <div className="mt-4 grid grid-cols-4 gap-2">
+                {[250, 330, 500, 700].map((amount) => (
+                  <button key={amount} onClick={() => void handleAddWater(amount)} className="rounded-xl border border-blue-100 bg-blue-50 px-2 py-2 text-blue-700 transition hover:bg-blue-100" style={{ fontSize: "0.78rem", fontWeight: 800 }}>
+                    +{amount}ml
                   </button>
                 ))}
               </div>
-              <div className="rounded-xl border border-blue-100 bg-blue-50 p-3 text-center">
-                <p className="text-blue-700" style={{ fontSize: "1.2rem", fontWeight: 800 }}>{mealLog.waterGlasses * 250}ml</p>
-                <p className="text-blue-500" style={{ fontSize: "0.78rem" }}>{mealLog.waterGlasses}/{targets.waterGlasses} ly · còn {(targets.waterGlasses - mealLog.waterGlasses) * 250}ml</p>
+              <div className="mt-3 flex gap-2">
+                <input
+                  type="number"
+                  min={1}
+                  max={3000}
+                  value={waterInputMl}
+                  onChange={(event) => setWaterInputMl(Number(event.target.value))}
+                  className="min-w-0 flex-1 rounded-xl border border-gray-200 bg-gray-50 px-3 py-2 outline-none focus:border-blue-400"
+                  style={{ fontSize: "0.85rem" }}
+                />
+                <button onClick={() => void handleAddWater()} className="rounded-xl bg-blue-600 px-4 py-2 text-white transition hover:bg-blue-700" style={{ fontSize: "0.85rem", fontWeight: 800 }}>
+                  Ghi
+                </button>
               </div>
             </div>
 

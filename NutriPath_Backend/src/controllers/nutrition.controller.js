@@ -8,6 +8,7 @@ export function registerNutritionRoutes(ctx) {
     applyChatIntent,
     applyNutritionCalculationToMember,
     applyWaterEquivalent,
+    applyWaterEquivalentMl,
     assertMealItemQuota,
     assertMealLogAccess,
     assertMemberSessionAccess,
@@ -78,13 +79,16 @@ export function registerNutritionRoutes(ctx) {
     getChatAdminKey,
     getClientIp,
     getDrinkWaterEquivalentGlasses,
+    getDrinkWaterEquivalentMl,
     getFatPct,
     getFood,
     getGeminiRateState,
     getGoalDelta,
+    getLogWaterMl,
     getMealHistoryDayDelta,
     getMealItemCount,
     getMember,
+    getMemberWaterTargetMl,
     getMemberChatHistory,
     getMembershipAccess,
     getNormalizedTier,
@@ -161,6 +165,7 @@ export function registerNutritionRoutes(ctx) {
     sendJson,
     serviceUnavailable,
     sessions,
+    setLogWaterMl,
     splitPath,
     startOfWeek,
     summarizeMealLog,
@@ -174,7 +179,9 @@ export function registerNutritionRoutes(ctx) {
     upsertNotification,
     validateSafeChatInput,
     validateSafeChatOutput,
-    verifyPassword
+    verifyPassword,
+    waterGlassesToMl,
+    waterMlToGlasses,
   } = ctx;
 
   route("GET", "/api/foods", async ({ req, store, url }) => {
@@ -419,11 +426,31 @@ export function registerNutritionRoutes(ctx) {
     if (!member) notFound(req, "Member not found.");
     assertMealLogAccess(member, params.date);
     const log = ensureMealLog(store, member.id, params.date);
-    requireFields(body, ["waterGlasses"]);
-    log.waterGlasses = Math.max(0, Number(body.waterGlasses));
+    if (body.addWaterMl === undefined && body.waterMl === undefined && body.waterGlasses === undefined) {
+      badRequest("Vui lòng nhập lượng nước theo ml.");
+    }
+    if (body.addWaterMl !== undefined) {
+      const addWaterMl = Number(body.addWaterMl);
+      if (!Number.isFinite(addWaterMl) || addWaterMl <= 0 || addWaterMl > 3000) {
+        badRequest("Lượng nước mỗi lần ghi phải từ 1ml đến 3000ml.");
+      }
+      setLogWaterMl(log, getLogWaterMl(log) + addWaterMl);
+    } else if (body.waterMl !== undefined) {
+      const waterMl = Number(body.waterMl);
+      if (!Number.isFinite(waterMl) || waterMl < 0 || waterMl > 10000) {
+        badRequest("Tổng lượng nước trong ngày phải từ 0ml đến 10000ml.");
+      }
+      setLogWaterMl(log, waterMl);
+    } else {
+      const waterGlasses = Number(body.waterGlasses);
+      if (!Number.isFinite(waterGlasses) || waterGlasses < 0 || waterGlasses > 40) {
+        badRequest("Tổng lượng nước trong ngày không hợp lệ.");
+      }
+      setLogWaterMl(log, waterGlassesToMl(waterGlasses));
+    }
     updateWaterGoalStatus(log, member);
-    if (log.waterGlasses >= (member.waterTargetGlasses || 8)) {
-      upsertNotification(store, member.id, "water-done", "Đã đạt mục tiêu nước", `Bạn đã hoàn thành ${log.waterGlasses}/${member.waterTargetGlasses || 8} ly nước trong ngày ${params.date}.`, {
+    if (getLogWaterMl(log) >= getMemberWaterTargetMl(member)) {
+      upsertNotification(store, member.id, "water-done", "Đã đạt mục tiêu nước", `Bạn đã hoàn thành ${getLogWaterMl(log).toLocaleString("vi-VN")}/${getMemberWaterTargetMl(member).toLocaleString("vi-VN")}ml nước trong ngày ${params.date}.`, {
         key: `${member.id}:water-done:${params.date}`,
         actionHref: "/dashboard",
       });
@@ -448,7 +475,8 @@ export function registerNutritionRoutes(ctx) {
     const quantity = Math.max(0.1, Number(body.quantity || 1));
     const category = body.category || source?.category || null;
     const portion = body.portion || source?.portion || "1 phần";
-    const waterEquivalentGlasses = getDrinkWaterEquivalentGlasses({ ...source, ...body, category, portion }, quantity);
+    const waterEquivalentMl = getDrinkWaterEquivalentMl({ ...source, ...body, category, portion }, quantity);
+    const waterEquivalentGlasses = waterMlToGlasses(waterEquivalentMl);
     const item = {
       id: store.nextId("item", meal.items),
       foodId: source?.id || body.foodId || null,
@@ -460,12 +488,13 @@ export function registerNutritionRoutes(ctx) {
       fat: round(Number(body.fat ?? source?.fat ?? 0) * quantity, 1),
       portion,
       quantity,
+      waterEquivalentMl,
       waterEquivalentGlasses,
     };
     if (!item.name) badRequest("Either foodId or name is required.");
     assertMealItemQuota(member, log);
     meal.items.push(item);
-    applyWaterEquivalent(log, member, waterEquivalentGlasses);
+    applyWaterEquivalentMl(log, member, waterEquivalentMl);
     log.goals = log.goals.map((goal) => goal.id === "journal" ? { ...goal, done: true } : goal);
     upsertNotification(store, member.id, "meal-added", "Đã thêm món vào nhật ký", `${item.name} đã được ghi vào ${meal.name} ngày ${params.date}.`, {
       key: `${member.id}:meal-added:${params.date}`,
@@ -485,9 +514,9 @@ export function registerNutritionRoutes(ctx) {
     const item = meal.items.find((entry) => entry.id === params.itemId);
     if (!item) notFound(req, "Meal item not found.");
     const source = item.foodId ? getFood(store.db, item.foodId) : null;
-    const waterEquivalentGlasses = Number(item.waterEquivalentGlasses) || getDrinkWaterEquivalentGlasses({ ...source, ...item, category: item.category || source?.category }, item.quantity);
+    const waterEquivalentMl = Number(item.waterEquivalentMl) || waterGlassesToMl(Number(item.waterEquivalentGlasses) || getDrinkWaterEquivalentGlasses({ ...source, ...item, category: item.category || source?.category }, item.quantity));
     meal.items = meal.items.filter((item) => item.id !== params.itemId);
-    applyWaterEquivalent(log, member, -waterEquivalentGlasses);
+    applyWaterEquivalentMl(log, member, -waterEquivalentMl);
     await saveMealLogChanges(store, log);
     return mealLogResource(req, log, member);
   });

@@ -241,8 +241,8 @@ export function registerMembersRoutes(ctx) {
     }
     if (body.waterTargetGlasses !== undefined) {
       const target = Number(body.waterTargetGlasses);
-      if (!Number.isFinite(target) || target < 1 || target > 20) badRequest("Mục tiêu nước phải nằm trong khoảng 1-20 ly/ngày.");
-      body.waterTargetGlasses = Math.round(target);
+      if (!Number.isFinite(target) || target < 2 || target > 20) badRequest("Mục tiêu nước phải nằm trong khoảng 500-5000ml/ngày.");
+      body.waterTargetGlasses = Math.round(target * 10) / 10;
     }
 
     for (const [key, value] of Object.entries(body || {})) {

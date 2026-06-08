@@ -454,30 +454,30 @@ INSERT INTO dbo.Foods (id, name, category, calories, protein, carbs, fat, portio
 (N'food-013', N'Bún bò Huế tô nhỏ', N'Bún', 380, 24, 50, 8, N'1 tô nhỏ (450ml)'),
 (N'food-014', N'Bánh mì kẹp thịt', N'Bánh mì', 320, 18, 38, 10, N'1 ổ (120g)'),
 (N'food-015', N'Xôi đậu xanh', N'Xôi', 280, 8, 52, 4, N'1 gói (200g)'),
-(N'food-101', N'Coca-Cola lon', N'Đồ uống', 139, 0, 35, 0, N'1 lon (330ml)'),
-(N'food-102', N'Pepsi lon', N'Đồ uống', 141, 0, 35, 0, N'1 lon (330ml)'),
-(N'food-103', N'7Up lon', N'Đồ uống', 140, 0, 35, 0, N'1 lon (330ml)'),
-(N'food-104', N'Sprite lon', N'Đồ uống', 140, 0, 35, 0, N'1 lon (330ml)'),
-(N'food-105', N'Sting dâu chai', N'Đồ uống', 198, 0, 49, 0, N'1 chai (330ml)'),
-(N'food-106', N'Revive chai', N'Đồ uống', 120, 0, 30, 0, N'1 chai (500ml)'),
-(N'food-107', N'Number 1 chai', N'Đồ uống', 165, 0, 41, 0, N'1 chai (330ml)'),
-(N'food-108', N'C2 trà xanh chai', N'Đồ uống', 120, 0, 30, 0, N'1 chai (455ml)'),
-(N'food-109', N'Trà xanh Không Độ chai', N'Đồ uống', 140, 0, 35, 0, N'1 chai (455ml)'),
-(N'food-110', N'Twister cam chai', N'Đồ uống', 150, 0, 36, 0, N'1 chai (320ml)'),
-(N'food-111', N'Trà sữa trân châu size M', N'Đồ uống', 450, 6, 72, 14, N'1 ly size M (500ml)'),
-(N'food-112', N'Trà sữa trân châu size L', N'Đồ uống', 620, 8, 98, 20, N'1 ly size L (700ml)'),
-(N'food-113', N'Trà sữa matcha size M', N'Đồ uống', 420, 7, 66, 13, N'1 ly size M (500ml)'),
-(N'food-114', N'Trà sữa matcha size L', N'Đồ uống', 590, 9, 92, 18, N'1 ly size L (700ml)'),
-(N'food-115', N'Trà sữa ít đường size M', N'Đồ uống', 330, 6, 50, 11, N'1 ly size M (500ml)'),
-(N'food-116', N'Trà sữa ít đường size L', N'Đồ uống', 470, 8, 72, 16, N'1 ly size L (700ml)'),
-(N'food-117', N'Trà ô long sữa size M', N'Đồ uống', 380, 6, 58, 12, N'1 ly size M (500ml)'),
-(N'food-118', N'Trà ô long sữa size L', N'Đồ uống', 540, 8, 82, 17, N'1 ly size L (700ml)'),
-(N'food-119', N'Trà đào cam sả size M', N'Đồ uống', 180, 0, 44, 0, N'1 ly size M (500ml)'),
-(N'food-120', N'Trà đào cam sả size L', N'Đồ uống', 250, 0, 61, 0, N'1 ly size L (700ml)'),
-(N'food-121', N'Trà tắc mật ong size M', N'Đồ uống', 150, 0, 38, 0, N'1 ly size M (500ml)'),
-(N'food-122', N'Trà tắc mật ong size L', N'Đồ uống', 210, 0, 52, 0, N'1 ly size L (700ml)'),
-(N'food-123', N'Trà chanh size M', N'Đồ uống', 120, 0, 30, 0, N'1 ly size M (500ml)'),
-(N'food-124', N'Trà chanh size L', N'Đồ uống', 170, 0, 43, 0, N'1 ly size L (700ml)');
+(N'food-101', N'Coca-Cola Zero lon', N'Đồ uống', 0, 0, 0, 0, N'1 lon (330ml)'),
+(N'food-102', N'Pepsi Black Zero lon', N'Đồ uống', 0, 0, 0, 0, N'1 lon (330ml)'),
+(N'food-103', N'7Up Free lon', N'Đồ uống', 0, 0, 0, 0, N'1 lon (330ml)'),
+(N'food-104', N'Sprite Zero lon', N'Đồ uống', 0, 0, 0, 0, N'1 lon (330ml)'),
+(N'food-105', N'Soda chanh không đường', N'Đồ uống', 5, 0, 1, 0, N'1 ly (330ml)'),
+(N'food-106', N'Nước điện giải không đường', N'Đồ uống', 10, 0, 2, 0, N'1 chai (500ml)'),
+(N'food-107', N'Nước khoáng có gas không đường', N'Đồ uống', 0, 0, 0, 0, N'1 chai (500ml)'),
+(N'food-108', N'Trà xanh không đường chai', N'Đồ uống', 0, 0, 0, 0, N'1 chai (455ml)'),
+(N'food-109', N'Trà ô long không đường chai', N'Đồ uống', 0, 0, 0, 0, N'1 chai (455ml)'),
+(N'food-110', N'Kombucha ít đường', N'Đồ uống', 45, 0, 10, 0, N'1 chai (330ml)'),
+(N'food-111', N'Trà sữa ô long healthy size M', N'Đồ uống', 160, 6, 22, 5, N'1 ly size M (500ml)'),
+(N'food-112', N'Trà sữa ô long healthy size L', N'Đồ uống', 220, 8, 32, 7, N'1 ly size L (700ml)'),
+(N'food-113', N'Trà sữa matcha ít calo size M', N'Đồ uống', 180, 8, 24, 5, N'1 ly size M (500ml)'),
+(N'food-114', N'Trà sữa matcha ít calo size L', N'Đồ uống', 250, 10, 36, 7, N'1 ly size L (700ml)'),
+(N'food-115', N'Trà sữa hạt chia ít calo size M', N'Đồ uống', 170, 6, 24, 6, N'1 ly size M (500ml)'),
+(N'food-116', N'Trà sữa hạt chia ít calo size L', N'Đồ uống', 235, 8, 34, 8, N'1 ly size L (700ml)'),
+(N'food-117', N'Trà đen sữa tươi không đường size M', N'Đồ uống', 120, 7, 14, 4, N'1 ly size M (500ml)'),
+(N'food-118', N'Trà đen sữa tươi không đường size L', N'Đồ uống', 170, 9, 20, 6, N'1 ly size L (700ml)'),
+(N'food-119', N'Trà đào cam sả ít đường size M', N'Đồ uống', 70, 0, 17, 0, N'1 ly size M (500ml)'),
+(N'food-120', N'Trà đào cam sả ít đường size L', N'Đồ uống', 100, 0, 24, 0, N'1 ly size L (700ml)'),
+(N'food-121', N'Trà tắc mật ong ít ngọt size M', N'Đồ uống', 60, 0, 15, 0, N'1 ly size M (500ml)'),
+(N'food-122', N'Trà tắc mật ong ít ngọt size L', N'Đồ uống', 90, 0, 22, 0, N'1 ly size L (700ml)'),
+(N'food-123', N'Trà chanh không đường size M', N'Đồ uống', 10, 0, 2, 0, N'1 ly size M (500ml)'),
+(N'food-124', N'Trà chanh không đường size L', N'Đồ uống', 15, 0, 3, 0, N'1 ly size L (700ml)');
 
 INSERT INTO dbo.MealLogs (id, member_id, log_date, water_glasses, steps, burned_calories, active_minutes) VALUES
 (N'log-mem-001-2026-03-13', N'mem-001', '2026-03-13', 5, 6420, 320, 45);
@@ -553,6 +553,35 @@ INSERT INTO dbo.RecipeSteps (recipe_id, step_order, instruction) VALUES
 (N'recipe-007', 1, N'Nhặt và rửa rau muống.'), (N'recipe-007', 2, N'Phi tỏi thơm.'), (N'recipe-007', 3, N'Xào rau trên lửa lớn, nêm vừa ăn.'),
 (N'recipe-008', 1, N'Chiên hoặc áp chảo đậu phụ.'), (N'recipe-008', 2, N'Xào cà chua thành sốt.'), (N'recipe-008', 3, N'Cho đậu vào đảo nhẹ, thêm hành lá.');
 
+INSERT INTO dbo.Recipes (id, name, image_url, time_minutes, calories, difficulty, servings, protein, carbs, fat, fiber) VALUES
+(N'recipe-009', N'Trà Sữa Ô Long Healthy Ít Calo', N'https://images.unsplash.com/photo-1558857563-b371033873b8?auto=format&fit=crop&w=800&q=80', 15, 160, 1, 1, 6, 22, 5, 4),
+(N'recipe-010', N'Trà Đào Cam Sả Ít Đường', N'https://images.unsplash.com/photo-1556679343-c7306c1976bc?auto=format&fit=crop&w=800&q=80', 12, 70, 1, 1, 0, 17, 0, 1),
+(N'recipe-011', N'Matcha Latte Không Đường', N'https://images.unsplash.com/photo-1536256263959-770b48d82b0a?auto=format&fit=crop&w=800&q=80', 8, 140, 1, 1, 4, 12, 7, 2);
+
+INSERT INTO dbo.RecipeTags (recipe_id, tag) VALUES
+(N'recipe-009', N'Đồ uống healthy'), (N'recipe-009', N'Ít calo'), (N'recipe-009', N'Trà sữa'),
+(N'recipe-010', N'Đồ uống healthy'), (N'recipe-010', N'Ít đường'), (N'recipe-010', N'Trà trái cây'),
+(N'recipe-011', N'Đồ uống healthy'), (N'recipe-011', N'Matcha'), (N'recipe-011', N'Ít calo');
+
+INSERT INTO dbo.RecipeIngredients (recipe_id, name, amount, sort_order) VALUES
+(N'recipe-009', N'Trà ô long túi lọc', N'2 gói', 1), (N'recipe-009', N'Sữa tươi không đường', N'150ml', 2), (N'recipe-009', N'Đường ăn kiêng hoặc erythritol', N'1-2 muỗng cà phê', 3), (N'recipe-009', N'Hạt chia đã ngâm', N'1 muỗng canh', 4),
+(N'recipe-010', N'Trà đen', N'250ml', 1), (N'recipe-010', N'Đào ngâm ít đường', N'2 lát', 2), (N'recipe-010', N'Cam tươi', N'2 lát', 3), (N'recipe-010', N'Sả đập dập', N'1 cây', 4),
+(N'recipe-011', N'Bột matcha nguyên chất', N'2g', 1), (N'recipe-011', N'Nước nóng', N'60ml', 2), (N'recipe-011', N'Sữa hạnh nhân không đường', N'220ml', 3), (N'recipe-011', N'Đường ăn kiêng', N'tùy chọn', 4);
+
+INSERT INTO dbo.RecipeSteps (recipe_id, step_order, instruction) VALUES
+(N'recipe-009', 1, N'Ủ trà ô long với 250ml nước nóng khoảng 90 độ C trong 5 phút, sau đó bỏ túi trà và để nguội còn hơi ấm.'),
+(N'recipe-009', 2, N'Khuấy sữa tươi không đường với đường ăn kiêng cho tan hoàn toàn, nếm nhẹ để giữ vị ngọt thanh.'),
+(N'recipe-009', 3, N'Cho trà, sữa và đá vào bình lắc, lắc 10-15 giây đến khi lạnh đều và có lớp bọt nhẹ.'),
+(N'recipe-009', 4, N'Rót ra ly, thêm hạt chia đã ngâm, khuấy đều và dùng trong ngày để giữ hương trà thơm nhất.'),
+(N'recipe-010', 1, N'Ủ trà đen với sả trong 5 phút để lấy mùi thơm, sau đó lọc bỏ bã trà và sả.'),
+(N'recipe-010', 2, N'Cho đào, cam và một ít đá vào ly, dằm rất nhẹ để tinh dầu cam hòa vào trà.'),
+(N'recipe-010', 3, N'Rót trà đã nguội vào ly, khuấy đều và chỉ thêm 1 muỗng cà phê mật ong nếu cần vị ngọt.'),
+(N'recipe-010', 4, N'Uống lạnh trong 1-2 giờ để giữ hương cam sả tươi, hạn chế thêm syrup để không tăng calo.'),
+(N'recipe-011', 1, N'Rây bột matcha vào bát nhỏ để tránh vón, thêm 60ml nước nóng khoảng 80 độ C.'),
+(N'recipe-011', 2, N'Dùng chổi matcha hoặc phới nhỏ khuấy nhanh theo hình chữ W đến khi mặt trà mịn và có bọt.'),
+(N'recipe-011', 3, N'Cho sữa hạnh nhân không đường và đá vào ly, rót matcha lên trên để tạo lớp màu đẹp.'),
+(N'recipe-011', 4, N'Khuấy nhẹ trước khi uống, chỉ thêm đường ăn kiêng nếu cần để giữ tổng calo thấp.');
+
 INSERT INTO dbo.Payments (id, member_id, invoice, plan_id, billing, payment_method, amount, currency, status, paid_at) VALUES
 (N'pay-001', N'mem-001', N'INV-2026-031', N'svip', N'monthly', N'card', 199000, N'VND', N'paid', '2026-03-13T09:00:00'),
 (N'pay-002', N'mem-001', N'INV-2026-021', N'svip', N'monthly', N'card', 199000, N'VND', N'paid', '2026-02-13T09:00:00'),
@@ -574,7 +603,7 @@ INSERT INTO dbo.ChatCannedResponses (prompt, response) VALUES
 (N'Tôi nên ăn gì hôm nay?', N'Dựa trên mục tiêu của bạn, tôi gợi ý: sáng cháo gà gừng, trưa cơm gạo lứt với gà luộc và rau, tối canh chua cá lóc. Tổng khoảng 1,200-1,500 kcal tùy khẩu phần.'),
 (N'Tính calo bữa sáng', N'Bạn gửi tên món và khẩu phần, tôi sẽ ước tính calo. Ví dụ: phở bò tô nhỏ khoảng 320 kcal, cháo gà gừng khoảng 280 kcal.'),
 (N'Gợi ý món Việt healthy', N'Ba món Việt lành mạnh: gỏi cuốn tôm thịt, canh chua cá lóc, đậu phụ sốt cà chua. Các món này giàu protein hoặc chất xơ và dễ kiểm soát khẩu phần.'),
-(N'Thực đơn giảm cân thuần Việt', N'Một ngày mẫu: sáng cháo gà, trưa cơm gạo lứt + cá kho + rau luộc, tối canh rau + đậu phụ. Ưu tiên nước lọc, hạn chế nước ngọt và đồ chiên.');
+(N'Thực đơn giảm cân thuần Việt', N'Một ngày mẫu: sáng cháo gà, trưa cơm gạo lứt + cá kho + rau luộc, tối canh rau + đậu phụ. Ưu tiên nước lọc, trà không đường hoặc nước 0 calo; hạn chế nước ngọt có đường và đồ chiên.');
 
 INSERT INTO dbo.AdminUsers (id, name, email, role, status, joined_at, plan_name) VALUES
 (N'U001', N'Nguyễn Thị Mai', N'mai.nt@example.com', N'User', N'active', '2026-03-10', N'Free'),

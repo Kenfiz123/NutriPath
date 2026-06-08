@@ -31,6 +31,13 @@ function authHeaders(token) {
   return { Authorization: `Bearer ${token}` };
 }
 
+function localDateString(date = new Date()) {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
 try {
   const email = `flow-${Date.now()}@example.com`;
   const password = "Flow@123456";
@@ -54,28 +61,39 @@ try {
   const { json: me } = await request("/api/auth/me", { headers });
   assert.equal(me.member.id, memberId);
 
-  const today = "2026-06-04";
+  const today = localDateString();
   const { json: mealLog } = await request(`/api/members/${memberId}/meal-logs/${today}`, { headers });
   assert.equal(mealLog.memberId, memberId);
 
   const { json: drinks } = await request("/api/foods?search=tra%20sua&limit=10");
   const milkTea = drinks._embedded.foods.find((food) => food.id === "food-111");
   assert.ok(milkTea, "Expected seeded milk tea food-111.");
+  assert.match(milkTea.name, /healthy|ít calo/i);
+  assert.equal(milkTea.volumeMl, 500);
 
   const { json: withDrink } = await request(`/api/members/${memberId}/meal-logs/${today}/meals/snack/items`, {
     method: "POST",
     headers,
     body: JSON.stringify({ foodId: milkTea.id, quantity: 1 }),
   });
+  assert.equal(withDrink.waterMl, 500);
   assert.equal(withDrink.waterGlasses, 2);
   const addedItem = withDrink.meals.find((meal) => meal.id === "snack").items.at(-1);
+  assert.equal(addedItem.waterEquivalentMl, 500);
   assert.equal(addedItem.waterEquivalentGlasses, 2);
+
+  const { json: afterManualWater } = await request(`/api/members/${memberId}/meal-logs/${today}/water`, {
+    method: "PATCH",
+    headers,
+    body: JSON.stringify({ addWaterMl: 330 }),
+  });
+  assert.equal(afterManualWater.waterMl, 830);
 
   const { json: afterDelete } = await request(`/api/members/${memberId}/meal-logs/${today}/meals/snack/items/${addedItem.id}`, {
     method: "DELETE",
     headers,
   });
-  assert.equal(afterDelete.waterGlasses, 0);
+  assert.equal(afterDelete.waterMl, 330);
 
   const { json: ingredients } = await request("/api/nutrition/custom-food/ingredients?search=uc%20ga");
   assert.ok(Array.isArray(ingredients._embedded.ingredients));
