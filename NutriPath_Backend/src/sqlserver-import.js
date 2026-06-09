@@ -56,6 +56,16 @@ export function sqlLiteral(value) {
   return `N'${String(value).replace(/'/g, "''")}'`;
 }
 
+function parseJsonArray(value) {
+  if (!value) return [];
+  try {
+    const parsed = JSON.parse(value);
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+}
+
 export async function ensureSqlServerAuthSchema() {
   const database = process.env.NUTRIPATH_SQL_DATABASE || "NutriPath";
   await execSql(database, `
@@ -69,6 +79,30 @@ BEGIN
     password_salt NVARCHAR(255) NOT NULL,
     created_at DATETIME2 NOT NULL DEFAULT SYSUTCDATETIME(),
     CONSTRAINT FK_AuthCredentials_Members FOREIGN KEY (member_id) REFERENCES dbo.Members(id)
+  );
+END;
+
+IF OBJECT_ID(N'dbo.WorkoutEntries', N'U') IS NULL AND OBJECT_ID(N'dbo.MealLogs', N'U') IS NOT NULL
+BEGIN
+  CREATE TABLE dbo.WorkoutEntries (
+    id NVARCHAR(60) NOT NULL PRIMARY KEY,
+    meal_log_id NVARCHAR(80) NOT NULL,
+    workout_type NVARCHAR(40) NOT NULL,
+    label NVARCHAR(160) NOT NULL,
+    duration_minutes INT NOT NULL,
+    calories INT NOT NULL,
+    met DECIMAL(5, 1) NULL,
+    intensity NVARCHAR(30) NULL,
+    distance_km DECIMAL(8, 2) NULL,
+    speed_kmh DECIMAL(8, 2) NULL,
+    incline_pct DECIMAL(5, 2) NULL,
+    source NVARCHAR(80) NULL,
+    confidence NVARCHAR(30) NULL,
+    note NVARCHAR(1000) NULL,
+    assumptions_json NVARCHAR(MAX) NULL,
+    user_notes NVARCHAR(1000) NULL,
+    recorded_at DATETIME2 NOT NULL DEFAULT SYSUTCDATETIME(),
+    CONSTRAINT FK_WorkoutEntries_MealLogs FOREIGN KEY (meal_log_id) REFERENCES dbo.MealLogs(id)
   );
 END;
 `);
@@ -256,6 +290,7 @@ WHEN NOT MATCHED THEN INSERT (id, member_id, log_date, water_glasses, steps, bur
 
 DELETE FROM dbo.MealItems WHERE meal_log_id = ${sqlLiteral(log.id)};
 DELETE FROM dbo.Goals WHERE meal_log_id = ${sqlLiteral(log.id)};
+DELETE FROM dbo.WorkoutEntries WHERE meal_log_id = ${sqlLiteral(log.id)};
 DELETE FROM dbo.MealSections WHERE meal_log_id = ${sqlLiteral(log.id)};
 
 ${(log.meals || []).map((meal) => `
@@ -272,6 +307,21 @@ VALUES (${sqlLiteral(item.id)}, ${sqlLiteral(log.id)}, ${sqlLiteral(meal.id)}, $
 ${(log.goals || []).map((goal) => `
 INSERT INTO dbo.Goals (id, meal_log_id, label, done)
 VALUES (${sqlLiteral(goal.id)}, ${sqlLiteral(log.id)}, ${sqlLiteral(goal.label)}, ${goal.done ? 1 : 0});
+`).join("\n")}
+
+${(log.activity?.workouts || []).map((workout) => `
+INSERT INTO dbo.WorkoutEntries (
+  id, meal_log_id, workout_type, label, duration_minutes, calories, met, intensity,
+  distance_km, speed_kmh, incline_pct, source, confidence, note, assumptions_json, user_notes, recorded_at
+)
+VALUES (
+  ${sqlLiteral(workout.id)}, ${sqlLiteral(log.id)}, ${sqlLiteral(workout.type)}, ${sqlLiteral(workout.label)},
+  ${sqlLiteral(workout.durationMinutes || 0)}, ${sqlLiteral(workout.calories || 0)}, ${sqlLiteral(workout.met)},
+  ${sqlLiteral(workout.intensity)}, ${sqlLiteral(workout.distanceKm)}, ${sqlLiteral(workout.speedKmh)},
+  ${sqlLiteral(workout.inclinePct)}, ${sqlLiteral(workout.source)}, ${sqlLiteral(workout.confidence)},
+  ${sqlLiteral(workout.note)}, ${sqlLiteral(JSON.stringify(workout.assumptions || []))},
+  ${sqlLiteral(workout.userNotes)}, ${sqlLiteral(workout.recordedAt || new Date().toISOString())}
+);
 `).join("\n")}
 
 COMMIT TRANSACTION;
@@ -350,6 +400,7 @@ export async function loadSqlServerData() {
     mealSections,
     mealItems,
     goals,
+    workoutEntries,
     weeklyProgress,
     recipesRaw,
     recipeTags,
@@ -392,6 +443,12 @@ export async function loadSqlServerData() {
       food_id AS foodId, name, calories, protein, carbs, fat, portion, quantity
       FROM dbo.MealItems FOR JSON PATH;`),
     queryJson(database, "SELECT id, meal_log_id AS mealLogId, label, CAST(done AS bit) AS done FROM dbo.Goals FOR JSON PATH;"),
+    queryJson(database, `SELECT id, meal_log_id AS mealLogId, workout_type AS type, label,
+      duration_minutes AS durationMinutes, calories, met, intensity, distance_km AS distanceKm,
+      speed_kmh AS speedKmh, incline_pct AS inclinePct, source, confidence, note,
+      assumptions_json AS assumptionsJson, user_notes AS userNotes,
+      CONVERT(varchar(33), recorded_at, 126) AS recordedAt
+      FROM dbo.WorkoutEntries FOR JSON PATH;`),
     queryJson(database, `SELECT member_id AS memberId, CONVERT(varchar(10), progress_date, 23) AS date,
       day_label AS day, consumed, target FROM dbo.WeeklyProgress FOR JSON PATH;`),
     queryJson(database, `SELECT id, name, image_url AS image, time_minutes AS timeMinutes, calories,
@@ -504,42 +561,71 @@ export async function loadSqlServerData() {
     },
   }));
 
-  const mealLogs = mealLogsRaw.map((log) => ({
-    id: log.id,
-    memberId: log.memberId,
-    date: log.date,
-    waterGlasses: log.waterGlasses,
-    activity: {
-      steps: log.steps,
-      burnedCalories: log.burnedCalories,
-      activeMinutes: log.activeMinutes,
-    },
-    goals: goals
-      .filter((goal) => goal.mealLogId === log.id)
-      .map((goal) => ({ id: goal.id, label: goal.label, done: Boolean(goal.done) })),
-    meals: mealSections
-      .filter((section) => section.mealLogId === log.id)
-      .map((section) => ({
-        id: section.id,
-        name: section.name,
-        icon: section.icon,
-        targetKcal: section.targetKcal,
-        time: section.time,
-        items: mealItems
-          .filter((item) => item.mealLogId === log.id && item.mealSectionId === section.id)
-          .map((item) => ({
-            id: item.id,
-            foodId: item.foodId,
-            name: item.name,
-            calories: Number(item.calories),
-            protein: Number(item.protein),
-            carbs: Number(item.carbs),
-            fat: Number(item.fat),
-            portion: item.portion,
-            quantity: Number(item.quantity),
-          })),
-      })),
-  }));
+  const mealLogs = mealLogsRaw.map((log) => {
+    const workouts = workoutEntries
+      .filter((workout) => workout.mealLogId === log.id)
+      .map((workout) => ({
+        id: workout.id,
+        type: workout.type,
+        label: workout.label,
+        durationMinutes: Number(workout.durationMinutes),
+        calories: Number(workout.calories),
+        met: workout.met === null || workout.met === undefined ? null : Number(workout.met),
+        intensity: workout.intensity,
+        distanceKm: workout.distanceKm === null || workout.distanceKm === undefined ? null : Number(workout.distanceKm),
+        speedKmh: workout.speedKmh === null || workout.speedKmh === undefined ? null : Number(workout.speedKmh),
+        inclinePct: workout.inclinePct === null || workout.inclinePct === undefined ? null : Number(workout.inclinePct),
+        source: workout.source,
+        confidence: workout.confidence,
+        note: workout.note,
+        assumptions: parseJsonArray(workout.assumptionsJson),
+        userNotes: workout.userNotes,
+        recordedAt: workout.recordedAt,
+      }));
+    const workoutCalories = workouts.reduce((sum, workout) => sum + (Number(workout.calories) || 0), 0);
+    const workoutMinutes = workouts.reduce((sum, workout) => sum + (Number(workout.durationMinutes) || 0), 0);
+    return {
+      id: log.id,
+      memberId: log.memberId,
+      date: log.date,
+      waterGlasses: log.waterGlasses,
+      activity: {
+        steps: log.steps,
+        burnedCalories: log.burnedCalories,
+        activeMinutes: log.activeMinutes,
+        manualBurnedCalories: Math.max(0, Number(log.burnedCalories || 0) - workoutCalories),
+        manualActiveMinutes: Math.max(0, Number(log.activeMinutes || 0) - workoutMinutes),
+        workoutCalories,
+        workoutMinutes,
+        workouts,
+      },
+      goals: goals
+        .filter((goal) => goal.mealLogId === log.id)
+        .map((goal) => ({ id: goal.id, label: goal.label, done: Boolean(goal.done) })),
+      meals: mealSections
+        .filter((section) => section.mealLogId === log.id)
+        .map((section) => ({
+          id: section.id,
+          name: section.name,
+          icon: section.icon,
+          targetKcal: section.targetKcal,
+          time: section.time,
+          items: mealItems
+            .filter((item) => item.mealLogId === log.id && item.mealSectionId === section.id)
+            .map((item) => ({
+              id: item.id,
+              foodId: item.foodId,
+              name: item.name,
+              calories: Number(item.calories),
+              protein: Number(item.protein),
+              carbs: Number(item.carbs),
+              fat: Number(item.fat),
+              portion: item.portion,
+              quantity: Number(item.quantity),
+            })),
+        })),
+    };
+  });
 
   const recipes = recipesRaw.map((recipe) => ({
     id: recipe.id,

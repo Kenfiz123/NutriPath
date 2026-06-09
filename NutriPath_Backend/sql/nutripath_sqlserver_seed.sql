@@ -34,6 +34,7 @@ DROP TABLE IF EXISTS dbo.WeeklyProgress;
 DROP TABLE IF EXISTS dbo.Goals;
 DROP TABLE IF EXISTS dbo.MealItems;
 DROP TABLE IF EXISTS dbo.MealSections;
+DROP TABLE IF EXISTS dbo.WorkoutEntries;
 DROP TABLE IF EXISTS dbo.MealLogs;
 DROP TABLE IF EXISTS dbo.MemberNutritionProfiles;
 DROP TABLE IF EXISTS dbo.Foods;
@@ -173,6 +174,27 @@ CREATE TABLE dbo.MealLogs (
   active_minutes INT NOT NULL DEFAULT 0,
   CONSTRAINT UQ_MealLogs_Member_Date UNIQUE (member_id, log_date),
   CONSTRAINT FK_MealLogs_Members FOREIGN KEY (member_id) REFERENCES dbo.Members(id)
+);
+
+CREATE TABLE dbo.WorkoutEntries (
+  id NVARCHAR(60) NOT NULL PRIMARY KEY,
+  meal_log_id NVARCHAR(80) NOT NULL,
+  workout_type NVARCHAR(40) NOT NULL,
+  label NVARCHAR(160) NOT NULL,
+  duration_minutes INT NOT NULL,
+  calories INT NOT NULL,
+  met DECIMAL(5, 1) NULL,
+  intensity NVARCHAR(30) NULL,
+  distance_km DECIMAL(8, 2) NULL,
+  speed_kmh DECIMAL(8, 2) NULL,
+  incline_pct DECIMAL(5, 2) NULL,
+  source NVARCHAR(80) NULL,
+  confidence NVARCHAR(30) NULL,
+  note NVARCHAR(1000) NULL,
+  assumptions_json NVARCHAR(MAX) NULL,
+  user_notes NVARCHAR(1000) NULL,
+  recorded_at DATETIME2 NOT NULL DEFAULT SYSUTCDATETIME(),
+  CONSTRAINT FK_WorkoutEntries_MealLogs FOREIGN KEY (meal_log_id) REFERENCES dbo.MealLogs(id)
 );
 
 CREATE TABLE dbo.MealSections (
@@ -481,6 +503,15 @@ INSERT INTO dbo.Foods (id, name, category, calories, protein, carbs, fat, portio
 
 INSERT INTO dbo.MealLogs (id, member_id, log_date, water_glasses, steps, burned_calories, active_minutes) VALUES
 (N'log-mem-001-2026-03-13', N'mem-001', '2026-03-13', 5, 6420, 320, 45);
+
+INSERT INTO dbo.WorkoutEntries (
+  id, meal_log_id, workout_type, label, duration_minutes, calories, met, intensity,
+  distance_km, speed_kmh, incline_pct, source, confidence, note, assumptions_json, user_notes, recorded_at
+) VALUES
+(N'workout-001', N'log-mem-001-2026-03-13', N'cycling', N'Đạp xe ngoài trời', 45, 320, 6.8, N'moderate',
+  12.00, 16.00, NULL, N'formula', N'medium',
+  N'Ước tính bằng công thức MET theo cân nặng và thời lượng; thực tế có thể dao động theo nhịp tim, kỹ thuật và cường độ.',
+  N'["Cân nặng dùng để tính: 65kg.","Tốc độ ước tính: 16 km/h."]', N'', '2026-03-13T07:00:00');
 
 INSERT INTO dbo.MealSections (id, meal_log_id, name, icon, target_kcal, meal_time) VALUES
 (N'breakfast', N'log-mem-001-2026-03-13', N'Bữa sáng', N'sunrise', 450, '07:30'),

@@ -244,6 +244,36 @@ export interface MealSection {
   items: MealItem[];
 }
 
+export interface WorkoutEntry {
+  id: string;
+  type: string;
+  label: string;
+  durationMinutes: number;
+  calories: number;
+  met?: number;
+  intensity?: "light" | "moderate" | "hard" | "very_hard" | string;
+  distanceKm?: number | null;
+  speedKmh?: number | null;
+  inclinePct?: number | null;
+  source?: string;
+  confidence?: "low" | "medium" | "high" | string;
+  note?: string;
+  assumptions?: string[];
+  userNotes?: string;
+  recordedAt?: string;
+}
+
+export interface WorkoutInput {
+  type: string;
+  durationMinutes: number;
+  intensity?: "light" | "moderate" | "hard" | "very_hard";
+  distanceKm?: number | null;
+  speedKmh?: number | null;
+  inclinePct?: number | null;
+  notes?: string;
+  useAi?: boolean;
+}
+
 export interface MealLog {
   id: string;
   memberId: string;
@@ -266,9 +296,15 @@ export interface MealLog {
     steps: number;
     burnedCalories: number;
     activeMinutes: number;
+    manualBurnedCalories?: number;
+    manualActiveMinutes?: number;
+    workoutCalories?: number;
+    workoutMinutes?: number;
+    workouts?: WorkoutEntry[];
   };
   goals: Array<{ id: string; label: string; done: boolean }>;
   meals: MealSection[];
+  workouts?: WorkoutEntry[];
   summary: {
     totals: {
       calories: number;
@@ -989,6 +1025,23 @@ export function addWaterIntake(date: string, addWaterMl: number) {
     method: "PATCH",
     body: { addWaterMl },
   });
+}
+
+export function addWorkout(date: string, payload: WorkoutInput) {
+  return apiFetch<{ workout: WorkoutEntry; mealLog: MealLog }>(
+    `/api/members/${getCurrentMemberId()}/meal-logs/${encodeURIComponent(date)}/workouts`,
+    {
+      method: "POST",
+      body: payload,
+    },
+  );
+}
+
+export function deleteWorkout(date: string, workoutId: string) {
+  return apiFetch<MealLog>(
+    `/api/members/${getCurrentMemberId()}/meal-logs/${encodeURIComponent(date)}/workouts/${workoutId}`,
+    { method: "DELETE" },
+  );
 }
 
 export function getRecipes(search = "", tag = "Tất cả") {

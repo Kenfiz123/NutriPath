@@ -767,10 +767,49 @@ function assertMemberSessionAccess(req, store, memberId) {
   return { sessionMember, member };
 }
 
+function ensureWorkoutEntries(log) {
+  log.activity ??= { steps: 0, burnedCalories: 0, activeMinutes: 0 };
+  if (!Array.isArray(log.activity.workouts)) {
+    log.activity.workouts = [];
+    log.activity.manualBurnedCalories = Number(log.activity.manualBurnedCalories ?? log.activity.burnedCalories ?? 0) || 0;
+    log.activity.manualActiveMinutes = Number(log.activity.manualActiveMinutes ?? log.activity.activeMinutes ?? 0) || 0;
+  }
+  if (log.activity.manualBurnedCalories === undefined || log.activity.manualActiveMinutes === undefined) {
+    const workoutTotals = log.activity.workouts.reduce((sum, workout) => {
+      sum.calories += Number(workout.calories) || 0;
+      sum.minutes += Number(workout.durationMinutes) || 0;
+      return sum;
+    }, { calories: 0, minutes: 0 });
+    log.activity.manualBurnedCalories ??= Math.max(0, (Number(log.activity.burnedCalories) || 0) - workoutTotals.calories);
+    log.activity.manualActiveMinutes ??= Math.max(0, (Number(log.activity.activeMinutes) || 0) - workoutTotals.minutes);
+  }
+  log.activity.manualBurnedCalories = Math.max(0, round(Number(log.activity.manualBurnedCalories) || 0));
+  log.activity.manualActiveMinutes = Math.max(0, round(Number(log.activity.manualActiveMinutes) || 0));
+  return log.activity.workouts;
+}
+
+function syncWorkoutActivity(log) {
+  const workouts = ensureWorkoutEntries(log);
+  const workoutTotals = workouts.reduce((sum, workout) => {
+    sum.calories += Number(workout.calories) || 0;
+    sum.minutes += Number(workout.durationMinutes) || 0;
+    return sum;
+  }, { calories: 0, minutes: 0 });
+
+  log.activity.workoutCalories = round(workoutTotals.calories);
+  log.activity.workoutMinutes = round(workoutTotals.minutes);
+  log.activity.burnedCalories = round((Number(log.activity.manualBurnedCalories) || 0) + workoutTotals.calories);
+  log.activity.activeMinutes = round((Number(log.activity.manualActiveMinutes) || 0) + workoutTotals.minutes);
+  log.goals = (log.goals || []).map((goal) => goal.id === "exercise"
+    ? { ...goal, done: log.activity.burnedCalories > 0 || log.activity.activeMinutes > 0 }
+    : goal);
+  return log;
+}
+
 function ensureMealLog(store, memberId, date) {
   const { db } = store;
   let log = db.mealLogs.find((entry) => entry.memberId === memberId && entry.date === date);
-  if (log) return normalizeMealLogLabels(log);
+  if (log) return normalizeMealLogLabels(syncWorkoutActivity(log));
 
   const member = getMember(db, memberId);
   if (!member) notFound(null, "Member not found.");
@@ -781,7 +820,7 @@ function ensureMealLog(store, memberId, date) {
     date,
     waterMl: 0,
     waterGlasses: 0,
-    activity: { steps: 0, burnedCalories: 0, activeMinutes: 0 },
+    activity: { steps: 0, burnedCalories: 0, activeMinutes: 0, manualBurnedCalories: 0, manualActiveMinutes: 0, workouts: [] },
     goals: [
       { id: "calories", label: "Calo nạp vào", done: false },
       { id: "water", label: "Uống đủ nước", done: false },
@@ -796,7 +835,7 @@ function ensureMealLog(store, memberId, date) {
     ],
   };
   db.mealLogs.push(log);
-  return normalizeMealLogLabels(log);
+  return normalizeMealLogLabels(syncWorkoutActivity(log));
 }
 
 function summarizeMealLog(log, member) {
@@ -947,7 +986,7 @@ function makeEmptyReportLog(member, date) {
     memberId: member.id,
     date,
     waterGlasses: 0,
-    activity: { steps: 0, burnedCalories: 0, activeMinutes: 0 },
+    activity: { steps: 0, burnedCalories: 0, activeMinutes: 0, manualBurnedCalories: 0, manualActiveMinutes: 0, workouts: [] },
     goals: [],
     meals: Object.entries(mealDefaults).map(([id, meal]) => ({ id, ...meal, items: [] })),
   });
@@ -973,6 +1012,7 @@ function buildNutritionReport(req, db, member, options = {}) {
 
   const daily = dates.map((date) => {
     const log = logsByDate.get(date) || makeEmptyReportLog(member, date);
+    syncWorkoutActivity(log);
     const summary = summarizeMealLog(log, member);
     const mealCount = getMealItemCount(log);
     const target = summary.targets.calories;
@@ -1510,6 +1550,7 @@ function customFoodResource(req, food) {
 }
 
 function mealLogResource(req, log, member) {
+  syncWorkoutActivity(log);
   const summary = summarizeMealLog(log, member);
   const access = getMembershipAccess(member);
   const itemCount = getMealItemCount(log);
@@ -1537,11 +1578,18 @@ function mealLogResource(req, log, member) {
         },
       })),
     })),
+    workouts: (log.activity?.workouts || []).map((workout) => ({
+      ...workout,
+      _links: {
+        delete: link(req, `/api/members/${log.memberId}/meal-logs/${log.date}/workouts/${workout.id}`, "DELETE"),
+      },
+    })),
     _links: {
       self: link(req, `/api/members/${log.memberId}/meal-logs/${log.date}`),
       member: link(req, `/api/members/${log.memberId}`),
       dashboard: link(req, `/api/members/${log.memberId}/dashboard?date=${log.date}`),
       updateWater: link(req, `/api/members/${log.memberId}/meal-logs/${log.date}/water`, "PATCH"),
+      addWorkout: link(req, `/api/members/${log.memberId}/meal-logs/${log.date}/workouts`, "POST"),
     },
   };
 }
@@ -1780,6 +1828,181 @@ function calculateCalories(db, body) {
   results.warnings = buildCalculationWarnings(input, results);
 
   return { input, results };
+}
+
+const WORKOUT_TYPES = {
+  walking: { label: "Đi bộ nhanh", baseMet: 3.8 },
+  running: { label: "Chạy bộ", baseMet: 8.3 },
+  treadmill: { label: "Chạy bộ trên máy", baseMet: 8.3 },
+  cycling: { label: "Đạp xe", baseMet: 6.8 },
+  gym: { label: "Tập gym", baseMet: 5 },
+  hiit: { label: "HIIT", baseMet: 8.5 },
+  swimming: { label: "Bơi", baseMet: 6 },
+  yoga: { label: "Yoga", baseMet: 2.5 },
+  custom: { label: "Bài tập khác", baseMet: 5 },
+};
+
+const WORKOUT_INTENSITY_FACTORS = {
+  light: 0.82,
+  moderate: 1,
+  hard: 1.18,
+  very_hard: 1.35,
+};
+
+function caloriesFromMet(met, weightKg, durationMinutes) {
+  return Math.max(1, Math.round((Number(met) * 3.5 * Number(weightKg) * Number(durationMinutes)) / 200));
+}
+
+function workoutSpeedFromInput(body, durationMinutes) {
+  const explicitSpeed = Number(body.speedKmh);
+  if (Number.isFinite(explicitSpeed) && explicitSpeed > 0) return explicitSpeed;
+  const distanceKm = Number(body.distanceKm);
+  if (Number.isFinite(distanceKm) && distanceKm > 0 && durationMinutes > 0) {
+    return distanceKm / (durationMinutes / 60);
+  }
+  return 0;
+}
+
+function treadmillMet(speedKmh, inclinePct = 0) {
+  if (!speedKmh) return WORKOUT_TYPES.treadmill.baseMet;
+  const speedMetersPerMinute = (speedKmh * 1000) / 60;
+  const grade = Math.max(0, Number(inclinePct) || 0) / 100;
+  const vo2 = speedKmh >= 8
+    ? 0.2 * speedMetersPerMinute + 0.9 * speedMetersPerMinute * grade + 3.5
+    : 0.1 * speedMetersPerMinute + 1.8 * speedMetersPerMinute * grade + 3.5;
+  return Math.max(2.5, Math.min(18, vo2 / 3.5));
+}
+
+function runningMet(speedKmh) {
+  if (!speedKmh) return WORKOUT_TYPES.running.baseMet;
+  if (speedKmh < 8) return 6;
+  if (speedKmh < 9.7) return 8.3;
+  if (speedKmh < 11.3) return 9.8;
+  if (speedKmh < 12.9) return 11.5;
+  return 12.8;
+}
+
+function cyclingMet(speedKmh) {
+  if (!speedKmh) return WORKOUT_TYPES.cycling.baseMet;
+  if (speedKmh < 16) return 4;
+  if (speedKmh < 19) return 6.8;
+  if (speedKmh < 22.5) return 8;
+  if (speedKmh < 26) return 10;
+  return 12;
+}
+
+function deterministicWorkoutEstimate(member, body) {
+  const type = WORKOUT_TYPES[body.type] ? body.type : "custom";
+  const durationMinutes = assertNumberInRange(body.durationMinutes, "durationMinutes", { min: 1, max: 600 });
+  const weightKg = assertNumberInRange(body.weightKg ?? member.weightKg ?? 70, "weightKg", { min: 25, max: 250 });
+  const speedKmh = workoutSpeedFromInput(body, durationMinutes);
+  const inclinePct = Math.max(0, Math.min(Number(body.inclinePct) || 0, 40));
+  const intensity = WORKOUT_INTENSITY_FACTORS[body.intensity] ? body.intensity : "moderate";
+
+  let met = WORKOUT_TYPES[type].baseMet;
+  if (type === "treadmill") met = treadmillMet(speedKmh, inclinePct);
+  if (type === "running") met = runningMet(speedKmh);
+  if (type === "cycling") met = cyclingMet(speedKmh);
+  if (type === "gym") {
+    met = body.intensity === "hard" || body.intensity === "very_hard" ? 6 : body.intensity === "light" ? 3.5 : 5;
+  }
+  met *= WORKOUT_INTENSITY_FACTORS[intensity];
+
+  const calories = caloriesFromMet(met, weightKg, durationMinutes);
+  const confidence = type === "custom" ? "low" : speedKmh || ["gym", "hiit", "swimming", "yoga", "walking"].includes(type) ? "medium" : "medium";
+
+  return {
+    type,
+    label: String(body.label || WORKOUT_TYPES[type].label).trim(),
+    durationMinutes,
+    weightKg,
+    calories,
+    met: round(met, 1),
+    intensity,
+    distanceKm: Number.isFinite(Number(body.distanceKm)) ? round(Number(body.distanceKm), 2) : null,
+    speedKmh: speedKmh ? round(speedKmh, 1) : null,
+    inclinePct: type === "treadmill" ? inclinePct : null,
+    confidence,
+    source: "formula",
+    note: "Ước tính bằng công thức MET theo cân nặng và thời lượng; thực tế có thể dao động theo nhịp tim, kỹ thuật và cường độ.",
+    assumptions: [
+      `Cân nặng dùng để tính: ${weightKg}kg.`,
+      type === "treadmill" ? `Độ dốc máy chạy: ${inclinePct}%.` : null,
+      speedKmh ? `Tốc độ ước tính: ${round(speedKmh, 1)} km/h.` : "Chưa có tốc độ/distance nên dùng MET mặc định theo loại bài tập.",
+    ].filter(Boolean),
+  };
+}
+
+async function estimateWorkoutCaloriesWithAi(member, body, formulaEstimate) {
+  const providers = getAiProviders();
+  if (!providers.length) return null;
+  const prompt = [
+    "Bạn là AI ước tính calories burned cho hoạt động thể chất.",
+    "Chỉ trả JSON thuần, không markdown.",
+    "Dùng tiếng Việt có dấu cho reason và assumptions.",
+    "Nếu dữ liệu thiếu, ước tính bảo thủ và ghi rõ giả định.",
+    "Schema:",
+    "{\"calories\":250,\"met\":5.5,\"confidence\":\"low|medium|high\",\"reason\":\"\",\"assumptions\":[\"\"]}",
+    "",
+    `Member: weight ${member.weightKg || 70}kg, age ${member.age || "unknown"}, gender ${member.gender || "unknown"}.`,
+    `Workout input: ${redactSensitiveText(JSON.stringify(body), 1200)}`,
+    `Formula baseline: ${redactSensitiveText(JSON.stringify(formulaEstimate), 1200)}`,
+  ].join("\n");
+
+  for (const provider of providers) {
+    try {
+      const quota = reserveGeminiQuota(provider);
+      if (!quota.allowed) continue;
+      const { response, text } = await callAiProviderForText(provider, prompt);
+      if (!response.ok) {
+        if (response.status !== 429) releaseGeminiQuota(provider);
+        continue;
+      }
+      const json = extractJsonObject(text);
+      const calories = Math.round(Number(json?.calories));
+      if (!Number.isFinite(calories) || calories <= 0) continue;
+      return {
+        ...formulaEstimate,
+        calories: Math.max(1, Math.min(calories, 3000)),
+        met: Number.isFinite(Number(json?.met)) ? round(Number(json.met), 1) : formulaEstimate.met,
+        confidence: ["low", "medium", "high"].includes(json?.confidence) ? json.confidence : "medium",
+        source: `ai:${provider.name}`,
+        note: String(json?.reason || "AI đã ước tính dựa trên mô tả bài tập và dữ liệu người dùng.").trim(),
+        assumptions: Array.isArray(json?.assumptions) && json.assumptions.length
+          ? json.assumptions.map((item) => String(item).trim()).filter(Boolean).slice(0, 4)
+          : formulaEstimate.assumptions,
+      };
+    } catch (error) {
+      console.error("Workout AI estimate failed:", error?.message || error);
+    }
+  }
+  return null;
+}
+
+async function estimateWorkoutCalories(store, member, body) {
+  requireFields(body, ["type", "durationMinutes"]);
+  const formulaEstimate = deterministicWorkoutEstimate(member, body);
+  const shouldUseAi = formulaEstimate.type === "custom" || body.useAi === true || String(body.notes || "").trim().length >= 20;
+  const aiEstimate = shouldUseAi ? await estimateWorkoutCaloriesWithAi(member, body, formulaEstimate) : null;
+  const estimate = aiEstimate || formulaEstimate;
+  return {
+    id: store.nextId("workout", []),
+    type: estimate.type,
+    label: estimate.label,
+    durationMinutes: estimate.durationMinutes,
+    calories: estimate.calories,
+    met: estimate.met,
+    intensity: estimate.intensity,
+    distanceKm: estimate.distanceKm,
+    speedKmh: estimate.speedKmh,
+    inclinePct: estimate.inclinePct,
+    source: estimate.source,
+    confidence: estimate.confidence,
+    note: estimate.note,
+    assumptions: estimate.assumptions,
+    userNotes: String(body.notes || "").trim(),
+    recordedAt: new Date().toISOString(),
+  };
 }
 
 function buildQuote(db, body) {
@@ -3316,9 +3539,11 @@ registerControllers({
   ensureNotifications,
   ensurePersonalFoods,
   ensurePersonalizedRecipes,
+  ensureWorkoutEntries,
   errorResponse,
   estimateCustomCookedFood,
   estimateFoodPhotoCalories,
+  estimateWorkoutCalories,
   extractGeminiText,
   extractJsonObject,
   extractMillilitersFromPortion,
@@ -3427,6 +3652,7 @@ registerControllers({
   splitPath,
   startOfWeek,
   summarizeMealLog,
+  syncWorkoutActivity,
   syncMemberNotifications,
   toLocalDateString,
   tooManyRequests,

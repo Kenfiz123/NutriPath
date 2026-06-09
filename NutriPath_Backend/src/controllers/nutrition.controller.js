@@ -58,9 +58,11 @@ export function registerNutritionRoutes(ctx) {
     ensureNotifications,
     ensurePersonalFoods,
     ensurePersonalizedRecipes,
+    ensureWorkoutEntries,
     errorResponse,
     estimateCustomCookedFood,
     estimateFoodPhotoCalories,
+    estimateWorkoutCalories,
     extractGeminiText,
     extractJsonObject,
     extractMillilitersFromPortion,
@@ -169,6 +171,7 @@ export function registerNutritionRoutes(ctx) {
     splitPath,
     startOfWeek,
     summarizeMealLog,
+    syncWorkoutActivity,
     syncMemberNotifications,
     toLocalDateString,
     tooManyRequests,
@@ -455,6 +458,43 @@ export function registerNutritionRoutes(ctx) {
         actionHref: "/dashboard",
       });
     }
+    await saveMealLogChanges(store, log);
+    return mealLogResource(req, log, member);
+  });
+
+  route("POST", "/api/members/:memberId/meal-logs/:date/workouts", async ({ req, store, params, body }) => {
+    const { member } = assertMemberSessionAccess(req, store, params.memberId);
+    assertMealLogAccess(member, params.date);
+    const log = ensureMealLog(store, member.id, params.date);
+    const workouts = ensureWorkoutEntries(log);
+    const workout = await estimateWorkoutCalories(store, member, body);
+    workout.id = store.nextId("workout", workouts);
+    workouts.unshift(workout);
+    syncWorkoutActivity(log);
+    upsertNotification(store, member.id, "workout-added", "Đã ghi bài tập", `${workout.label} đã đốt ước tính ${workout.calories} kcal trong ngày ${params.date}.`, {
+      key: `${member.id}:workout-added:${params.date}:${workout.id}`,
+      actionHref: "/dashboard",
+    });
+    await saveMealLogChanges(store, log);
+    return {
+      workout,
+      mealLog: mealLogResource(req, log, member),
+      _links: {
+        mealLog: link(req, `/api/members/${member.id}/meal-logs/${params.date}`),
+        delete: link(req, `/api/members/${member.id}/meal-logs/${params.date}/workouts/${workout.id}`, "DELETE"),
+      },
+    };
+  });
+
+  route("DELETE", "/api/members/:memberId/meal-logs/:date/workouts/:workoutId", async ({ req, store, params }) => {
+    const { member } = assertMemberSessionAccess(req, store, params.memberId);
+    assertMealLogAccess(member, params.date);
+    const log = ensureMealLog(store, member.id, params.date);
+    const workouts = ensureWorkoutEntries(log);
+    const before = workouts.length;
+    log.activity.workouts = workouts.filter((workout) => workout.id !== params.workoutId);
+    if (log.activity.workouts.length === before) notFound(req, "Workout not found.");
+    syncWorkoutActivity(log);
     await saveMealLogChanges(store, log);
     return mealLogResource(req, log, member);
   });

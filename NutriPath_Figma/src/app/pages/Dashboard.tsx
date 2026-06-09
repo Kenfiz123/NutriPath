@@ -2,18 +2,23 @@
 import { Link } from "react-router";
 import {
   Plus, MessageCircle, Search, Droplets, Flame, TrendingUp, Target, Apple,
-  ChevronRight, Zap, Award, Activity, Check, FileBarChart, Crown, Sparkles
+  ChevronRight, Zap, Award, Activity, Check, FileBarChart, Crown, Sparkles,
+  Bike, Dumbbell, Gauge, Timer, Trash2, WandSparkles
 } from "lucide-react";
 import {
   RadialBarChart, RadialBar, ResponsiveContainer, BarChart, Bar, XAxis, YAxis,
   CartesianGrid, Tooltip, Cell
 } from "recharts";
 import {
+  addWorkout,
   addWaterIntake,
   createWeeklyCoachPlan,
+  deleteWorkout,
   getDashboard,
   getWeeklyCoachPlans,
   type DashboardData,
+  type WorkoutEntry,
+  type WorkoutInput,
   type WeeklyCoachPlan,
 } from "../api";
 
@@ -23,6 +28,39 @@ const quickActions = [
   { label: "Tìm công thức", icon: Search, color: "bg-orange-50 text-orange-700 hover:bg-orange-100 border border-orange-200", link: "/recipes" },
   { label: "Báo cáo", icon: FileBarChart, color: "bg-blue-50 text-blue-700 hover:bg-blue-100 border border-blue-200", link: "/reports" },
 ];
+
+type WorkoutFormState = Required<Pick<WorkoutInput, "type" | "durationMinutes">> & {
+  intensity: NonNullable<WorkoutInput["intensity"]>;
+  distanceKm: number;
+  speedKmh: number;
+  inclinePct: number;
+  notes: string;
+};
+
+const workoutTypes = [
+  { id: "cycling", label: "Đạp xe", icon: Bike, hint: "Ngoài trời hoặc xe đạp tại chỗ" },
+  { id: "running", label: "Chạy bộ", icon: Activity, hint: "Có thể nhập quãng đường hoặc tốc độ" },
+  { id: "treadmill", label: "Chạy máy", icon: Gauge, hint: "Có thêm tốc độ và góc dốc" },
+  { id: "gym", label: "Tập gym", icon: Dumbbell, hint: "Tạ, máy, circuit hoặc full-body" },
+  { id: "hiit", label: "HIIT", icon: Zap, hint: "Cường độ cao, nghỉ ngắn" },
+  { id: "swimming", label: "Bơi", icon: Droplets, hint: "Bơi nhẹ đến bơi nhanh" },
+  { id: "walking", label: "Đi bộ nhanh", icon: Activity, hint: "Đi bộ ngoài trời hoặc máy" },
+  { id: "yoga", label: "Yoga", icon: Sparkles, hint: "Nhẹ, giãn cơ, phục hồi" },
+  { id: "custom", label: "Bài khác", icon: WandSparkles, hint: "AI hỗ trợ nếu mô tả đủ rõ" },
+] as const;
+
+const intensityOptions = [
+  { id: "light", label: "Nhẹ" },
+  { id: "moderate", label: "Vừa" },
+  { id: "hard", label: "Nặng" },
+  { id: "very_hard", label: "Rất nặng" },
+] as const;
+
+const confidenceLabel: Record<string, string> = {
+  low: "Thấp",
+  medium: "Trung bình",
+  high: "Cao",
+};
 
 function makeMojibake(value: string) {
   return Array.from(new TextEncoder().encode(value), (byte) => String.fromCharCode(byte)).join("");
@@ -53,6 +91,17 @@ export function Dashboard() {
   const [coachPlan, setCoachPlan] = useState<WeeklyCoachPlan | null>(null);
   const [coachLoading, setCoachLoading] = useState(false);
   const [coachMessage, setCoachMessage] = useState<string | null>(null);
+  const [workoutForm, setWorkoutForm] = useState<WorkoutFormState>({
+    type: "cycling",
+    durationMinutes: 30,
+    intensity: "moderate",
+    distanceKm: 0,
+    speedKmh: 0,
+    inclinePct: 0,
+    notes: "",
+  });
+  const [workoutSaving, setWorkoutSaving] = useState(false);
+  const [workoutMessage, setWorkoutMessage] = useState<string | null>(null);
 
   useEffect(() => {
     let active = true;
@@ -130,6 +179,12 @@ export function Dashboard() {
   ];
   const tips = dashboard.tips;
   const activity = dashboard.mealLog.activity;
+  const workouts = (activity.workouts ?? dashboard.mealLog.workouts ?? []) as WorkoutEntry[];
+  const workoutCalories = activity.workoutCalories ?? workouts.reduce((sum, workout) => sum + (Number(workout.calories) || 0), 0);
+  const selectedWorkoutType = workoutTypes.find((type) => type.id === workoutForm.type) ?? workoutTypes[0];
+  const SelectedWorkoutIcon = selectedWorkoutType.icon;
+  const showMovementInputs = ["cycling", "running", "treadmill", "walking"].includes(workoutForm.type);
+  const showInclineInput = workoutForm.type === "treadmill";
   const goals = dashboard.mealLog.goals;
   const greeting = cleanDashboardText(dashboard.greeting);
   const canUseCoach = Boolean(membershipAccess.aiCoach);
@@ -159,6 +214,60 @@ export function Dashboard() {
       setDashboard((current) => current ? { ...current, mealLog: updated, nutrition: updated.summary } : current);
     } catch {
       setWaterMl(previous);
+    }
+  };
+
+  const updateWorkoutForm = <K extends keyof WorkoutFormState>(field: K, value: WorkoutFormState[K]) => {
+    setWorkoutForm((current) => ({ ...current, [field]: value }));
+  };
+
+  const handleAddWorkout = async () => {
+    const durationMinutes = Math.round(Number(workoutForm.durationMinutes) || 0);
+    if (durationMinutes < 1) {
+      setWorkoutMessage("Vui lòng nhập thời lượng tập luyện hợp lệ.");
+      return;
+    }
+
+    const payload: WorkoutInput = {
+      type: workoutForm.type,
+      durationMinutes,
+      intensity: workoutForm.intensity,
+      notes: workoutForm.notes.trim(),
+      useAi: workoutForm.type === "custom" || workoutForm.notes.trim().length >= 20,
+    };
+    if (workoutForm.distanceKm > 0) payload.distanceKm = Number(workoutForm.distanceKm);
+    if (workoutForm.speedKmh > 0) payload.speedKmh = Number(workoutForm.speedKmh);
+    if (workoutForm.type === "treadmill") payload.inclinePct = Math.max(0, Number(workoutForm.inclinePct) || 0);
+
+    setWorkoutSaving(true);
+    setWorkoutMessage(null);
+    try {
+      const data = await addWorkout(dashboard.date, payload);
+      setDashboard((current) => current ? { ...current, mealLog: data.mealLog, nutrition: data.mealLog.summary } : current);
+      setWorkoutMessage(`${data.workout.label}: ước tính ${data.workout.calories.toLocaleString("vi-VN")} kcal đã đốt.`);
+      setWorkoutForm((current) => ({
+        ...current,
+        durationMinutes: 30,
+        distanceKm: 0,
+        speedKmh: 0,
+        inclinePct: current.type === "treadmill" ? current.inclinePct : 0,
+        notes: "",
+      }));
+    } catch (err) {
+      setWorkoutMessage(err instanceof Error ? err.message : "Không lưu được bài tập.");
+    } finally {
+      setWorkoutSaving(false);
+    }
+  };
+
+  const handleDeleteWorkout = async (workoutId: string) => {
+    setWorkoutMessage(null);
+    try {
+      const updated = await deleteWorkout(dashboard.date, workoutId);
+      setDashboard((current) => current ? { ...current, mealLog: updated, nutrition: updated.summary } : current);
+      setWorkoutMessage("Đã xóa bài tập khỏi ngày hôm nay.");
+    } catch (err) {
+      setWorkoutMessage(err instanceof Error ? err.message : "Không xóa được bài tập.");
     }
   };
 
@@ -356,7 +465,10 @@ export function Dashboard() {
             {/* Activity & Burn */}
             <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100">
               <div className="flex items-center justify-between mb-5">
-                <h3 className="text-gray-900" style={{ fontSize: "1rem", fontWeight: 700 }}>Hoạt động thể chất</h3>
+                <div>
+                  <h3 className="text-gray-900" style={{ fontSize: "1rem", fontWeight: 700 }}>Hoạt động thể chất</h3>
+                  <p className="mt-1 text-gray-500" style={{ fontSize: "0.78rem" }}>Nhập bài tập để hệ thống ước tính calo đã dùng.</p>
+                </div>
                 <Activity className="w-5 h-5 text-green-600" />
               </div>
               <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
@@ -372,6 +484,213 @@ export function Dashboard() {
                     <p className="text-gray-600 mt-0.5" style={{ fontSize: "0.8rem" }}>{stat.label}</p>
                   </div>
                 ))}
+              </div>
+              <div className="mt-5 rounded-2xl border border-green-100 bg-green-50/70 p-4">
+                <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                  <div className="flex items-center gap-3">
+                    <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-white text-green-700 shadow-sm">
+                      <SelectedWorkoutIcon className="h-5 w-5" />
+                    </div>
+                    <div>
+                      <p className="text-gray-900" style={{ fontSize: "0.92rem", fontWeight: 800 }}>Ghi bài tập chi tiết</p>
+                      <p className="text-gray-500" style={{ fontSize: "0.75rem" }}>{selectedWorkoutType.hint}</p>
+                    </div>
+                  </div>
+                  <div className="rounded-full bg-white px-3 py-1 text-green-700" style={{ fontSize: "0.74rem", fontWeight: 800 }}>
+                    {Math.round(workoutCalories).toLocaleString("vi-VN")} kcal từ workout
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-2 md:grid-cols-3 lg:grid-cols-5">
+                  {workoutTypes.map(({ id, label, icon: Icon }) => {
+                    const active = workoutForm.type === id;
+                    return (
+                      <button
+                        key={id}
+                        type="button"
+                        onClick={() => updateWorkoutForm("type", id)}
+                        className={`flex min-h-[74px] flex-col items-center justify-center gap-1.5 rounded-xl border px-2 py-3 text-center transition ${
+                          active
+                            ? "border-green-500 bg-white text-green-700 shadow-sm"
+                            : "border-transparent bg-white/70 text-gray-600 hover:border-green-200 hover:bg-white"
+                        }`}
+                      >
+                        <Icon className="h-4 w-4" />
+                        <span style={{ fontSize: "0.72rem", fontWeight: 800 }}>{label}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+
+                <div className="mt-4 grid grid-cols-1 gap-3 md:grid-cols-4">
+                  <label className="block">
+                    <span className="mb-1 block text-gray-600" style={{ fontSize: "0.74rem", fontWeight: 700 }}>Thời lượng</span>
+                    <div className="flex items-center gap-2 rounded-xl border border-gray-200 bg-white px-3 py-2">
+                      <Timer className="h-4 w-4 text-gray-400" />
+                      <input
+                        type="number"
+                        min={1}
+                        max={600}
+                        value={workoutForm.durationMinutes}
+                        onChange={(event) => updateWorkoutForm("durationMinutes", Number(event.target.value))}
+                        className="min-w-0 flex-1 bg-transparent outline-none"
+                        style={{ fontSize: "0.85rem", fontWeight: 700 }}
+                      />
+                      <span className="text-gray-400" style={{ fontSize: "0.75rem" }}>phút</span>
+                    </div>
+                  </label>
+
+                  <label className="block">
+                    <span className="mb-1 block text-gray-600" style={{ fontSize: "0.74rem", fontWeight: 700 }}>Cường độ</span>
+                    <select
+                      value={workoutForm.intensity}
+                      onChange={(event) => updateWorkoutForm("intensity", event.target.value as WorkoutFormState["intensity"])}
+                      className="h-[42px] w-full rounded-xl border border-gray-200 bg-white px-3 outline-none focus:border-green-400"
+                      style={{ fontSize: "0.85rem", fontWeight: 700 }}
+                    >
+                      {intensityOptions.map((option) => (
+                        <option key={option.id} value={option.id}>{option.label}</option>
+                      ))}
+                    </select>
+                  </label>
+
+                  {showMovementInputs && (
+                    <label className="block">
+                      <span className="mb-1 block text-gray-600" style={{ fontSize: "0.74rem", fontWeight: 700 }}>Quãng đường</span>
+                      <input
+                        type="number"
+                        min={0}
+                        step={0.1}
+                        value={workoutForm.distanceKm}
+                        onChange={(event) => updateWorkoutForm("distanceKm", Number(event.target.value))}
+                        className="h-[42px] w-full rounded-xl border border-gray-200 bg-white px-3 outline-none focus:border-green-400"
+                        style={{ fontSize: "0.85rem", fontWeight: 700 }}
+                        placeholder="km"
+                      />
+                    </label>
+                  )}
+
+                  {showMovementInputs && (
+                    <label className="block">
+                      <span className="mb-1 block text-gray-600" style={{ fontSize: "0.74rem", fontWeight: 700 }}>Tốc độ</span>
+                      <input
+                        type="number"
+                        min={0}
+                        step={0.1}
+                        value={workoutForm.speedKmh}
+                        onChange={(event) => updateWorkoutForm("speedKmh", Number(event.target.value))}
+                        className="h-[42px] w-full rounded-xl border border-gray-200 bg-white px-3 outline-none focus:border-green-400"
+                        style={{ fontSize: "0.85rem", fontWeight: 700 }}
+                        placeholder="km/h"
+                      />
+                    </label>
+                  )}
+
+                  {showInclineInput && (
+                    <label className="block">
+                      <span className="mb-1 block text-gray-600" style={{ fontSize: "0.74rem", fontWeight: 700 }}>Góc dốc máy</span>
+                      <input
+                        type="number"
+                        min={0}
+                        max={40}
+                        step={0.5}
+                        value={workoutForm.inclinePct}
+                        onChange={(event) => updateWorkoutForm("inclinePct", Number(event.target.value))}
+                        className="h-[42px] w-full rounded-xl border border-gray-200 bg-white px-3 outline-none focus:border-green-400"
+                        style={{ fontSize: "0.85rem", fontWeight: 700 }}
+                        placeholder="%"
+                      />
+                    </label>
+                  )}
+                </div>
+
+                <div className="mt-3 grid grid-cols-1 gap-3 lg:grid-cols-[1fr_auto]">
+                  <textarea
+                    value={workoutForm.notes}
+                    onChange={(event) => updateWorkoutForm("notes", event.target.value)}
+                    className="min-h-[78px] rounded-xl border border-gray-200 bg-white px-3 py-2 outline-none focus:border-green-400"
+                    style={{ fontSize: "0.85rem", lineHeight: 1.5 }}
+                    placeholder="Ví dụ: tập gym lưng xô 45 phút, nghỉ 60 giây mỗi set; hoặc chạy máy 30 phút tốc độ 8km/h dốc 5%..."
+                  />
+                  <button
+                    type="button"
+                    onClick={() => void handleAddWorkout()}
+                    disabled={workoutSaving}
+                    className="flex items-center justify-center gap-2 rounded-xl bg-green-600 px-5 py-3 text-white transition hover:bg-green-700 disabled:cursor-not-allowed disabled:opacity-60 lg:min-w-[150px]"
+                    style={{ fontSize: "0.86rem", fontWeight: 800 }}
+                  >
+                    <Plus className="h-4 w-4" />
+                    {workoutSaving ? "Đang tính..." : "Tính & lưu"}
+                  </button>
+                </div>
+
+                <p className="mt-2 text-gray-500" style={{ fontSize: "0.74rem", lineHeight: 1.5 }}>
+                  Công thức mặc định dùng MET theo cân nặng, thời lượng và cường độ. Nếu là bài khác hoặc mô tả phức tạp, hệ thống sẽ dùng AI để ước tính bảo thủ hơn.
+                </p>
+                {workoutMessage && (
+                  <p className="mt-3 rounded-xl bg-white px-3 py-2 text-green-700" style={{ fontSize: "0.8rem", fontWeight: 700 }}>
+                    {workoutMessage}
+                  </p>
+                )}
+              </div>
+
+              <div className="mt-5">
+                <div className="mb-3 flex items-center justify-between">
+                  <p className="text-gray-900" style={{ fontSize: "0.92rem", fontWeight: 800 }}>Bài tập đã ghi hôm nay</p>
+                  <span className="text-gray-500" style={{ fontSize: "0.76rem" }}>{workouts.length} mục</span>
+                </div>
+                {workouts.length === 0 ? (
+                  <div className="rounded-2xl border border-dashed border-gray-200 bg-gray-50 p-5 text-center">
+                    <Dumbbell className="mx-auto mb-2 h-6 w-6 text-green-500" />
+                    <p className="text-gray-700" style={{ fontSize: "0.84rem", fontWeight: 700 }}>Chưa có bài tập nào hôm nay</p>
+                    <p className="mx-auto mt-1 max-w-md text-gray-500" style={{ fontSize: "0.76rem", lineHeight: 1.5 }}>
+                      Ghi đạp xe, chạy bộ, chạy máy có dốc, tập gym hoặc bài khác để dashboard tính calo đã đốt.
+                    </p>
+                  </div>
+                ) : (
+                  <div className="space-y-3">
+                    {workouts.map((workout) => (
+                      <div key={workout.id} className="rounded-2xl border border-gray-100 bg-gray-50 p-4">
+                        <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                          <div className="min-w-0">
+                            <div className="flex flex-wrap items-center gap-2">
+                              <p className="text-gray-900" style={{ fontSize: "0.9rem", fontWeight: 800 }}>{workout.label}</p>
+                              <span className="rounded-full bg-green-100 px-2 py-0.5 text-green-700" style={{ fontSize: "0.68rem", fontWeight: 800 }}>
+                                {confidenceLabel[String(workout.confidence || "medium")] || "Trung bình"}
+                              </span>
+                              {workout.source?.startsWith("ai:") && (
+                                <span className="rounded-full bg-amber-100 px-2 py-0.5 text-amber-700" style={{ fontSize: "0.68rem", fontWeight: 800 }}>
+                                  AI fallback
+                                </span>
+                              )}
+                            </div>
+                            <p className="mt-1 text-gray-500" style={{ fontSize: "0.76rem" }}>
+                              {workout.durationMinutes} phút
+                              {workout.speedKmh ? ` • ${workout.speedKmh} km/h` : ""}
+                              {workout.distanceKm ? ` • ${workout.distanceKm} km` : ""}
+                              {workout.inclinePct ? ` • dốc ${workout.inclinePct}%` : ""}
+                              {workout.met ? ` • MET ${workout.met}` : ""}
+                            </p>
+                            {workout.note && (
+                              <p className="mt-2 text-gray-600" style={{ fontSize: "0.76rem", lineHeight: 1.5 }}>{workout.note}</p>
+                            )}
+                          </div>
+                          <div className="flex items-center justify-between gap-3 sm:flex-col sm:items-end">
+                            <p className="text-orange-600" style={{ fontSize: "1.05rem", fontWeight: 900 }}>{workout.calories.toLocaleString("vi-VN")} kcal</p>
+                            <button
+                              type="button"
+                              onClick={() => void handleDeleteWorkout(workout.id)}
+                              className="inline-flex h-9 w-9 items-center justify-center rounded-xl border border-red-100 bg-white text-red-500 transition hover:bg-red-50"
+                              aria-label={`Xóa ${workout.label}`}
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
             </div>
           </div>
