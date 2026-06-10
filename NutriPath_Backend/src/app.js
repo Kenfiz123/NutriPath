@@ -1545,6 +1545,7 @@ function customFoodResource(req, food) {
       self: link(req, `/api/members/${food.memberId}/custom-foods/${food.id}`),
       collection: link(req, `/api/members/${food.memberId}/custom-foods`),
       mealLogs: link(req, `/api/members/${food.memberId}/meal-logs`),
+      delete: link(req, `/api/members/${food.memberId}/custom-foods/${food.id}`, "DELETE"),
     },
   };
 }

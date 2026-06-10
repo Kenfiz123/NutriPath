@@ -424,6 +424,22 @@ export function registerNutritionRoutes(ctx) {
     return customFoodResource(req, savedFood);
   });
 
+  route("DELETE", "/api/members/:memberId/custom-foods/:foodId", async ({ req, store, params }) => {
+    const { member } = assertMemberSessionAccess(req, store, params.memberId);
+    const foods = ensurePersonalFoods(store.db);
+    const foodIndex = foods.findIndex((food) => food.memberId === member.id && food.id === params.foodId);
+    if (foodIndex === -1) notFound(req, "Món cá nhân không tồn tại.");
+
+    const [deletedFood] = foods.splice(foodIndex, 1);
+    await store.save();
+    return {
+      deleted: deletedFood.id,
+      _links: {
+        collection: link(req, `/api/members/${member.id}/custom-foods`),
+      },
+    };
+  });
+
   route("PATCH", "/api/members/:memberId/meal-logs/:date/water", async ({ req, store, params, body }) => {
     const member = getMember(store.db, params.memberId);
     if (!member) notFound(req, "Member not found.");

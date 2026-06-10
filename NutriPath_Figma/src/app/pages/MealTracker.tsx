@@ -18,6 +18,7 @@ import {
   addWaterIntake,
   addMealItem,
   deleteMealItem,
+  deleteSavedCustomFood,
   estimateCustomFood,
   estimateFoodPhoto,
   getCustomFoodIngredients,
@@ -127,6 +128,7 @@ export function MealTracker() {
   const [customEstimateStatus, setCustomEstimateStatus] = useState<"idle" | "estimating" | "ready" | "error">("idle");
   const [customSaveStatus, setCustomSaveStatus] = useState<"idle" | "saving" | "saved" | "error">("idle");
   const [savedCustomFoods, setSavedCustomFoods] = useState<SavedCustomFood[]>([]);
+  const [customDeleteId, setCustomDeleteId] = useState<string | null>(null);
   const [currentDate, setCurrentDate] = useState(new Date());
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -321,6 +323,19 @@ export function MealTracker() {
     } catch (err) {
       setSaveStatus("error");
       setError(err instanceof Error ? err.message : "Không thêm được món cá nhân đã lưu");
+    }
+  };
+
+  const handleDeleteSavedCustomFood = async (food: SavedCustomFood) => {
+    if (!window.confirm(`Xóa món cá nhân "${food.name}" khỏi danh sách đã lưu?`)) return;
+    setCustomDeleteId(food.id);
+    try {
+      await deleteSavedCustomFood(food.id);
+      setSavedCustomFoods((current) => current.filter((item) => item.id !== food.id));
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Không xóa được món cá nhân đã lưu");
+    } finally {
+      setCustomDeleteId(null);
     }
   };
 
@@ -1030,24 +1045,41 @@ export function MealTracker() {
                   </div>
 
                   {savedCustomFoods.length > 0 && (
-                    <div className="rounded-2xl border border-amber-100 bg-amber-50 p-4">
-                      <p className="mb-3 text-amber-900" style={{ fontSize: "0.86rem", fontWeight: 900 }}>Món cá nhân đã lưu</p>
-                      <div className="space-y-2">
-                        {savedCustomFoods.slice(0, 4).map((food) => (
-                          <button
+                    <div className="rounded-2xl border border-amber-100 bg-amber-50 p-4 dark:border-amber-400/30 dark:bg-slate-800">
+                      <p className="mb-3 text-amber-900 dark:text-amber-100" style={{ fontSize: "0.86rem", fontWeight: 900 }}>Món cá nhân đã lưu</p>
+                      <div className="max-h-56 space-y-2 overflow-y-auto pr-1">
+                        {savedCustomFoods.map((food) => (
+                          <div
                             key={food.id}
-                            type="button"
-                            onClick={() => void handleAddSavedCustomFood(food)}
-                            className="flex w-full items-center justify-between gap-3 rounded-xl bg-white px-3 py-2 text-left shadow-sm hover:bg-amber-100"
+                            className="flex w-full items-center justify-between gap-3 rounded-xl bg-white px-3 py-2 text-left shadow-sm dark:bg-slate-900/80"
                           >
                             <div className="min-w-0">
-                              <p className="truncate text-gray-900" style={{ fontSize: "0.82rem", fontWeight: 800 }}>{food.name}</p>
-                              <p className="truncate text-gray-500" style={{ fontSize: "0.72rem" }}>{food.portion} · P:{food.protein}g C:{food.carbs}g F:{food.fat}g</p>
+                              <p className="truncate text-gray-900 dark:text-slate-100" style={{ fontSize: "0.82rem", fontWeight: 800 }}>{food.name}</p>
+                              <p className="truncate text-gray-500 dark:text-slate-400" style={{ fontSize: "0.72rem" }}>{food.portion} · P:{food.protein}g C:{food.carbs}g F:{food.fat}g</p>
                             </div>
-                            <span className="flex-shrink-0 rounded-lg bg-amber-100 px-2.5 py-1 text-amber-800" style={{ fontSize: "0.78rem", fontWeight: 900 }}>
-                              {food.calories} kcal
-                            </span>
-                          </button>
+                            <div className="flex flex-shrink-0 items-center gap-2">
+                              <span className="rounded-lg bg-amber-100 px-2.5 py-1 text-amber-800 dark:bg-amber-400/15 dark:text-amber-100" style={{ fontSize: "0.78rem", fontWeight: 900 }}>
+                                {food.calories} kcal
+                              </span>
+                              <button
+                                type="button"
+                                onClick={() => void handleAddSavedCustomFood(food)}
+                                className="rounded-lg bg-green-50 px-2.5 py-1 text-green-700 hover:bg-green-100 dark:bg-green-400/15 dark:text-green-100 dark:hover:bg-green-400/25"
+                                style={{ fontSize: "0.76rem", fontWeight: 900 }}
+                              >
+                                Thêm
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => void handleDeleteSavedCustomFood(food)}
+                                disabled={customDeleteId === food.id}
+                                aria-label={"Xóa món cá nhân " + food.name}
+                                className="rounded-lg p-1.5 text-gray-400 hover:bg-red-50 hover:text-red-600 disabled:opacity-50 dark:text-slate-400 dark:hover:bg-red-500/15 dark:hover:text-red-200"
+                              >
+                                <X className="h-4 w-4" />
+                              </button>
+                            </div>
+                          </div>
                         ))}
                       </div>
                     </div>

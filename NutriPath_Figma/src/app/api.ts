@@ -1007,6 +1007,12 @@ export function saveCustomFoodEstimate(payload: { estimate: CustomFoodEstimate; 
   });
 }
 
+export function deleteSavedCustomFood(foodId: string) {
+  return apiFetch<{ deleted: string }>(`/api/members/${getCurrentMemberId()}/custom-foods/${foodId}`, {
+    method: "DELETE",
+  });
+}
+
 export function deleteMealItem(date: string, mealId: string, itemId: string) {
   return apiFetch<MealLog>(`/api/members/${getCurrentMemberId()}/meal-logs/${encodeURIComponent(date)}/meals/${mealId}/items/${itemId}`, {
     method: "DELETE",
