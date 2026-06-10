@@ -463,11 +463,11 @@ export function Dashboard() {
             </div>
 
             {/* Activity & Burn */}
-            <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100">
+            <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100 dark:border-slate-700 dark:bg-slate-800">
               <div className="flex items-center justify-between mb-5">
                 <div>
-                  <h3 className="text-gray-900" style={{ fontSize: "1rem", fontWeight: 700 }}>Hoạt động thể chất</h3>
-                  <p className="mt-1 text-gray-500" style={{ fontSize: "0.78rem" }}>Nhập bài tập để hệ thống ước tính calo đã dùng.</p>
+                  <h3 className="text-gray-900 dark:text-slate-50" style={{ fontSize: "1rem", fontWeight: 700 }}>Hoạt động thể chất</h3>
+                  <p className="mt-1 text-gray-500 dark:text-slate-300" style={{ fontSize: "0.78rem" }}>Nhập bài tập để hệ thống ước tính calo đã dùng.</p>
                 </div>
                 <Activity className="w-5 h-5 text-green-600" />
               </div>
@@ -477,26 +477,26 @@ export function Dashboard() {
                   { label: "Đốt cháy", value: activity.burnedCalories.toLocaleString("vi-VN"), unit: "kcal", icon: "🔥", color: "bg-orange-50 text-orange-700" },
                   { label: "Thời gian", value: activity.activeMinutes.toLocaleString("vi-VN"), unit: "phút", icon: "⏱️", color: "bg-blue-50 text-blue-700" },
                 ].map((stat) => (
-                  <div key={stat.label} className={`${stat.color.split(" ")[0]} rounded-2xl p-4 text-center`}>
+                  <div key={stat.label} className={`${stat.color.split(" ")[0]} rounded-2xl p-4 text-center dark:bg-slate-900`}>
                     <div className="text-2xl mb-2">{stat.icon}</div>
-                    <p className={`${stat.color.split(" ")[1]}`} style={{ fontSize: "1.3rem", fontWeight: 800 }}>{stat.value}</p>
-                    <p className="text-gray-500" style={{ fontSize: "0.75rem" }}>{stat.unit}</p>
-                    <p className="text-gray-600 mt-0.5" style={{ fontSize: "0.8rem" }}>{stat.label}</p>
+                    <p className={`${stat.color.split(" ")[1]} dark:text-slate-50`} style={{ fontSize: "1.3rem", fontWeight: 800 }}>{stat.value}</p>
+                    <p className="text-gray-500 dark:text-slate-400" style={{ fontSize: "0.75rem" }}>{stat.unit}</p>
+                    <p className="text-gray-600 mt-0.5 dark:text-slate-300" style={{ fontSize: "0.8rem" }}>{stat.label}</p>
                   </div>
                 ))}
               </div>
-              <div className="mt-5 rounded-2xl border border-green-100 bg-green-50/70 p-4">
+              <div className="mt-5 rounded-2xl border border-green-100 bg-green-50/70 p-4 dark:border-slate-700 dark:bg-slate-900/80">
                 <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                   <div className="flex items-center gap-3">
-                    <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-white text-green-700 shadow-sm">
+                    <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-white text-green-700 shadow-sm dark:bg-emerald-500/15 dark:text-emerald-200 dark:ring-1 dark:ring-emerald-400/20">
                       <SelectedWorkoutIcon className="h-5 w-5" />
                     </div>
                     <div>
-                      <p className="text-gray-900" style={{ fontSize: "0.92rem", fontWeight: 800 }}>Ghi bài tập chi tiết</p>
-                      <p className="text-gray-500" style={{ fontSize: "0.75rem" }}>{selectedWorkoutType.hint}</p>
+                      <p className="text-gray-900 dark:text-slate-50" style={{ fontSize: "0.92rem", fontWeight: 800 }}>Ghi bài tập chi tiết</p>
+                      <p className="text-gray-500 dark:text-slate-300" style={{ fontSize: "0.75rem" }}>{selectedWorkoutType.hint}</p>
                     </div>
                   </div>
-                  <div className="rounded-full bg-white px-3 py-1 text-green-700" style={{ fontSize: "0.74rem", fontWeight: 800 }}>
+                  <div className="rounded-full bg-white px-3 py-1 text-green-700 dark:bg-emerald-500/15 dark:text-emerald-200" style={{ fontSize: "0.74rem", fontWeight: 800 }}>
                     {Math.round(workoutCalories).toLocaleString("vi-VN")} kcal từ workout
                   </div>
                 </div>
@@ -511,8 +511,8 @@ export function Dashboard() {
                         onClick={() => updateWorkoutForm("type", id)}
                         className={`flex min-h-[74px] flex-col items-center justify-center gap-1.5 rounded-xl border px-2 py-3 text-center transition ${
                           active
-                            ? "border-green-500 bg-white text-green-700 shadow-sm"
-                            : "border-transparent bg-white/70 text-gray-600 hover:border-green-200 hover:bg-white"
+                            ? "border-green-500 bg-white text-green-700 shadow-sm dark:border-emerald-400 dark:bg-emerald-500/15 dark:text-emerald-200"
+                            : "border-transparent bg-white/70 text-gray-600 hover:border-green-200 hover:bg-white dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200 dark:hover:border-emerald-400/50 dark:hover:bg-slate-700"
                         }`}
                       >
                         <Icon className="h-4 w-4" />
@@ -524,8 +524,8 @@ export function Dashboard() {
 
                 <div className="mt-4 grid grid-cols-1 gap-3 md:grid-cols-4">
                   <label className="block">
-                    <span className="mb-1 block text-gray-600" style={{ fontSize: "0.74rem", fontWeight: 700 }}>Thời lượng</span>
-                    <div className="flex items-center gap-2 rounded-xl border border-gray-200 bg-white px-3 py-2">
+                    <span className="mb-1 block text-gray-600 dark:text-slate-200" style={{ fontSize: "0.74rem", fontWeight: 700 }}>Thời lượng</span>
+                    <div className="flex items-center gap-2 rounded-xl border border-gray-200 bg-white px-3 py-2 dark:border-slate-600 dark:bg-slate-950">
                       <Timer className="h-4 w-4 text-gray-400" />
                       <input
                         type="number"
@@ -533,19 +533,19 @@ export function Dashboard() {
                         max={600}
                         value={workoutForm.durationMinutes}
                         onChange={(event) => updateWorkoutForm("durationMinutes", Number(event.target.value))}
-                        className="min-w-0 flex-1 bg-transparent outline-none"
+                        className="min-w-0 flex-1 bg-transparent outline-none dark:text-slate-50"
                         style={{ fontSize: "0.85rem", fontWeight: 700 }}
                       />
-                      <span className="text-gray-400" style={{ fontSize: "0.75rem" }}>phút</span>
+                      <span className="text-gray-400 dark:text-slate-400" style={{ fontSize: "0.75rem" }}>phút</span>
                     </div>
                   </label>
 
                   <label className="block">
-                    <span className="mb-1 block text-gray-600" style={{ fontSize: "0.74rem", fontWeight: 700 }}>Cường độ</span>
+                    <span className="mb-1 block text-gray-600 dark:text-slate-200" style={{ fontSize: "0.74rem", fontWeight: 700 }}>Cường độ</span>
                     <select
                       value={workoutForm.intensity}
                       onChange={(event) => updateWorkoutForm("intensity", event.target.value as WorkoutFormState["intensity"])}
-                      className="h-[42px] w-full rounded-xl border border-gray-200 bg-white px-3 outline-none focus:border-green-400"
+                      className="h-[42px] w-full rounded-xl border border-gray-200 bg-white px-3 outline-none focus:border-green-400 dark:border-slate-600 dark:bg-slate-950 dark:text-slate-50"
                       style={{ fontSize: "0.85rem", fontWeight: 700 }}
                     >
                       {intensityOptions.map((option) => (
@@ -556,14 +556,14 @@ export function Dashboard() {
 
                   {showMovementInputs && (
                     <label className="block">
-                      <span className="mb-1 block text-gray-600" style={{ fontSize: "0.74rem", fontWeight: 700 }}>Quãng đường</span>
+                      <span className="mb-1 block text-gray-600 dark:text-slate-200" style={{ fontSize: "0.74rem", fontWeight: 700 }}>Quãng đường</span>
                       <input
                         type="number"
                         min={0}
                         step={0.1}
                         value={workoutForm.distanceKm}
                         onChange={(event) => updateWorkoutForm("distanceKm", Number(event.target.value))}
-                        className="h-[42px] w-full rounded-xl border border-gray-200 bg-white px-3 outline-none focus:border-green-400"
+                        className="h-[42px] w-full rounded-xl border border-gray-200 bg-white px-3 outline-none focus:border-green-400 dark:border-slate-600 dark:bg-slate-950 dark:text-slate-50 dark:placeholder:text-slate-500"
                         style={{ fontSize: "0.85rem", fontWeight: 700 }}
                         placeholder="km"
                       />
@@ -572,14 +572,14 @@ export function Dashboard() {
 
                   {showMovementInputs && (
                     <label className="block">
-                      <span className="mb-1 block text-gray-600" style={{ fontSize: "0.74rem", fontWeight: 700 }}>Tốc độ</span>
+                      <span className="mb-1 block text-gray-600 dark:text-slate-200" style={{ fontSize: "0.74rem", fontWeight: 700 }}>Tốc độ</span>
                       <input
                         type="number"
                         min={0}
                         step={0.1}
                         value={workoutForm.speedKmh}
                         onChange={(event) => updateWorkoutForm("speedKmh", Number(event.target.value))}
-                        className="h-[42px] w-full rounded-xl border border-gray-200 bg-white px-3 outline-none focus:border-green-400"
+                        className="h-[42px] w-full rounded-xl border border-gray-200 bg-white px-3 outline-none focus:border-green-400 dark:border-slate-600 dark:bg-slate-950 dark:text-slate-50 dark:placeholder:text-slate-500"
                         style={{ fontSize: "0.85rem", fontWeight: 700 }}
                         placeholder="km/h"
                       />
@@ -588,7 +588,7 @@ export function Dashboard() {
 
                   {showInclineInput && (
                     <label className="block">
-                      <span className="mb-1 block text-gray-600" style={{ fontSize: "0.74rem", fontWeight: 700 }}>Góc dốc máy</span>
+                      <span className="mb-1 block text-gray-600 dark:text-slate-200" style={{ fontSize: "0.74rem", fontWeight: 700 }}>Góc dốc máy</span>
                       <input
                         type="number"
                         min={0}
@@ -596,7 +596,7 @@ export function Dashboard() {
                         step={0.5}
                         value={workoutForm.inclinePct}
                         onChange={(event) => updateWorkoutForm("inclinePct", Number(event.target.value))}
-                        className="h-[42px] w-full rounded-xl border border-gray-200 bg-white px-3 outline-none focus:border-green-400"
+                        className="h-[42px] w-full rounded-xl border border-gray-200 bg-white px-3 outline-none focus:border-green-400 dark:border-slate-600 dark:bg-slate-950 dark:text-slate-50 dark:placeholder:text-slate-500"
                         style={{ fontSize: "0.85rem", fontWeight: 700 }}
                         placeholder="%"
                       />
@@ -608,7 +608,7 @@ export function Dashboard() {
                   <textarea
                     value={workoutForm.notes}
                     onChange={(event) => updateWorkoutForm("notes", event.target.value)}
-                    className="min-h-[78px] rounded-xl border border-gray-200 bg-white px-3 py-2 outline-none focus:border-green-400"
+                    className="min-h-[78px] rounded-xl border border-gray-200 bg-white px-3 py-2 outline-none focus:border-green-400 dark:border-slate-600 dark:bg-slate-950 dark:text-slate-50 dark:placeholder:text-slate-400"
                     style={{ fontSize: "0.85rem", lineHeight: 1.5 }}
                     placeholder="Ví dụ: tập gym lưng xô 45 phút, nghỉ 60 giây mỗi set; hoặc chạy máy 30 phút tốc độ 8km/h dốc 5%..."
                   />
@@ -624,11 +624,11 @@ export function Dashboard() {
                   </button>
                 </div>
 
-                <p className="mt-2 text-gray-500" style={{ fontSize: "0.74rem", lineHeight: 1.5 }}>
+                <p className="mt-2 text-gray-500 dark:text-slate-300" style={{ fontSize: "0.74rem", lineHeight: 1.5 }}>
                   Công thức mặc định dùng MET theo cân nặng, thời lượng và cường độ. Nếu là bài khác hoặc mô tả phức tạp, hệ thống sẽ dùng AI để ước tính bảo thủ hơn.
                 </p>
                 {workoutMessage && (
-                  <p className="mt-3 rounded-xl bg-white px-3 py-2 text-green-700" style={{ fontSize: "0.8rem", fontWeight: 700 }}>
+                  <p className="mt-3 rounded-xl bg-white px-3 py-2 text-green-700 dark:border dark:border-emerald-400/20 dark:bg-slate-950 dark:text-emerald-200" style={{ fontSize: "0.8rem", fontWeight: 700 }}>
                     {workoutMessage}
                   </p>
                 )}
@@ -636,25 +636,25 @@ export function Dashboard() {
 
               <div className="mt-5">
                 <div className="mb-3 flex items-center justify-between">
-                  <p className="text-gray-900" style={{ fontSize: "0.92rem", fontWeight: 800 }}>Bài tập đã ghi hôm nay</p>
-                  <span className="text-gray-500" style={{ fontSize: "0.76rem" }}>{workouts.length} mục</span>
+                  <p className="text-gray-900 dark:text-slate-50" style={{ fontSize: "0.92rem", fontWeight: 800 }}>Bài tập đã ghi hôm nay</p>
+                  <span className="text-gray-500 dark:text-slate-300" style={{ fontSize: "0.76rem" }}>{workouts.length} mục</span>
                 </div>
                 {workouts.length === 0 ? (
-                  <div className="rounded-2xl border border-dashed border-gray-200 bg-gray-50 p-5 text-center">
+                  <div className="rounded-2xl border border-dashed border-gray-200 bg-gray-50 p-5 text-center dark:border-slate-700 dark:bg-slate-900">
                     <Dumbbell className="mx-auto mb-2 h-6 w-6 text-green-500" />
-                    <p className="text-gray-700" style={{ fontSize: "0.84rem", fontWeight: 700 }}>Chưa có bài tập nào hôm nay</p>
-                    <p className="mx-auto mt-1 max-w-md text-gray-500" style={{ fontSize: "0.76rem", lineHeight: 1.5 }}>
+                    <p className="text-gray-700 dark:text-slate-100" style={{ fontSize: "0.84rem", fontWeight: 700 }}>Chưa có bài tập nào hôm nay</p>
+                    <p className="mx-auto mt-1 max-w-md text-gray-500 dark:text-slate-300" style={{ fontSize: "0.76rem", lineHeight: 1.5 }}>
                       Ghi đạp xe, chạy bộ, chạy máy có dốc, tập gym hoặc bài khác để dashboard tính calo đã đốt.
                     </p>
                   </div>
                 ) : (
                   <div className="space-y-3">
                     {workouts.map((workout) => (
-                      <div key={workout.id} className="rounded-2xl border border-gray-100 bg-gray-50 p-4">
+                      <div key={workout.id} className="rounded-2xl border border-gray-100 bg-gray-50 p-4 dark:border-slate-700 dark:bg-slate-900">
                         <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                           <div className="min-w-0">
                             <div className="flex flex-wrap items-center gap-2">
-                              <p className="text-gray-900" style={{ fontSize: "0.9rem", fontWeight: 800 }}>{workout.label}</p>
+                              <p className="text-gray-900 dark:text-slate-50" style={{ fontSize: "0.9rem", fontWeight: 800 }}>{workout.label}</p>
                               <span className="rounded-full bg-green-100 px-2 py-0.5 text-green-700" style={{ fontSize: "0.68rem", fontWeight: 800 }}>
                                 {confidenceLabel[String(workout.confidence || "medium")] || "Trung bình"}
                               </span>
@@ -664,7 +664,7 @@ export function Dashboard() {
                                 </span>
                               )}
                             </div>
-                            <p className="mt-1 text-gray-500" style={{ fontSize: "0.76rem" }}>
+                            <p className="mt-1 text-gray-500 dark:text-slate-300" style={{ fontSize: "0.76rem" }}>
                               {workout.durationMinutes} phút
                               {workout.speedKmh ? ` • ${workout.speedKmh} km/h` : ""}
                               {workout.distanceKm ? ` • ${workout.distanceKm} km` : ""}
@@ -672,15 +672,15 @@ export function Dashboard() {
                               {workout.met ? ` • MET ${workout.met}` : ""}
                             </p>
                             {workout.note && (
-                              <p className="mt-2 text-gray-600" style={{ fontSize: "0.76rem", lineHeight: 1.5 }}>{workout.note}</p>
+                              <p className="mt-2 text-gray-600 dark:text-slate-300" style={{ fontSize: "0.76rem", lineHeight: 1.5 }}>{workout.note}</p>
                             )}
                           </div>
                           <div className="flex items-center justify-between gap-3 sm:flex-col sm:items-end">
-                            <p className="text-orange-600" style={{ fontSize: "1.05rem", fontWeight: 900 }}>{workout.calories.toLocaleString("vi-VN")} kcal</p>
+                            <p className="text-orange-600 dark:text-orange-300" style={{ fontSize: "1.05rem", fontWeight: 900 }}>{workout.calories.toLocaleString("vi-VN")} kcal</p>
                             <button
                               type="button"
                               onClick={() => void handleDeleteWorkout(workout.id)}
-                              className="inline-flex h-9 w-9 items-center justify-center rounded-xl border border-red-100 bg-white text-red-500 transition hover:bg-red-50"
+                              className="inline-flex h-9 w-9 items-center justify-center rounded-xl border border-red-100 bg-white text-red-500 transition hover:bg-red-50 dark:border-red-400/20 dark:bg-slate-950 dark:text-red-300 dark:hover:bg-red-500/10"
                               aria-label={`Xóa ${workout.label}`}
                             >
                               <Trash2 className="h-4 w-4" />
