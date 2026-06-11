@@ -25,6 +25,45 @@ export const healthyBeverageFoods = [
   { id: "food-124", name: "Trà chanh không đường size L", category: "Đồ uống", calories: 15, protein: 0, carbs: 3, fat: 0, portion: "1 ly size L (700ml)", volumeMl: 700 },
 ];
 
+export const healthyVietnameseFoods = [
+  { id: "food-vh-001", name: "Cơm gạo lứt ức gà áp chảo", category: "Cơm", calories: 430, protein: 38, carbs: 48, fat: 9, portion: "1 phần (350g)" },
+  { id: "food-vh-002", name: "Cơm gạo lứt cá thu kho ít dầu", category: "Cơm", calories: 455, protein: 32, carbs: 46, fat: 14, portion: "1 phần (360g)" },
+  { id: "food-vh-003", name: "Cơm gạo lứt tôm rim nhạt", category: "Cơm", calories: 390, protein: 30, carbs: 48, fat: 7, portion: "1 phần (340g)" },
+  { id: "food-vh-004", name: "Cơm gạo lứt thịt nạc kho tiêu", category: "Cơm", calories: 430, protein: 31, carbs: 46, fat: 12, portion: "1 phần (350g)" },
+  { id: "food-vh-005", name: "Cơm gạo lứt đậu hũ nấm kho", category: "Cơm", calories: 365, protein: 18, carbs: 50, fat: 10, portion: "1 phần (350g)" },
+  { id: "food-vh-006", name: "Cơm tấm ức gà nướng ít mỡ", category: "Cơm", calories: 470, protein: 39, carbs: 58, fat: 9, portion: "1 đĩa (360g)" },
+  { id: "food-vh-007", name: "Cơm cá basa hấp gừng rau luộc", category: "Cơm", calories: 410, protein: 34, carbs: 50, fat: 8, portion: "1 phần (360g)" },
+  { id: "food-vh-008", name: "Cơm trứng luộc rau củ", category: "Cơm", calories: 355, protein: 18, carbs: 47, fat: 10, portion: "1 phần (320g)" },
+  { id: "food-vh-009", name: "Phở gà xé không da tô nhỏ", category: "Súp & Cháo", calories: 340, protein: 28, carbs: 48, fat: 5, portion: "1 tô nhỏ (450ml)" },
+  { id: "food-vh-010", name: "Phở bò nạc nhiều rau tô nhỏ", category: "Súp & Cháo", calories: 365, protein: 30, carbs: 50, fat: 6, portion: "1 tô nhỏ (450ml)" },
+  { id: "food-vh-011", name: "Bún cá rô đồng ít bún", category: "Bún", calories: 330, protein: 29, carbs: 42, fat: 5, portion: "1 tô (450ml)" },
+  { id: "food-vh-012", name: "Bún gà xé rau thơm", category: "Bún", calories: 350, protein: 30, carbs: 45, fat: 6, portion: "1 tô (450ml)" },
+  { id: "food-vh-013", name: "Bún riêu cua ít bún nhiều rau", category: "Bún", calories: 360, protein: 24, carbs: 42, fat: 10, portion: "1 tô (450ml)" },
+  { id: "food-vh-014", name: "Bún thịt nướng nạc ít mỡ", category: "Bún", calories: 430, protein: 30, carbs: 55, fat: 10, portion: "1 phần (350g)" },
+  { id: "food-vh-015", name: "Miến gà nấm hương", category: "Súp & Cháo", calories: 320, protein: 27, carbs: 42, fat: 5, portion: "1 tô (420ml)" },
+  { id: "food-vh-016", name: "Cháo cá lóc rau thì là", category: "Súp & Cháo", calories: 285, protein: 24, carbs: 38, fat: 5, portion: "1 tô (380g)" },
+  { id: "food-vh-017", name: "Cháo tôm bí đỏ", category: "Súp & Cháo", calories: 300, protein: 23, carbs: 42, fat: 4, portion: "1 tô (380g)" },
+  { id: "food-vh-018", name: "Cháo đậu xanh ức gà", category: "Súp & Cháo", calories: 330, protein: 28, carbs: 44, fat: 5, portion: "1 tô (400g)" },
+  { id: "food-vh-019", name: "Gỏi gà xé phay bắp cải", category: "Gỏi & Salad", calories: 260, protein: 30, carbs: 16, fat: 8, portion: "1 đĩa (250g)" },
+  { id: "food-vh-020", name: "Gỏi bò rau mầm", category: "Gỏi & Salad", calories: 285, protein: 28, carbs: 18, fat: 10, portion: "1 đĩa (240g)" },
+  { id: "food-vh-021", name: "Gỏi đu đủ tôm hấp", category: "Gỏi & Salad", calories: 230, protein: 22, carbs: 24, fat: 5, portion: "1 đĩa (250g)" },
+  { id: "food-vh-022", name: "Gỏi ngó sen tôm thịt nạc", category: "Gỏi & Salad", calories: 280, protein: 24, carbs: 22, fat: 9, portion: "1 đĩa (260g)" },
+  { id: "food-vh-023", name: "Nộm rau muống tôm", category: "Gỏi & Salad", calories: 210, protein: 20, carbs: 18, fat: 6, portion: "1 đĩa (240g)" },
+  { id: "food-vh-024", name: "Gỏi cuốn cá hấp rau sống", category: "Gỏi & Salad", calories: 185, protein: 20, carbs: 22, fat: 3, portion: "2 cuốn (170g)" },
+  { id: "food-vh-025", name: "Canh bầu nấu tôm", category: "Canh", calories: 110, protein: 14, carbs: 9, fat: 2, portion: "1 bát (300ml)" },
+  { id: "food-vh-026", name: "Canh rau ngót thịt nạc", category: "Canh", calories: 145, protein: 16, carbs: 8, fat: 5, portion: "1 bát (300ml)" },
+  { id: "food-vh-027", name: "Canh bí đỏ thịt bằm nạc", category: "Canh", calories: 165, protein: 15, carbs: 18, fat: 4, portion: "1 bát (300ml)" },
+  { id: "food-vh-028", name: "Canh khổ qua nhồi thịt nạc", category: "Canh", calories: 190, protein: 19, carbs: 12, fat: 7, portion: "1 bát (300ml)" },
+  { id: "food-vh-029", name: "Canh cải xanh cá thác lác", category: "Canh", calories: 160, protein: 20, carbs: 8, fat: 5, portion: "1 bát (300ml)" },
+  { id: "food-vh-030", name: "Cá lóc hấp bầu", category: "Protein", calories: 245, protein: 36, carbs: 8, fat: 7, portion: "1 phần (250g)" },
+  { id: "food-vh-031", name: "Cá thu hấp gừng hành", category: "Protein", calories: 285, protein: 34, carbs: 4, fat: 15, portion: "1 phần (180g)" },
+  { id: "food-vh-032", name: "Tôm hấp sả", category: "Protein", calories: 180, protein: 34, carbs: 3, fat: 3, portion: "1 đĩa (180g)" },
+  { id: "food-vh-033", name: "Thịt heo nạc luộc cuốn rau", category: "Protein", calories: 300, protein: 32, carbs: 12, fat: 13, portion: "1 phần (250g)" },
+  { id: "food-vh-034", name: "Bò xào cần tây ít dầu", category: "Protein", calories: 290, protein: 31, carbs: 12, fat: 12, portion: "1 đĩa (230g)" },
+  { id: "food-vh-035", name: "Đậu hũ hấp nấm rơm", category: "Món chay", calories: 220, protein: 18, carbs: 16, fat: 10, portion: "1 đĩa (250g)" },
+  { id: "food-vh-036", name: "Nấm rơm kho tiêu ít dầu", category: "Món chay", calories: 170, protein: 9, carbs: 18, fat: 7, portion: "1 đĩa (220g)" },
+];
+
 export const healthyDrinkRecipes = [
   {
     id: "recipe-009",
@@ -206,6 +245,7 @@ export const seedData = {
     { id: "food-013", name: "Bún bò Huế tô nhỏ", category: "Bún", calories: 380, protein: 24, carbs: 50, fat: 8, portion: "1 tô nhỏ (450ml)" },
     { id: "food-014", name: "Bánh mì kẹp thịt", category: "Bánh mì", calories: 320, protein: 18, carbs: 38, fat: 10, portion: "1 ổ (120g)" },
     { id: "food-015", name: "Xôi đậu xanh", category: "Xôi", calories: 280, protein: 8, carbs: 52, fat: 4, portion: "1 gói (200g)" },
+    ...healthyVietnameseFoods,
     ...healthyBeverageFoods,
   ],
   mealLogs: [
