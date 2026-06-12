@@ -5,6 +5,7 @@ import { fileURLToPath } from "node:url";
 import { healthyBeverageFoods, healthyDrinkRecipes, healthyVietnameseFoods, seedData } from "./data/seed.js";
 import { loadSqlServerData } from "./sqlserver-import.js";
 import { loadSupabaseData, persistSupabaseData, resetSupabaseData } from "./supabase-postgres-store.js";
+import { loadSupabaseNormalizedData, persistSupabaseNormalizedData, resetSupabaseNormalizedData } from "./supabase-normalized-store.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -82,25 +83,30 @@ export async function createStore(options = {}) {
     };
   }
 
-  if (["supabase", "postgres", "postgresql"].includes(dataSource)) {
-    let cache = normalizeCatalogData(await loadSupabaseData());
+  if (["supabase", "postgres", "postgresql", "supabase-normalized", "supabase_normalized"].includes(dataSource)) {
+    const storageMode = String(process.env.NUTRIPATH_SUPABASE_STORAGE || "normalized").toLowerCase();
+    const useAppState = ["app_state", "app-state", "jsonb", "legacy"].includes(storageMode) && !["supabase-normalized", "supabase_normalized"].includes(dataSource);
+    const loadData = useAppState ? loadSupabaseData : loadSupabaseNormalizedData;
+    const persistData = useAppState ? persistSupabaseData : persistSupabaseNormalizedData;
+    const resetData = useAppState ? resetSupabaseData : resetSupabaseNormalizedData;
+    let cache = normalizeCatalogData(await loadData());
 
     return {
-      filePath: "supabase:postgresql",
-      dataSource: "supabase",
+      filePath: useAppState ? "supabase:app-state" : "supabase:normalized",
+      dataSource: useAppState ? "supabase" : "supabase-normalized",
       get db() {
         return cache;
       },
       async reload() {
-        cache = normalizeCatalogData(await loadSupabaseData());
+        cache = normalizeCatalogData(await loadData());
         return cache;
       },
       async save() {
-        await persistSupabaseData(cache);
+        await persistData(cache);
         return cache;
       },
       async reset() {
-        cache = normalizeCatalogData(await resetSupabaseData());
+        cache = normalizeCatalogData(await resetData());
         return cache;
       },
       nextId(prefix, collection) {

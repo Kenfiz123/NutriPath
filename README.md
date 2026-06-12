@@ -16,11 +16,11 @@ NutriPath là ứng dụng quản lý dinh dưỡng thông minh sử dụng AI, 
 
 ```
 NutriPath/
-├── NutriPath_Backend/          # REST API server (Node.js, zero dependencies)
+├── NutriPath_Backend/          # REST API server (Node.js + pg for Supabase)
 │   ├── src/
 │   │   ├── app.js              # Core application logic (routes, handlers)
 │   │   ├── server.js           # HTTP server bootstrap
-│   │   ├── store.js            # JSON file data store
+│   │   ├── store.js            # Multi-source data store (JSON/SQL Server/Supabase)
 │   │   ├── hateoas.js          # HAL link builder
 │   │   ├── sqlserver-import.js # SQL Server data loader
 │   │   └── data/seed.js        # Seed data (source of truth)
@@ -68,8 +68,9 @@ cd NutriPath_Backend
 # Copy file .env mẫu
 cp .env.example .env
 # Chỉnh sửa .env nếu cần (thêm GEMINI_API_KEY cho AI Chat)
+npm install
 
-# Khởi động server (KHÔNG cần npm install, zero dependencies)
+# Khởi động server
 npm run start
 ```
 
@@ -111,6 +112,25 @@ sqlcmd -S localhost -E -i NutriPath_SQL_Test.sql
 cd NutriPath_Backend && npm run start
 ```
 
+### Bước 5 *(Production)* — Thiết lập Supabase PostgreSQL
+
+Supabase production dùng schema normalized, không dùng một dòng JSONB làm nguồn dữ liệu chính.
+
+```bash
+# 1. Mở Supabase SQL Editor và chạy:
+NutriPath_Backend/sql/nutripath_supabase_normalized.sql
+
+# 2. Cấu hình backend trên Render/Railway:
+NUTRIPATH_DATA_SOURCE=supabase
+NUTRIPATH_SUPABASE_STORAGE=normalized
+NUTRIPATH_SUPABASE_SCHEMA=public
+SUPABASE_DATABASE_URL=postgresql://postgres.xxxxxx:[PASSWORD]@aws-xxx.pooler.supabase.com:6543/postgres
+SUPABASE_DATABASE_SSL=true
+SUPABASE_DATABASE_SSL_REJECT_UNAUTHORIZED=false
+```
+
+Backend sẽ tạo/đọc các bảng `nutripath_members`, `nutripath_foods`, `nutripath_meal_logs`, `nutripath_recipes`, `nutripath_payments`, `nutripath_chat_messages`, `nutripath_ai_safety_logs`... Nếu `public.nutripath_app_state` đã có dữ liệu cũ, lần chạy đầu sẽ dùng nó làm nguồn migrate khi các bảng normalized còn trống.
+
 ---
 
 ## ⚙️ Biến môi trường (Backend)
@@ -125,7 +145,12 @@ cd NutriPath_Backend && npm run start
 | `NUTRIPATH_SQL_DATABASE` | `NutriPath` | Tên database SQL Server |
 | `NUTRIPATH_SQL_TRUST_CERT` | `false` | Trust self-signed SSL cert |
 | `SUPABASE_DATABASE_URL` | *(trống)* | PostgreSQL/pooler connection string từ Supabase |
-| `NUTRIPATH_SUPABASE_TABLE` | `public.nutripath_app_state` | Bảng JSONB state khi dùng Supabase |
+| `SUPABASE_DATABASE_SSL` | `true` | Bật SSL khi kết nối Supabase PostgreSQL |
+| `SUPABASE_DATABASE_SSL_REJECT_UNAUTHORIZED` | `false` | Cho phép Supabase pooler cert trong môi trường deploy |
+| `SUPABASE_DATABASE_POOL_MAX` | `5` | Số kết nối PostgreSQL tối đa của backend |
+| `NUTRIPATH_SUPABASE_STORAGE` | `normalized` | `normalized` dùng nhiều bảng production; `app_state`/`jsonb` chỉ cho legacy fallback |
+| `NUTRIPATH_SUPABASE_SCHEMA` | `public` | Schema chứa các bảng NutriPath trên Supabase |
+| `NUTRIPATH_SUPABASE_TABLE` | `public.nutripath_app_state` | Bảng legacy JSONB, chỉ dùng khi migrate hoặc bật `NUTRIPATH_SUPABASE_STORAGE=app_state` |
 | `GEMINI_API_KEY` | *(trống)* | Google Gemini API key (cho AI Chat) |
 | `GEMINI_MODEL` | `gemini-2.5-flash` | Model Gemini sử dụng |
 | `GEMINI_RPM_LIMIT` | `5` | Rate limit requests/phút cho Gemini |
@@ -145,7 +170,7 @@ cd NutriPath_Backend && npm run start
 ```
 ┌─────────────────────┐       ┌──────────────────────────────────┐
 │                     │       │          NutriPath Backend        │
-│   React Frontend    │ HTTP  │   (Node.js, zero dependencies)   │
+│   React Frontend    │ HTTP  │   (Node.js REST API + pg)        │
 │                     │◄─────►│                                  │
 │  Vite + Tailwind v4 │       │  HAL-style HATEOAS REST API      │
 │  React Router v7    │       │                                  │
@@ -377,10 +402,11 @@ npm run preview
 # 1. Clone repo
 git clone <repo-url> && cd NutriPath
 
-# 2. Backend (không cần npm install)
+# 2. Backend
 cd NutriPath_Backend
 cp .env.example .env
 # Chỉnh sửa .env: thêm GEMINI_API_KEY nếu muốn AI Chat thực
+npm install
 npm run start
 
 # 3. Frontend (terminal mới)
@@ -415,7 +441,7 @@ node src/server.js
 
 ## 📌 Lưu ý kỹ thuật
 
-- **Backend không có `node_modules`**: Chỉ dùng Node.js built-in modules, không cần `npm install`
+- **Backend cần `npm install` khi deploy/production**: Supabase PostgreSQL dùng package `pg`; local JSON mode vẫn chạy nhẹ và tự tạo `data/db.json`.
 - **Data file bị gitignore**: `data/db.json` không được commit, sẽ tự tạo lần chạy đầu
 - **File `.env` bị gitignore**: Mỗi dev cần tạo từ `.env.example`
 - **Multi-mode data**: Cùng API, có thể chuyển giữa JSON, SQL Server và Supabase PostgreSQL qua env

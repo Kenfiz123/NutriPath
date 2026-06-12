@@ -16,7 +16,7 @@ http://127.0.0.1:8080
 
 Khi deploy Render/production, backend tự bind `0.0.0.0` để Render detect port. Local vẫn mặc định `127.0.0.1`; có thể override bằng `HOST`.
 
-Chạy `npm install` nếu dùng Supabase PostgreSQL hoặc deploy production; local JSON mode vẫn chỉ dùng Node.js built-in modules.
+Chạy `npm install` trước khi dùng Supabase PostgreSQL hoặc deploy production vì backend cần package `pg`. Local JSON mode vẫn có thể chạy nhanh bằng file `data/db.json`.
 
 ## Chạy với dữ liệu SQL Server
 
@@ -33,22 +33,26 @@ Khi đó FE vẫn gọi các API cũ, nhưng dữ liệu được load từ SQL 
 
 ## Chạy với Supabase PostgreSQL
 
-NutriPath hỗ trợ Supabase PostgreSQL bằng adapter JSONB để giữ nguyên toàn bộ API hiện tại.
-Backend sẽ tự tạo và seed dòng state đầu tiên nếu bảng chưa có dữ liệu.
+NutriPath dùng Supabase PostgreSQL theo schema normalized cho production. Backend vẫn giữ nguyên API hiện tại cho frontend, nhưng dữ liệu được lưu thành nhiều bảng thật như `nutripath_members`, `nutripath_foods`, `nutripath_meal_logs`, `nutripath_recipes`, `nutripath_payments`, `nutripath_chat_messages`, `nutripath_ai_safety_logs`.
+
+Nếu project cũ đang có bảng legacy `public.nutripath_app_state`, lần chạy đầu với normalized storage sẽ đọc row `default` rồi seed dữ liệu sang các bảng mới khi chúng còn trống.
 
 1. Tạo project Supabase.
-2. Mở SQL Editor và chạy file `sql/nutripath_supabase_app_state.sql`.
+2. Mở SQL Editor và chạy file `sql/nutripath_supabase_normalized.sql`.
 3. Lấy connection string ở Supabase Database Settings, ưu tiên pooler URI cho server deploy.
 4. Cấu hình backend:
 
 ```powershell
 $env:NUTRIPATH_DATA_SOURCE="supabase"
+$env:NUTRIPATH_SUPABASE_STORAGE="normalized"
+$env:NUTRIPATH_SUPABASE_SCHEMA="public"
 $env:SUPABASE_DATABASE_URL="postgresql://postgres.xxxxxx:[PASSWORD]@aws-0-xxx.pooler.supabase.com:6543/postgres"
-$env:NUTRIPATH_SUPABASE_TABLE="public.nutripath_app_state"
 node src/server.js
 ```
 
 Trên Render/Railway, đặt các biến môi trường tương tự trong dashboard. Không commit connection string hoặc database password.
+
+Muốn tạm chạy adapter cũ một dòng JSONB thì đặt `NUTRIPATH_SUPABASE_STORAGE=app_state` và dùng file `sql/nutripath_supabase_app_state.sql`. Không dùng mode này cho dữ liệu production dài hạn.
 
 ## HATEOAS
 
@@ -101,7 +105,11 @@ curl -X POST http://127.0.0.1:8080/api/payments \
 
 ## Data store
 
-Lần chạy đầu tiên sẽ tạo `data/db.json` từ seed data trong `src/data/seed.js`. File này được ignore để dữ liệu local không làm bẩn git.
+Backend có 3 mode dữ liệu:
+
+- `NUTRIPATH_DATA_SOURCE=json`: dev local, lần chạy đầu tạo `data/db.json` từ `src/data/seed.js`. File này được ignore để dữ liệu local không làm bẩn git.
+- `NUTRIPATH_DATA_SOURCE=sqlserver`: load dữ liệu từ SQL Server qua `src/sqlserver-import.js`.
+- `NUTRIPATH_DATA_SOURCE=supabase`: production Supabase PostgreSQL. Mặc định `NUTRIPATH_SUPABASE_STORAGE=normalized`, dữ liệu được ghi vào nhiều bảng riêng thay vì một JSON blob.
 
 Reset seed:
 
