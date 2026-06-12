@@ -806,16 +806,9 @@ function syncWorkoutActivity(log) {
   return log;
 }
 
-function ensureMealLog(store, memberId, date) {
-  const { db } = store;
-  let log = db.mealLogs.find((entry) => entry.memberId === memberId && entry.date === date);
-  if (log) return normalizeMealLogLabels(syncWorkoutActivity(log));
-
-  const member = getMember(db, memberId);
-  if (!member) notFound(null, "Member not found.");
-
-  log = {
-    id: store.nextId("log", db.mealLogs),
+function createMealLogDraft(store, memberId, date) {
+  return {
+    id: store.nextId("log", store.db.mealLogs),
     memberId,
     date,
     waterMl: 0,
@@ -834,6 +827,17 @@ function ensureMealLog(store, memberId, date) {
       { id: "snack", name: "Bữa phụ", icon: "orange", targetKcal: 200, time: "15:30", items: [] },
     ],
   };
+}
+
+function ensureMealLog(store, memberId, date) {
+  const { db } = store;
+  let log = db.mealLogs.find((entry) => entry.memberId === memberId && entry.date === date);
+  if (log) return normalizeMealLogLabels(syncWorkoutActivity(log));
+
+  const member = getMember(db, memberId);
+  if (!member) notFound(null, "Member not found.");
+
+  log = createMealLogDraft(store, memberId, date);
   db.mealLogs.push(log);
   return normalizeMealLogLabels(syncWorkoutActivity(log));
 }
@@ -3524,6 +3528,7 @@ registerControllers({
   collectionResponse,
   conflict,
   countTrackedMealDays,
+  createMealLogDraft,
   csvValue,
   currentLink,
   customFoodResource,

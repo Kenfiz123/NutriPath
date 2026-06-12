@@ -43,6 +43,7 @@ export function registerMembersRoutes(ctx) {
     collectionResponse,
     conflict,
     countTrackedMealDays,
+    createMealLogDraft,
     csvValue,
     currentLink,
     customFoodResource,
@@ -348,9 +349,9 @@ export function registerMembersRoutes(ctx) {
     const selectedDate = parseDate(url.searchParams.get("date")) || new Date();
     const date = toLocalDateString(selectedDate);
     assertMealLogAccess(member, date);
-    const log = ensureMealLog(store, member.id, date);
+    const existingLog = store.db.mealLogs.find((entry) => entry.memberId === member.id && entry.date === date);
+    const log = existingLog ? ensureMealLog(store, member.id, date) : createMealLogDraft(store, member.id, date);
     const summary = summarizeMealLog(log, member);
-    await saveMealLogChanges(store, log);
 
     return {
       date,
