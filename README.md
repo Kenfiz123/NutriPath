@@ -175,7 +175,7 @@ Backend sẽ tạo/đọc các bảng `nutripath_members`, `nutripath_foods`, `n
 │  Vite + Tailwind v4 │       │  HAL-style HATEOAS REST API      │
 │  React Router v7    │       │                                  │
 │  TypeScript         │       │  ┌─────────┐    ┌─────────────┐  │
-│  Recharts           │       │  │ JSON DB │ OR │ SQL Server  │  │
+│  Recharts           │       │  │ JSON DB │ OR │ SQL/Supabase│  │
 │  Lucide Icons       │       │  └─────────┘    └─────────────┘  │
 │  shadcn/ui + Radix  │       │                                  │
 │                     │       │  AI: Gemini / Groq (fallback)    │
@@ -184,7 +184,7 @@ Backend sẽ tạo/đọc các bảng `nutripath_members`, `nutripath_foods`, `n
 
 ### Backend — HAL HATEOAS API
 
-Backend sử dụng **Node.js built-in modules** (không cần `npm install`). API tuân theo chuẩn **HAL** (Hypertext Application Language):
+Backend sử dụng **Node.js REST API** với package `pg` khi chạy Supabase PostgreSQL production. API tuân theo chuẩn **HAL** (Hypertext Application Language):
 
 - Mỗi response đều có `_links` để client biết các action khả dụng
 - Collection responses dùng `_embedded` để chứa danh sách items
@@ -278,7 +278,9 @@ Frontend dùng **React 18** + **Vite 6** + **TypeScript**, styling với **Tailw
 
 ---
 
-## 🗄️ Database Schema (SQL Server)
+## 🗄️ Database & Seed Data
+
+SQL Server script vẫn là baseline local/legacy. Runtime hiện tại hỗ trợ JSON dev, SQL Server và Supabase PostgreSQL normalized; catalog seed chính nằm trong `NutriPath_Backend/src/data/seed.js`.
 
 ### Bảng dữ liệu chính
 
@@ -287,16 +289,16 @@ Frontend dùng **React 18** + **Vite 6** + **TypeScript**, styling với **Tailw
 | `Members` | Thông tin thành viên | 1 |
 | `AuthCredentials` | Mật khẩu hash (PBKDF2 + salt) | runtime |
 | `Subscriptions` | Đăng ký gói thành viên | 1 |
-| `Foods` | Cơ sở dữ liệu thực phẩm Việt | 15 |
+| `Foods` | Cơ sở dữ liệu thực phẩm Việt, đồ uống healthy và món phổ biến | 75 |
 | `MealLogs` | Nhật ký bữa ăn theo ngày | 1 |
 | `MealSections` | Các bữa (sáng/trưa/tối/phụ) | 4 |
 | `MealItems` | Món ăn trong từng bữa | 8 |
 | `Goals` | Mục tiêu hàng ngày | 4 |
 | `WeeklyProgress` | Tiến trình calo tuần | 7 |
-| `Recipes` | Công thức nấu ăn | 8 |
-| `RecipeTags` | Tag phân loại công thức | 16 |
-| `RecipeIngredients` | Nguyên liệu | 24 |
-| `RecipeSteps` | Các bước nấu | 24 |
+| `Recipes` | Công thức nấu ăn và đồ uống healthy | 11 |
+| `RecipeTags` | Tag phân loại công thức | runtime |
+| `RecipeIngredients` | Nguyên liệu | runtime |
+| `RecipeSteps` | Các bước nấu | runtime |
 | `Plans` | Gói Free/VIP/SVIP | 3 |
 | `PlanFeatures` | Tính năng của mỗi gói | 12 |
 | `Payments` | Lịch sử thanh toán | 3 |
