@@ -8,6 +8,6 @@
     "vercel-build": "npm run build --prefix NutriPath_Figma"
   },
   "engines": {
-    "node": ">=20"
+    "node": ">=20.19"
   }
 }
