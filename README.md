@@ -159,7 +159,7 @@ Backend sẽ tạo/đọc các bảng `nutripath_members`, `nutripath_foods`, `n
 | `GROQ_MODEL` | `llama-3.1-8b-instant` | Model Groq sử dụng |
 | `GROQ_RPM_LIMIT` | `30` | Rate limit requests/phút cho Groq |
 | `GROQ_RPD_LIMIT` | `1000` | Rate limit requests/ngày cho Groq |
-| `CHAT_ADMIN_KEY` | `TOILAKENFI` | Admin key cho chat management |
+| `CHAT_ADMIN_KEY` | *(trống; tự cấu hình)* | Admin key nội bộ cho chat management. Không commit giá trị thật. |
 
 > **Lưu ý:** AI Chat sẽ dùng canned responses nếu không có API key. Khi có `GEMINI_API_KEY`, chatbot sẽ trả lời bằng AI thực.
 

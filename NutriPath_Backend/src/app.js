@@ -2084,11 +2084,12 @@ function getSafeChatLimits(member) {
 }
 
 function getChatAdminKey() {
-  return process.env.CHAT_ADMIN_KEY || "TOILAKENFI";
+  return String(process.env.CHAT_ADMIN_KEY || "").trim();
 }
 
 function isChatAdminKey(text) {
-  return String(text || "").trim() === getChatAdminKey();
+  const adminKey = getChatAdminKey();
+  return adminKey.length > 0 && String(text || "").trim() === adminKey;
 }
 
 function getClientIp(req) {
