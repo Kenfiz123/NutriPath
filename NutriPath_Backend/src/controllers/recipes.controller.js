@@ -273,11 +273,12 @@ export function registerRecipesRoutes(ctx) {
 
     const prompt = String(body.prompt || "").trim();
     const answers = body.answers && typeof body.answers === "object" ? body.answers : {};
-    if (!prompt && Object.keys(answers).length === 0) {
+    const options = body.options && typeof body.options === "object" ? body.options : {};
+    if (!prompt && Object.keys(answers).length === 0 && Object.keys(options).length === 0) {
       badRequest("Vui lòng nhập mục tiêu hoặc trả lời câu hỏi cá nhân hóa.");
     }
 
-    const questions = getPersonalizedRecipeQuestions(prompt, answers);
+    const questions = getPersonalizedRecipeQuestions(prompt, answers, options);
     if (questions.length) {
       return {
         status: "needs_questions",
@@ -290,7 +291,7 @@ export function registerRecipesRoutes(ctx) {
       };
     }
 
-    const generatedRecipe = await generatePersonalizedRecipe(store, member, prompt, answers);
+    const generatedRecipe = await generatePersonalizedRecipe(store, member, prompt, answers, options);
     const recipe = savePersonalizedRecipe(store, member, generatedRecipe);
     await store.save();
     return {

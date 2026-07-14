@@ -8,11 +8,13 @@ import {
   setStoredSession,
   type CalorieCalculation,
   type CalorieCalculationInput,
+  type MemberPreferences,
 } from "../api";
 
 type Gender = "male" | "female";
 type ActivityLevel = "sedentary" | "light" | "moderate" | "active" | "very_active";
 type Goal = "lose" | "maintain" | "gain";
+type BodyShape = NonNullable<MemberPreferences["bodyShape"]>;
 
 const activityLevels: Array<{ value: ActivityLevel; label: string; desc: string; multiplier: number }> = [
   { value: "sedentary", label: "Ít vận động", desc: "Ngồi văn phòng, ít hoặc không tập", multiplier: 1.2 },
@@ -35,6 +37,14 @@ const exerciseTypes: Array<{ value: string; label: string }> = [
 
 const MACRO_COLORS = ["#16a34a", "#3b82f6", "#f59e0b"];
 
+const bodyShapeOptions: Array<{ value: BodyShape; label: string }> = [
+  { value: "lean", label: "Gầy/thon" },
+  { value: "average", label: "Cân đối" },
+  { value: "muscular", label: "Cơ bắp" },
+  { value: "curvy", label: "Đầy đặn" },
+  { value: "large", label: "Ngoại cỡ" },
+];
+
 function buildInitialInput(): CalorieCalculationInput {
   const session = getStoredSession();
   const profile = session?.member?.nutritionProfile;
@@ -48,6 +58,7 @@ function buildInitialInput(): CalorieCalculationInput {
       goal: profile.input.goal,
       exerciseType: profile.input.exerciseType,
       durationMinutes: profile.input.durationMinutes,
+      bodyShape: profile.input.bodyShape ?? session?.member?.preferences?.bodyShape ?? "average",
     };
   }
 
@@ -60,6 +71,7 @@ function buildInitialInput(): CalorieCalculationInput {
     goal: session?.member?.goal ?? "lose",
     exerciseType: "walking",
     durationMinutes: 30,
+    bodyShape: session?.member?.preferences?.bodyShape ?? "average",
   };
 }
 
@@ -96,12 +108,33 @@ function formatSavedTime(value?: string) {
   });
 }
 
+function getBodyModelMetrics(weightKg: number, heightCm: number, shape: BodyShape) {
+  const bmi = weightKg / ((heightCm / 100) ** 2);
+  const shapeBonus: Record<BodyShape, number> = {
+    lean: -8,
+    average: 0,
+    muscular: 8,
+    curvy: 10,
+    large: 18,
+  };
+  const torsoWidth = Math.min(92, Math.max(42, 46 + (bmi - 21) * 2.2 + shapeBonus[shape]));
+  const figureHeight = Math.min(220, Math.max(145, 150 + (heightCm - 150) * 0.72));
+  return {
+    bmi: Number.isFinite(bmi) ? Number(bmi.toFixed(1)) : 0,
+    torsoWidth,
+    shoulderWidth: torsoWidth + (shape === "muscular" ? 22 : 12),
+    hipWidth: torsoWidth + (shape === "curvy" ? 18 : shape === "large" ? 12 : 4),
+    figureHeight,
+  };
+}
+
 export function CalorieCalculator() {
   const initialInput = useMemo(() => buildInitialInput(), []);
   const [age, setAge] = useState(initialInput.age);
   const [weightKg, setWeightKg] = useState(initialInput.weightKg);
   const [heightCm, setHeightCm] = useState(initialInput.heightCm);
   const [gender, setGender] = useState<Gender>(initialInput.gender);
+  const [bodyShape, setBodyShape] = useState<BodyShape>(initialInput.bodyShape ?? "average");
   const [activityLevel, setActivityLevel] = useState<ActivityLevel>(initialInput.activityLevel as ActivityLevel);
   const [goal, setGoal] = useState<Goal>(initialInput.goal);
   const [exerciseType, setExerciseType] = useState(initialInput.exerciseType ?? "walking");
@@ -117,6 +150,7 @@ export function CalorieCalculator() {
   const isSvip = tier === "svip";
   const lastSaved = session?.member?.nutritionProfile?.updatedAt;
   const exerciseLabel = exerciseTypes.find((item) => item.value === exerciseType)?.label ?? "Đi bộ";
+  const bodyModel = getBodyModelMetrics(Number(weightKg), Number(heightCm), bodyShape);
 
   const macroData = calculation ? [
     getMacro(calculation, "Protein"),
@@ -134,6 +168,7 @@ export function CalorieCalculator() {
       weightKg: Number(weightKg),
       heightCm: Number(heightCm),
       gender,
+      bodyShape,
       activityLevel,
       goal,
       exerciseType,
@@ -230,6 +265,47 @@ export function CalorieCalculator() {
                       {item.label}
                     </button>
                   ))}
+                </div>
+              </div>
+
+              <div className="mb-5">
+                <label className="mb-2 block text-gray-700" style={{ fontSize: "0.875rem", fontWeight: 600 }}>Hình dáng cơ thể</label>
+                <div className="grid grid-cols-2 gap-2 sm:grid-cols-5">
+                  {bodyShapeOptions.map((item) => (
+                    <button
+                      key={item.value}
+                      type="button"
+                      onClick={() => setBodyShape(item.value)}
+                      className={`rounded-xl border px-2 py-2.5 transition-all ${
+                        bodyShape === item.value
+                          ? "border-green-500 bg-green-50 text-green-700"
+                          : "border-gray-200 bg-white text-gray-600 hover:border-gray-300"
+                      }`}
+                      style={{ fontSize: "0.78rem", fontWeight: 700 }}
+                    >
+                      {item.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div className="mb-5 rounded-2xl border border-emerald-100 bg-emerald-50 p-4">
+                <div className="flex items-center gap-4">
+                  <div className="flex h-[240px] w-32 flex-shrink-0 items-center justify-center rounded-2xl bg-white">
+                    <div className="relative flex justify-center" style={{ height: bodyModel.figureHeight, width: 112 }}>
+                      <div className="absolute left-1/2 top-0 h-10 w-10 -translate-x-1/2 rounded-full bg-emerald-200" />
+                      <div className="absolute left-1/2 top-12 -translate-x-1/2 rounded-t-[42px] rounded-b-[30px] bg-emerald-500" style={{ width: bodyModel.shoulderWidth, height: bodyModel.figureHeight * 0.42 }} />
+                      <div className="absolute left-1/2 -translate-x-1/2 rounded-b-[34px] bg-emerald-400" style={{ top: 52 + bodyModel.figureHeight * 0.28, width: bodyModel.hipWidth, height: bodyModel.figureHeight * 0.24 }} />
+                      <div className="absolute bottom-0 left-[42%] h-[38%] w-5 rounded-full bg-emerald-500" />
+                      <div className="absolute bottom-0 right-[42%] h-[38%] w-5 rounded-full bg-emerald-500" />
+                    </div>
+                  </div>
+                  <div>
+                    <p className="text-gray-900" style={{ fontSize: "0.95rem", fontWeight: 800 }}>Mô phỏng theo dữ liệu nhập</p>
+                    <p className="mt-1 text-gray-600" style={{ fontSize: "0.82rem", lineHeight: 1.6 }}>
+                      {heightCm}cm • {weightKg}kg • BMI khoảng {bodyModel.bmi}. Hình này chỉ để trực quan hóa vóc dáng, không thay thế đo thành phần cơ thể.
+                    </p>
+                  </div>
                 </div>
               </div>
 

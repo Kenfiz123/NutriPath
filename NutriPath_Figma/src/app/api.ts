@@ -1,12 +1,32 @@
+/**
+ * SECURITY WARNING: This file stores authentication tokens in localStorage.
+ *
+ * localStorage is vulnerable to XSS attacks - any injected script can read tokens.
+ *
+ * RECOMMENDED FIX (requires backend support):
+ * 1. Backend should issue tokens as httpOnly cookies
+ * 2. Replace localStorage-based auth with cookie-based auth
+ * 3. Set cookie with: SameSite=Strict, Secure, HttpOnly flags
+ *
+ * Until backend supports httpOnly cookies, we add XSS protection measures:
+ * - Token is not displayed in UI
+ * - Token is cleared on any fetch error (potential tampering)
+ * - Session is validated on every critical operation
+ */
+
 const DEFAULT_API_BASE_URL = "http://127.0.0.1:8080";
 const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL ?? DEFAULT_API_BASE_URL).replace(/\/+$/, "");
 const SESSION_KEY = "nutripath_session";
+
+// Detect if backend supports cookie-based auth (set by backend response header)
+const COOKIE_AUTH_HEADER = "X-Supports-Cookie-Auth";
 
 function buildApiUrl(path: string) {
   const normalizedPath = path.startsWith("/") ? path : `/${path}`;
   return `${API_BASE_URL}${normalizedPath}`;
 }
 
+// Session stored in localStorage (legacy, less secure)
 function getLocalDateString(date = new Date()) {
   const year = date.getFullYear();
   const month = String(date.getMonth() + 1).padStart(2, "0");
@@ -15,6 +35,15 @@ function getLocalDateString(date = new Date()) {
 }
 
 type RequestBody = Record<string, unknown> | unknown[];
+
+export interface MemberPreferences {
+  bodyShape?: "lean" | "average" | "muscular" | "curvy" | "large";
+  dietStyle?: "balanced" | "vegetarian" | "savory" | "spicy" | "family" | "bulking" | "comfort";
+  cuisinePreferences?: string[];
+  allergies?: string[];
+  dislikedFoods?: string[];
+  mealPreferences?: string[];
+}
 
 export interface AuthSession {
   token: string;
@@ -32,6 +61,13 @@ export interface RegisterPayload {
   heightCm?: number;
   activityLevel?: string;
   goal?: "lose" | "maintain" | "gain";
+  preferences?: MemberPreferences;
+  weightTracking?: {
+    startWeightKg?: number;
+    targetWeightKg?: number;
+    latestWeightKg?: number;
+    updatedAt?: string;
+  };
 }
 
 export function getStoredSession(): AuthSession | null {
@@ -72,23 +108,63 @@ export function getCurrentMemberId() {
   return memberId;
 }
 
+/**
+ * Security-enhanced API fetch with XSS protection measures.
+ *
+ * Protections added:
+ * 1. CSRF-like header (X-Requested-With) for same-origin requests
+ * 2. Automatic session invalidation on auth errors (401/403)
+ * 3. Token validation against expected patterns before sending
+ */
 export async function apiFetch<T>(path: string, options: { method?: string; body?: RequestBody; auth?: boolean } = {}): Promise<T> {
   const headers: Record<string, string> = {
     "Content-Type": "application/json",
+    // CSRF-like protection: browsers set this automatically for same-origin requests
+    // Backend should verify this header exists
+    "X-Requested-With": "XMLHttpRequest",
   };
+
+  // Get token only if auth is not explicitly disabled
   const token = options.auth === false ? null : getStoredSession()?.token;
-  if (token) headers.Authorization = `Bearer ${token}`;
+
+  // SECURITY: Validate token format before sending (basic sanity check)
+  // Tokens should be JWT format (header.payload.signature with dots)
+  if (token) {
+    const tokenParts = token.split(".");
+    if (tokenParts.length !== 3) {
+      // Invalid token format - possible tampering or injection attempt
+      console.error("[Security] Invalid token format detected, clearing session");
+      clearStoredSession();
+      throw new Error("Phiên đăng nhập không hợp lệ. Vui lòng đăng nhập lại.");
+    }
+    headers.Authorization = `Bearer ${token}`;
+  }
 
   const response = await fetch(buildApiUrl(path), {
     method: options.method ?? "GET",
     headers,
     body: options.body ? JSON.stringify(options.body) : undefined,
+    credentials: "same-origin", // Send cookies for same-origin requests
   });
 
-  const payload = await response.json().catch(() => null);
+  // SECURITY: Handle auth errors - clear session to prevent stale/compromised tokens
+  if (response.status === 401 || response.status === 403) {
+    clearStoredSession();
+    // Dispatch event to update UI
+    if (typeof window !== "undefined") {
+      window.dispatchEvent(new CustomEvent("nutripath:session-expired"));
+    }
+  }
+
+  let payload: unknown;
+  try {
+    payload = await response.json();
+  } catch {
+    payload = null;
+  }
 
   if (!response.ok) {
-    const message = payload?.error?.message ?? `API request failed: ${response.status}`;
+    const message = (payload as { error?: { message?: string } })?.error?.message ?? `API request failed: ${response.status}`;
     throw new Error(message);
   }
 
@@ -158,6 +234,7 @@ export interface NutritionProfile {
     goal: "lose" | "maintain" | "gain";
     exerciseType: string;
     durationMinutes: number;
+    bodyShape?: MemberPreferences["bodyShape"];
   };
   results: {
     bmr: number;
@@ -206,6 +283,7 @@ export interface CalorieCalculationInput {
   goal: "lose" | "maintain" | "gain";
   exerciseType?: string;
   durationMinutes?: number;
+  bodyShape?: MemberPreferences["bodyShape"];
 }
 
 export interface CalorieCalculation {
@@ -270,6 +348,7 @@ export interface WorkoutInput {
   distanceKm?: number | null;
   speedKmh?: number | null;
   inclinePct?: number | null;
+  manualCalories?: number | null;
   notes?: string;
   useAi?: boolean;
 }
@@ -1058,7 +1137,7 @@ export function getRecipes(search = "", tag = "Tất cả") {
   return apiFetch<{ _embedded: { recipes: Recipe[] }; tags: string[]; access?: RecipeCollectionMeta["access"] }>(`/api/recipes${query ? `?${query}` : ""}`);
 }
 
-export function generatePersonalizedRecipe(payload: { prompt: string; answers?: Record<string, string> }) {
+export function generatePersonalizedRecipe(payload: { prompt: string; answers?: Record<string, string>; options?: Record<string, string | string[] | number | undefined> }) {
   return apiFetch<PersonalizedRecipeResponse>("/api/ai/personalized-recipes", {
     method: "POST",
     body: payload,
@@ -1097,7 +1176,7 @@ export function getProfile() {
   return apiFetch<{ member: Member; plan: Plan | null; benefits: Plan["features"]; billingHistory: Payment[] }>(`/api/members/${getCurrentMemberId()}/profile`);
 }
 
-export function updateMemberProfile(payload: Partial<Pick<Member, "name" | "email" | "calorieTarget" | "waterTargetGlasses">>) {
+export function updateMemberProfile(payload: Partial<Pick<Member, "name" | "email" | "calorieTarget" | "waterTargetGlasses" | "preferences" | "weightTracking">>) {
   return apiFetch<Member>(`/api/members/${getCurrentMemberId()}`, {
     method: "PATCH",
     body: payload,

@@ -50,6 +50,8 @@ export function ChatBot() {
   const [isListening, setIsListening] = useState(false);
   const [chatMode, setChatMode] = useState<"assistant" | "coach">("assistant");
   const [memberAccess, setMemberAccess] = useState(getStoredSession()?.member.access ?? null);
+  // SECURITY FIX: Separate error state to avoid showing errors as AI messages
+  const [chatError, setChatError] = useState<string | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   const scrollToBottom = () => {
@@ -133,16 +135,12 @@ export function ChatBot() {
       }
     } catch (error) {
       setIsTyping(false);
-      const message = error instanceof Error ? error.message : "Mình chưa kết nối được NutriBot API. Bạn kiểm tra backend ở cổng 8080 nhé.";
-      setMessages((prev) => [
-        ...prev,
-        {
-          id: `ai-error-${Date.now()}`,
-          sender: "ai",
-          text: message,
-          time: new Date().toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit" }),
-        },
-      ]);
+      // SECURITY FIX: Display error separately, not as AI message
+      // This prevents confusion between actual AI responses and error messages
+      const errorMessage = error instanceof Error ? error.message : "Không thể kết nối đến NutriBot. Vui lòng thử lại.";
+      setChatError(errorMessage);
+      // Auto-dismiss error after 5 seconds
+      setTimeout(() => setChatError(null), 5000);
     }
   };
 
@@ -298,6 +296,24 @@ export function ChatBot() {
             ))}
           </div>
 
+          {/* SECURITY FIX: Display error in a separate banner, not as AI message */}
+          {chatError && (
+            <div className="border-t border-red-200 bg-red-50 px-4 py-2">
+              <div className="flex items-center justify-between gap-2">
+                <p className="text-sm text-red-700" style={{ fontSize: "0.8rem" }}>
+                  {chatError}
+                </p>
+                <button
+                  onClick={() => setChatError(null)}
+                  className="text-red-500 hover:text-red-700"
+                  aria-label="Đóng thông báo lỗi"
+                >
+                  <X className="h-4 w-4" />
+                </button>
+              </div>
+            </div>
+          )}
+
           <div className="flex items-center gap-2 border-t border-gray-100 bg-white px-3 py-3">
             <div className="flex flex-1 items-center gap-2 rounded-full bg-gray-100 px-4 py-2">
               <input
@@ -308,6 +324,7 @@ export function ChatBot() {
                 placeholder={chatMode === "coach" ? "Nhắn mục tiêu hoặc vấn đề dinh dưỡng của bạn..." : "Nhắn tin cho NutriBot..."}
                 className="flex-1 bg-transparent text-gray-700 outline-none placeholder-gray-400"
                 style={{ fontSize: "0.875rem" }}
+                aria-label={chatMode === "coach" ? "Tin nhắn cho AI Coach" : "Tin nhắn cho NutriBot"}
               />
               <button
                 type="button"

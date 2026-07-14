@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type FormEvent, type ReactNode } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent, type ReactNode } from "react";
 import { Link } from "react-router";
 import {
   BarChart3,
@@ -424,11 +424,29 @@ export function Admin() {
     }
   }, [activeTab]);
 
+  // Debounced search - chỉ gọi API sau 300ms khi user ngừng gõ
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
   useEffect(() => {
-    if (activeTab === "users") {
-      void loadUsers();
+    if (activeTab !== "users") return;
+
+    // Hủy debounce trước đó nếu có
+    if (debounceRef.current) {
+      clearTimeout(debounceRef.current);
     }
-  }, [search, roleFilter, statusFilter]);
+
+    // Đặt debounce mới - chờ 300ms trước khi gọi API
+    debounceRef.current = setTimeout(() => {
+      void loadUsers();
+    }, 300);
+
+    // Cleanup: hủy timeout khi component unmount hoặc dependencies thay đổi
+    return () => {
+      if (debounceRef.current) {
+        clearTimeout(debounceRef.current);
+      }
+    };
+  }, [search, roleFilter, statusFilter, activeTab]);
 
   async function refreshCurrentTab() {
     if (activeTab === "overview") await loadOverview();

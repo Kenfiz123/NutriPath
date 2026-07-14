@@ -31,10 +31,12 @@ import {
   updateMemberProfile,
   type AppNotification,
   type Member,
+  type MemberPreferences,
   type Payment,
   type Plan,
 } from "../api";
 import { useAuth } from "../auth";
+import { VoiceInputButton } from "../components/VoiceInputButton";
 
 type Tier = "free" | "vip" | "svip";
 type ProfileTab = "overview" | "membership" | "activity" | "notifications" | "settings";
@@ -76,6 +78,41 @@ const navItems: Array<{ icon: typeof TrendingUp; label: string; id: ProfileTab }
   { icon: Bell, label: "Thông báo", id: "notifications" },
   { icon: Settings, label: "Cài đặt", id: "settings" },
 ];
+
+const bodyShapeOptions: Array<{ value: NonNullable<MemberPreferences["bodyShape"]>; label: string }> = [
+  { value: "lean", label: "Gầy/thon" },
+  { value: "average", label: "Cân đối" },
+  { value: "muscular", label: "Cơ bắp" },
+  { value: "curvy", label: "Đầy đặn" },
+  { value: "large", label: "Ngoại cỡ" },
+];
+
+const dietStyleOptions: Array<{ value: NonNullable<MemberPreferences["dietStyle"]>; label: string }> = [
+  { value: "balanced", label: "Cân bằng" },
+  { value: "vegetarian", label: "Chay" },
+  { value: "savory", label: "Mặn/đậm vị" },
+  { value: "spicy", label: "Cay" },
+  { value: "family", label: "Món gia đình" },
+  { value: "bulking", label: "Tăng cân" },
+  { value: "comfort", label: "Không quá healthy" },
+];
+
+const cuisineOptions = [
+  { value: "vietnamese", label: "Việt" },
+  { value: "asian", label: "Á" },
+  { value: "western", label: "Âu" },
+  { value: "japanese", label: "Nhật" },
+  { value: "korean", label: "Hàn" },
+  { value: "chinese", label: "Trung" },
+];
+
+function listToText(value?: string[]) {
+  return Array.isArray(value) ? value.join(", ") : "";
+}
+
+function textToList(value: string) {
+  return value.split(/[,\n;]/).map((item) => item.trim()).filter(Boolean);
+}
 
 function formatDate(date?: string | null) {
   if (!date) return "Không xác định";
@@ -123,6 +160,14 @@ export function MemberProfile() {
     email: "",
     calorieTarget: 1800,
     waterTargetMl: 2000,
+    bodyShape: "average" as NonNullable<MemberPreferences["bodyShape"]>,
+    dietStyle: "balanced" as NonNullable<MemberPreferences["dietStyle"]>,
+    cuisinePreferences: [] as string[],
+    allergies: "",
+    dislikedFoods: "",
+    mealPreferences: "",
+    latestWeightKg: 65,
+    targetWeightKg: 65,
   });
 
   useEffect(() => {
@@ -137,6 +182,14 @@ export function MemberProfile() {
           email: data.member.email,
           calorieTarget: data.member.calorieTarget,
           waterTargetMl: Math.round(data.member.waterTargetGlasses * 250),
+          bodyShape: data.member.preferences?.bodyShape ?? "average",
+          dietStyle: data.member.preferences?.dietStyle ?? "balanced",
+          cuisinePreferences: data.member.preferences?.cuisinePreferences ?? [],
+          allergies: listToText(data.member.preferences?.allergies),
+          dislikedFoods: listToText(data.member.preferences?.dislikedFoods),
+          mealPreferences: listToText(data.member.preferences?.mealPreferences),
+          latestWeightKg: data.member.weightTracking?.latestWeightKg ?? data.member.weightKg ?? 65,
+          targetWeightKg: data.member.weightTracking?.targetWeightKg ?? data.member.weightKg ?? 65,
         });
         setError(null);
       })
@@ -236,6 +289,11 @@ export function MemberProfile() {
       return;
     }
 
+    if (settingsForm.latestWeightKg < 30 || settingsForm.latestWeightKg > 250 || settingsForm.targetWeightKg < 30 || settingsForm.targetWeightKg > 250) {
+      setStatusMessage("CÃ¢n náº·ng nÃªn náº±m trong khoáº£ng 30-250kg.");
+      return;
+    }
+
     setSavingSettings(true);
     try {
       const updated = await updateMemberProfile({
@@ -243,6 +301,18 @@ export function MemberProfile() {
         email: settingsForm.email.trim(),
         calorieTarget,
         waterTargetGlasses,
+        preferences: {
+          bodyShape: settingsForm.bodyShape,
+          dietStyle: settingsForm.dietStyle,
+          cuisinePreferences: settingsForm.cuisinePreferences,
+          allergies: textToList(settingsForm.allergies),
+          dislikedFoods: textToList(settingsForm.dislikedFoods),
+          mealPreferences: textToList(settingsForm.mealPreferences),
+        },
+        weightTracking: {
+          latestWeightKg: Number(settingsForm.latestWeightKg),
+          targetWeightKg: Number(settingsForm.targetWeightKg),
+        },
       });
       setMember(updated);
       syncStoredMember(updated);
@@ -445,6 +515,75 @@ export function MemberProfile() {
                     <span className="mb-1 block text-sm font-semibold text-gray-700">Mục tiêu nước/ngày (ml)</span>
                     <input type="number" min={500} max={5000} step={50} value={settingsForm.waterTargetMl} onChange={(event) => setSettingsForm({ ...settingsForm, waterTargetMl: Number(event.target.value) })} className="w-full rounded-xl border border-gray-200 bg-gray-50 px-4 py-3 outline-none focus:border-green-500" />
                   </label>
+                  <div className="md:col-span-2 rounded-2xl border border-green-100 bg-green-50/70 p-4">
+                    <h4 className="text-gray-900" style={{ fontSize: "0.95rem", fontWeight: 800 }}>Hồ sơ cơ thể & khẩu vị</h4>
+                    <p className="mt-1 text-gray-500" style={{ fontSize: "0.8rem" }}>Dữ liệu này giúp dashboard mô phỏng cơ thể, theo dõi cân nặng và cho AI tránh món dị ứng.</p>
+                    <div className="mt-4 grid gap-4 md:grid-cols-2">
+                      <label className="block">
+                        <span className="mb-1 block text-sm font-semibold text-gray-700">Hình dáng cơ thể</span>
+                        <select value={settingsForm.bodyShape} onChange={(event) => setSettingsForm({ ...settingsForm, bodyShape: event.target.value as NonNullable<MemberPreferences["bodyShape"]> })} className="w-full rounded-xl border border-gray-200 bg-white px-4 py-3 outline-none focus:border-green-500">
+                          {bodyShapeOptions.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
+                        </select>
+                      </label>
+                      <label className="block">
+                        <span className="mb-1 block text-sm font-semibold text-gray-700">Phong cách ăn</span>
+                        <select value={settingsForm.dietStyle} onChange={(event) => setSettingsForm({ ...settingsForm, dietStyle: event.target.value as NonNullable<MemberPreferences["dietStyle"]> })} className="w-full rounded-xl border border-gray-200 bg-white px-4 py-3 outline-none focus:border-green-500">
+                          {dietStyleOptions.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
+                        </select>
+                      </label>
+                      <label className="block">
+                        <span className="mb-1 block text-sm font-semibold text-gray-700">Cân nặng hiện tại</span>
+                        <input type="number" min={30} max={250} step={0.1} value={settingsForm.latestWeightKg} onChange={(event) => setSettingsForm({ ...settingsForm, latestWeightKg: Number(event.target.value) })} className="w-full rounded-xl border border-gray-200 bg-white px-4 py-3 outline-none focus:border-green-500" />
+                      </label>
+                      <label className="block">
+                        <span className="mb-1 block text-sm font-semibold text-gray-700">Cân nặng mục tiêu</span>
+                        <input type="number" min={30} max={250} step={0.1} value={settingsForm.targetWeightKg} onChange={(event) => setSettingsForm({ ...settingsForm, targetWeightKg: Number(event.target.value) })} className="w-full rounded-xl border border-gray-200 bg-white px-4 py-3 outline-none focus:border-green-500" />
+                      </label>
+                    </div>
+                    <div className="mt-4">
+                      <span className="mb-2 block text-sm font-semibold text-gray-700">Nền ẩm thực ưu tiên</span>
+                      <div className="flex flex-wrap gap-2">
+                        {cuisineOptions.map((option) => {
+                          const active = settingsForm.cuisinePreferences.includes(option.value);
+                          return (
+                            <button
+                              key={option.value}
+                              type="button"
+                              onClick={() => setSettingsForm({
+                                ...settingsForm,
+                                cuisinePreferences: active
+                                  ? settingsForm.cuisinePreferences.filter((item) => item !== option.value)
+                                  : [...settingsForm.cuisinePreferences, option.value],
+                              })}
+                              className={`rounded-xl border px-3 py-2 text-sm font-bold ${active ? "border-green-500 bg-white text-green-700" : "border-gray-200 bg-white/70 text-gray-600"}`}
+                            >
+                              {option.label}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+                    <div className="mt-4 grid gap-4 md:grid-cols-2">
+                      {[
+                        { key: "allergies", label: "Món dị ứng/cần tránh", placeholder: "Ví dụ: tôm, đậu phộng, sữa..." },
+                        { key: "dislikedFoods", label: "Món không thích", placeholder: "Ví dụ: hành sống, nội tạng..." },
+                        { key: "mealPreferences", label: "Ghi chú khẩu vị", placeholder: "Ví dụ: thích cay nhẹ, ít dầu, món gia đình..." },
+                      ].map((field) => (
+                        <label key={field.key} className={field.key === "mealPreferences" ? "block md:col-span-2" : "block"}>
+                          <span className="mb-1 block text-sm font-semibold text-gray-700">{field.label}</span>
+                          <div className="flex gap-2">
+                            <input
+                              value={String(settingsForm[field.key as "allergies" | "dislikedFoods" | "mealPreferences"])}
+                              onChange={(event) => setSettingsForm({ ...settingsForm, [field.key]: event.target.value })}
+                              placeholder={field.placeholder}
+                              className="min-w-0 flex-1 rounded-xl border border-gray-200 bg-white px-4 py-3 outline-none focus:border-green-500"
+                            />
+                            <VoiceInputButton onTranscript={(text) => setSettingsForm({ ...settingsForm, [field.key]: `${String(settingsForm[field.key as "allergies" | "dislikedFoods" | "mealPreferences"])} ${text}`.trim() })} />
+                          </div>
+                        </label>
+                      ))}
+                    </div>
+                  </div>
                   <div className="md:col-span-2 flex flex-wrap items-center justify-between gap-3">
                     {statusMessage ? <p className="text-sm font-semibold text-green-700">{statusMessage}</p> : <span />}
                     <button disabled={savingSettings} type="submit" className="inline-flex items-center gap-2 rounded-xl bg-green-600 px-5 py-3 text-white transition hover:bg-green-700 disabled:opacity-60">

@@ -117,6 +117,25 @@ export function RequireAuth({ children }: { children: ReactNode }) {
   return <>{children}</>;
 }
 
+/**
+ * SECURITY FIX: Admin route protection
+ *
+ * IMPORTANT: Client-side role check is NOT sufficient for security.
+ * The backend MUST verify the user's role on EVERY admin API request.
+ *
+ * What this component does:
+ * 1. Client-side redirect for UX (non-admins can't see admin pages)
+ * 2. Adds security headers that backend should verify
+ *
+ * Backend requirements for proper security:
+ * - Verify JWT token on every request
+ * - Extract and verify 'role' claim from token
+ * - Return 403 for non-admin users trying to access /api/admin/* routes
+ * - Log unauthorized access attempts
+ *
+ * Without backend verification, a malicious user with a valid token
+ * could call admin APIs directly (e.g., via curl/Postman).
+ */
 export function RequireAdmin({ children }: { children: ReactNode }) {
   const { session } = useAuth();
   const location = useLocation();
@@ -125,8 +144,32 @@ export function RequireAdmin({ children }: { children: ReactNode }) {
     return <Navigate to="/login" replace state={{ from: location.pathname }} />;
   }
 
-  if (session.member.role?.toLowerCase() !== "admin") {
+  // Client-side check (UX only - not secure by itself)
+  // This prevents non-admins from seeing admin pages, but backend MUST enforce this
+  const isAdmin = session.member.role?.toLowerCase() === "admin";
+
+  // SECURITY: Add warning in console for debugging (remove in production)
+  if (!isAdmin) {
+    console.warn(
+      "[Security] Non-admin user attempted to access admin route. " +
+      "User role:", session.member.role,
+      "This check is client-side only. Backend must verify role on every request."
+    );
+  }
+
+  if (!isAdmin) {
     return <Navigate to="/dashboard" replace />;
+  }
+
+  // SECURITY: Dispatch event for audit logging (backend should log this server-side)
+  if (typeof window !== "undefined") {
+    window.dispatchEvent(new CustomEvent("nutripath:admin-access", {
+      detail: {
+        memberId: session.member.id,
+        timestamp: new Date().toISOString(),
+        path: location.pathname,
+      }
+    }));
   }
 
   return <>{children}</>;

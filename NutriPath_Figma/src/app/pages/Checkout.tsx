@@ -65,6 +65,117 @@ function formatExpiry(value: string) {
   return `${digits.slice(0, 2)}/${digits.slice(2)}`;
 }
 
+/**
+ * Validate card number bằng Luhn algorithm (dùng để kiểm tra số thẻ hợp lệ)
+ * @param cardNumber - số thẻ đã được format (có khoảng trắng)
+ * @returns true nếu số thẻ hợp lệ theo Luhn
+ */
+function validateCardNumber(cardNumber: string): boolean {
+  // Chỉ lấy digits
+  const digits = cardNumber.replace(/\s/g, "");
+
+  // Card number phải có 13-19 digits
+  if (!/^\d{13,19}$/.test(digits)) {
+    return false;
+  }
+
+  // Luhn algorithm
+  let sum = 0;
+  let isEven = false;
+
+  for (let i = digits.length - 1; i >= 0; i--) {
+    let digit = parseInt(digits[i], 10);
+
+    if (isEven) {
+      digit *= 2;
+      if (digit > 9) {
+        digit -= 9;
+      }
+    }
+
+    sum += digit;
+    isEven = !isEven;
+  }
+
+  return sum % 10 === 0;
+}
+
+/**
+ * Validate expiry date
+ * @param expiry - format MM/YY
+ * @returns true nếu expiry hợp lệ và không trong quá khứ
+ */
+function validateExpiry(expiry: string): boolean {
+  const match = expiry.match(/^(\d{2})\/(\d{2})$/);
+  if (!match) return false;
+
+  const month = parseInt(match[1], 10);
+  const year = parseInt(match[2], 10) + 2000;
+
+  if (month < 1 || month > 12) return false;
+
+  const now = new Date();
+  const expDate = new Date(year, month - 1, 1);
+  const lastDayOfMonth = new Date(year, month, 0).getDate();
+  expDate.setDate(lastDayOfMonth);
+
+  return expDate >= now;
+}
+
+/**
+ * Validate CVV
+ * @param cvv - 3-4 digits
+ * @param isAmex - true nếu là thẻ Amex (cần 4 digits)
+ */
+function validateCVV(cvv: string, isAmex = false): boolean {
+  const pattern = isAmex ? /^\d{4}$/ : /^\d{3}$/;
+  return pattern.test(cvv);
+}
+
+/**
+ * Kiểm tra loại thẻ dựa vào prefix (chỉ dùng để hiển thị, không bảo mật)
+ */
+function detectCardType(cardNumber: string): "visa" | "mastercard" | "amex" | "discover" | "unknown" {
+  const digits = cardNumber.replace(/\s/g, "");
+
+  if (/^4/.test(digits)) return "visa";
+  if (/^5[1-5]/.test(digits)) return "mastercard";
+  if (/^3[47]/.test(digits)) return "amex";
+  if (/^6(?:011|5)/.test(digits)) return "discover";
+
+  return "unknown";
+}
+
+/**
+ * Lấy error message cho card validation
+ */
+function getCardValidationError(cardNumber: string, expiry: string, cvv: string): string | null {
+  const digits = cardNumber.replace(/\s/g, "");
+  const isAmex = detectCardType(cardNumber) === "amex";
+
+  if (!digits) {
+    return "Vui lòng nhập số thẻ.";
+  }
+
+  if (digits.length < 13) {
+    return "Số thẻ quá ngắn.";
+  }
+
+  if (!validateCardNumber(cardNumber)) {
+    return "Số thẻ không hợp lệ.";
+  }
+
+  if (!validateExpiry(expiry)) {
+    return "Ngày hết hạn không hợp lệ hoặc thẻ đã hết hạn.";
+  }
+
+  if (!validateCVV(cvv, isAmex)) {
+    return isAmex ? "CVV phải có 4 chữ số." : "CVV phải có 3 chữ số.";
+  }
+
+  return null;
+}
+
 export function Checkout() {
   const [searchParams, setSearchParams] = useSearchParams();
   const initialPlan = searchParams.get("plan") === "svip" ? "svip" : "vip";
@@ -138,9 +249,18 @@ export function Checkout() {
   async function handleCheckout() {
     if (!quote) return;
     const isTrialCheckout = (quote.trialDays ?? 0) > 0;
-    if (!isTrialCheckout && paymentMethod === "card" && (!cardNumber || !expiry || cvv.length < 3 || !cardName.trim())) {
-      setError("Vui lòng nhập đầy đủ thông tin thẻ để tiếp tục.");
-      return;
+
+    // Validate card data nếu dùng thẻ và không phải trial
+    if (!isTrialCheckout && paymentMethod === "card") {
+      const validationError = getCardValidationError(cardNumber, expiry, cvv);
+      if (validationError) {
+        setError(validationError);
+        return;
+      }
+      if (!cardName.trim()) {
+        setError("Vui lòng nhập tên chủ thẻ.");
+        return;
+      }
     }
 
     setSubmitting(true);

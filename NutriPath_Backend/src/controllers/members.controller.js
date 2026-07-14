@@ -122,11 +122,13 @@ export function registerMembersRoutes(ctx) {
     normalizeFoodPhotoEstimate,
     normalizeForPolicy,
     normalizeIngredient,
+    normalizeMemberPreferences,
     normalizeMealLogLabels,
     normalizePath,
     normalizePersonalizedRecipe,
     normalizeSvipCalorieInsight,
     normalizeVietnameseText,
+    normalizeWeightTracking,
     notFound,
     notificationResource,
     paginateItems,
@@ -210,6 +212,11 @@ export function registerMembersRoutes(ctx) {
       heightCm: Number(body.heightCm || 168),
       activityLevel: body.activityLevel || "light",
       goal: body.goal || "maintain",
+      preferences: normalizeMemberPreferences(body.preferences, {
+        bodyShape: body.bodyShape,
+        dietStyle: body.dietStyle,
+      }),
+      weightTracking: normalizeWeightTracking(body.weightTracking, {}, Number(body.weightKg || 65)),
       joinedAt: new Date().toISOString().slice(0, 10),
       calorieTarget: Number(body.calorieTarget || 1800),
       macroTargets: body.macroTargets || { protein: 120, carbs: 220, fat: 60 },
@@ -232,8 +239,8 @@ export function registerMembersRoutes(ctx) {
     const { sessionMember, member } = assertMemberSessionAccess(req, store, params.id);
     const isAdmin = sessionMember.role?.toLowerCase() === "admin";
     const allowed = new Set(isAdmin
-      ? ["name", "email", "calorieTarget", "waterTargetGlasses", "role", "status", "tier", "subscription", "macroTargets"]
-      : ["name", "email", "calorieTarget", "waterTargetGlasses"]);
+      ? ["name", "email", "calorieTarget", "waterTargetGlasses", "role", "status", "tier", "subscription", "macroTargets", "preferences", "weightTracking"]
+      : ["name", "email", "calorieTarget", "waterTargetGlasses", "preferences", "weightTracking"]);
 
     if (body.calorieTarget !== undefined) {
       const target = Number(body.calorieTarget);
@@ -244,6 +251,14 @@ export function registerMembersRoutes(ctx) {
       const target = Number(body.waterTargetGlasses);
       if (!Number.isFinite(target) || target < 2 || target > 20) badRequest("Mục tiêu nước phải nằm trong khoảng 500-5000ml/ngày.");
       body.waterTargetGlasses = Math.round(target * 10) / 10;
+    }
+
+    if (body.preferences !== undefined) {
+      body.preferences = normalizeMemberPreferences(body.preferences, member.preferences);
+    }
+    if (body.weightTracking !== undefined) {
+      body.weightTracking = normalizeWeightTracking(body.weightTracking, member.weightTracking, member.weightKg || 65);
+      member.weightKg = body.weightTracking.latestWeightKg;
     }
 
     for (const [key, value] of Object.entries(body || {})) {

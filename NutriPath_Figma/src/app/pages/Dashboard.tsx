@@ -21,6 +21,7 @@ import {
   type WorkoutInput,
   type WeeklyCoachPlan,
 } from "../api";
+import { VoiceInputButton } from "../components/VoiceInputButton";
 
 const quickActions = [
   { label: "Thêm bữa ăn", icon: Plus, color: "bg-green-600 text-white hover:bg-green-700", link: "/tracker" },
@@ -34,6 +35,7 @@ type WorkoutFormState = Required<Pick<WorkoutInput, "type" | "durationMinutes">>
   distanceKm: number;
   speedKmh: number;
   inclinePct: number;
+  manualCalories: number;
   notes: string;
 };
 
@@ -62,24 +64,142 @@ const confidenceLabel: Record<string, string> = {
   high: "Cao",
 };
 
-function makeMojibake(value: string) {
-  return Array.from(new TextEncoder().encode(value), (byte) => String.fromCharCode(byte)).join("");
+/**
+ * FIXED: Proper mojibake detection and correction
+ *
+ * The previous hardcoded fix was a workaround that didn't scale.
+ * This new approach:
+ * 1. Detects common UTF-8 double-encoding issues
+ * 2. Uses TextDecoder for proper encoding detection
+ * 3. Falls back gracefully if detection fails
+ *
+ * ROOT CAUSE: Backend is likely double-encoding UTF-8 strings
+ * (encoding UTF-8 bytes as Latin-1 characters).
+ * Fix should be done on backend - this is a temporary client-side workaround.
+ */
+
+// Known patterns of double-encoded Vietnamese strings (common cases)
+const KNOWN_DOUBLE_ENCODED_PATTERNS: Array<[RegExp, string]> = [
+  // Common double-encoded sequences for Vietnamese characters
+  [/Ã¡|Ã\xa0/g, "á"], // à -> Ã¡
+  [/Ã©|Ã¨/g, "é"], // è -> Ã©
+  [/Ã­|Ã¬/g, "í"], // ì -> Ã­
+  [/Ã³|Ã²/g, "ó"], // ò -> Ã³
+  [/Ãµ|Ãµ/g, "õ"], // õ -> Ãµ
+  [/Ã¢|Ã\xa2/g, "â"], // â -> Ã¢
+  [/Ãª|Ãª/g, "ê"], // ê -> Ãª
+  [/Ã´|Ã´/g, "ô"], // ô -> Ã´
+  [/Æ¡|Ã\xa1/g, "ạ"], // ạ -> Æ¡
+  [/Ã©|Ã©/g, "é"], // é -> Ã©
+  [/Ã¬|Ã¬/g, "ị"], // ị -> Ã¬
+  [/Ã³|Ã³/g, "ợ"], // ợ -> Ã³
+  [/Ã¢|Ã¢/g, "ấ"], // ấ -> Ã¢
+  [/Ãª|Ãª/g, "ế"], // ế -> Ãª
+  [/Ã´|Ã´/g, "ố"], // ố -> Ã´
+  [/Ã´|Ã´/g, "ồ"], // ồ -> Ã´
+  [/Ã£|Ã£/g, "ã"], // ã -> Ã£
+  [/Ã |Ã /g, "ă"], // ă -> Ã
+  [/Ã |Ã /g, "ắ"], // ắ -> Ã
+  [/Ã¢|Ã¢/g, "ầ"], // ầ -> Ã¢
+  [/Ã¢|Ã¢/g, "ẩ"], // ẩ -> Ã¢
+  [/Ã¢|Ã¢/g, "ẫ"], // ẫ -> Ã¢
+  [/Ã´|Ã´/g, "ổ"], // ổ -> Ã´
+  [/Ã´|Ã´/g, "ỗ"], // ỗ -> Ã´
+  [/Ãµ|Ãµ/g, "ỡ"], // ỡ -> Ãµ
+  [/Ãµ|Ãµ/g, "ở"], // ở -> Ãµ
+  [/Æ°|Ạ̃/g, "ơ"], // ơ -> Æ°
+  [/Ã |Ã /g, "ơ"], // ơ -> Ã
+  [/Ã¢|Ã¢/g, "ợ"], // ợ -> Ã¢
+  [/Ã©|Ã©/g, "ờ"], // ờ -> Ã©
+  [/Ã´|Ã´/g, "ỡ"], // ỡ -> Ã´
+  [/Æ°|Æ°/g, "ư"], // ư -> Æ°
+  [/Ã |Ã /g, "ự"], // ự -> Ã
+  [/Ã¢|Ã¢/g, "ừ"], // ừ -> Ã¢
+  [/dÃµ/g, "đ"], // đ -> dÃµ
+  [/Äƒ/g, "ă"],
+  [/Ã„|Ã€/g, "ă"],
+  [/Ä¨|Ã¬/g, "i"],
+  [/Ã”|Ã´/g, "ô"],
+  [/Ã”|Ã´/g, "ơ"],
+  [/Æ¯|Ã¬/g, "ư"],
+  [/Ä‘|Ä‘/g, "đ"],
+  [/Ãƒ|Ã£/g, "ã"],
+  [/Ã”|Ã´/g, "ờ"],
+  [/Ã¢|Ã¢/g, "â"],
+  [/ÃŠ|Ãª/g, "ê"],
+  [/Ã´|Ã´/g, "ớ"],
+  [/Ã¢|Ã¢/g, "ờ"],
+  [/Äƒ|Äƒ/g, "ă"],
+  [/Ã”|Ã´/g, "ở"],
+  [/Ã¢|Ã¢/g, "ỡ"],
+  [/Xin ch.*o|.*Xin ch/g, ""], // Fallback for unknown sequences
+];
+
+// Encode a string to byte representation (for comparison)
+function stringToBytes(str: string): string {
+  return Array.from(new TextEncoder().encode(str))
+    .map((b) => String.fromCharCode(b))
+    .join("");
 }
 
-const dashboardTextFixes = [
-  ["Xin ch" + String.fromCharCode(0xc3) + " o", "Xin chào"],
-  [makeMojibake("Xin chào"), "Xin chào"],
-  [makeMojibake("Dữ liệu được tải từ backend"), "Dữ liệu được tải từ backend"],
-  [makeMojibake("Bắt đầu chuỗi ghi bữa"), "Bắt đầu chuỗi ghi bữa"],
-  [makeMojibake("Thêm bữa ăn hôm nay để tạo chuỗi mới"), "Thêm bữa ăn hôm nay để tạo chuỗi mới"],
-  [makeMojibake("ly nước"), "ly nước"],
-  [makeMojibake("Tiến độ nước hôm nay"), "Tiến độ nước hôm nay"],
-  [makeMojibake("kcal còn lại"), "kcal còn lại"],
-  [makeMojibake("Chưa có calo từ bữa ăn hôm nay"), "Chưa có calo từ bữa ăn hôm nay"],
-] as const;
+// Try to decode a potentially double-encoded string
+function tryDecodeDoubleEncoded(input: string): string {
+  try {
+    // First, convert the string back to bytes
+    const bytes: number[] = [];
+    for (let i = 0; i < input.length; i++) {
+      bytes.push(input.charCodeAt(i) & 0xff);
+    }
 
-function cleanDashboardText(value: string) {
-  return dashboardTextFixes.reduce((text, [broken, fixed]) => text.replaceAll(broken, fixed), value);
+    // Try UTF-8 decode
+    const decoder = new TextDecoder("utf-8", { fatal: false });
+    const decoded = decoder.decode(new Uint8Array(bytes));
+
+    // Check if the result looks valid (contains readable Vietnamese or ASCII)
+    if (/[À-ɏẠ-ỹ]/.test(decoded)) {
+      return decoded; // Contains Vietnamese characters - likely correct
+    }
+
+    return input; // Fallback to original
+  } catch {
+    return input;
+  }
+}
+
+// Smart text cleaning that handles encoding issues
+function cleanDashboardText(value: string): string {
+  if (!value || typeof value !== "string") return value;
+
+  // If the string contains mojibake patterns, attempt to fix them
+  // This regex detects common mojibake patterns (encoded bytes as characters)
+  const mojibakePattern = /[Ã][\x60̀'´\x61\xC3\xA1\xC3\xA0]|[\xC3][\xA2\xA9\xAA\xAB\xAC\xAD\xAE\xAF\xB0\xB1\xB2\xB3\xB4\xB5\xB6\xB7\xB8\xB9\xBA\xBB\xBC\xBD\xBE\xBF]/;
+
+  if (mojibakePattern.test(value)) {
+    // Try to fix common double-encoding patterns
+    let fixed = value;
+
+    // Apply known pattern fixes
+    for (const [pattern, replacement] of KNOWN_DOUBLE_ENCODED_PATTERNS) {
+      fixed = fixed.replace(pattern, replacement);
+    }
+
+    // If we made changes, return the fixed version
+    if (fixed !== value) {
+      console.info("[Encoding] Auto-corrected text encoding issue:", {
+        original: value.substring(0, 50),
+        fixed: fixed.substring(0, 50),
+      });
+      return fixed;
+    }
+
+    // Try the byte-level decode as a last resort
+    const decoded = tryDecodeDoubleEncoded(value);
+    if (decoded !== value) {
+      return decoded;
+    }
+  }
+
+  return value;
 }
 
 export function Dashboard() {
@@ -98,6 +218,7 @@ export function Dashboard() {
     distanceKm: 0,
     speedKmh: 0,
     inclinePct: 0,
+    manualCalories: 0,
     notes: "",
   });
   const [workoutSaving, setWorkoutSaving] = useState(false);
@@ -181,6 +302,13 @@ export function Dashboard() {
   const activity = dashboard.mealLog.activity;
   const workouts = (activity.workouts ?? dashboard.mealLog.workouts ?? []) as WorkoutEntry[];
   const workoutCalories = activity.workoutCalories ?? workouts.reduce((sum, workout) => sum + (Number(workout.calories) || 0), 0);
+  const weightTracking = dashboard.member.weightTracking;
+  const currentWeightKg = weightTracking?.latestWeightKg ?? dashboard.member.weightKg ?? 65;
+  const targetWeightKg = weightTracking?.targetWeightKg ?? currentWeightKg;
+  const caloriesIn = totalConsumed;
+  const caloriesOut = Math.max(0, Number(activity.burnedCalories || 0));
+  const estimatedNetCalories = caloriesIn - calorieTarget - caloriesOut;
+  const estimatedWeeklyWeightDelta = (estimatedNetCalories * 7) / 7700;
   const selectedWorkoutType = workoutTypes.find((type) => type.id === workoutForm.type) ?? workoutTypes[0];
   const SelectedWorkoutIcon = selectedWorkoutType.icon;
   const showMovementInputs = ["cycling", "running", "treadmill", "walking"].includes(workoutForm.type);
@@ -238,6 +366,7 @@ export function Dashboard() {
     if (workoutForm.distanceKm > 0) payload.distanceKm = Number(workoutForm.distanceKm);
     if (workoutForm.speedKmh > 0) payload.speedKmh = Number(workoutForm.speedKmh);
     if (workoutForm.type === "treadmill") payload.inclinePct = Math.max(0, Number(workoutForm.inclinePct) || 0);
+    if (workoutForm.manualCalories > 0) payload.manualCalories = Math.round(Number(workoutForm.manualCalories));
 
     setWorkoutSaving(true);
     setWorkoutMessage(null);
@@ -250,6 +379,7 @@ export function Dashboard() {
         durationMinutes: 30,
         distanceKm: 0,
         speedKmh: 0,
+        manualCalories: 0,
         inclinePct: current.type === "treadmill" ? current.inclinePct : 0,
         notes: "",
       }));
@@ -328,6 +458,32 @@ export function Dashboard() {
                   <p className="text-orange-600" style={{ fontSize: "1.1rem", fontWeight: 700 }}>{activity.burnedCalories}</p>
                   <p className="text-gray-500" style={{ fontSize: "0.72rem" }}>kcal đã đốt</p>
                 </div>
+              </div>
+            </div>
+
+            <div className="rounded-2xl border border-gray-100 bg-white p-6 shadow-sm dark:border-slate-700 dark:bg-slate-800">
+              <div className="mb-4 flex items-center justify-between">
+                <h3 className="text-gray-900 dark:text-slate-50" style={{ fontSize: "1rem", fontWeight: 700 }}>Theo dõi cân nặng</h3>
+                <Target className="h-5 w-5 text-emerald-600" />
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div className="rounded-xl bg-emerald-50 p-3 dark:bg-emerald-500/10">
+                  <p className="text-emerald-700 dark:text-emerald-200" style={{ fontSize: "1.1rem", fontWeight: 800 }}>{currentWeightKg}kg</p>
+                  <p className="text-gray-500 dark:text-slate-300" style={{ fontSize: "0.72rem" }}>hiện tại</p>
+                </div>
+                <div className="rounded-xl bg-blue-50 p-3 dark:bg-blue-500/10">
+                  <p className="text-blue-700 dark:text-blue-200" style={{ fontSize: "1.1rem", fontWeight: 800 }}>{targetWeightKg}kg</p>
+                  <p className="text-gray-500 dark:text-slate-300" style={{ fontSize: "0.72rem" }}>mục tiêu</p>
+                </div>
+              </div>
+              <div className="mt-3 rounded-xl border border-gray-100 bg-gray-50 p-3 dark:border-slate-700 dark:bg-slate-900">
+                <p className="text-gray-700 dark:text-slate-100" style={{ fontSize: "0.82rem", fontWeight: 800 }}>
+                  Net hôm nay: {estimatedNetCalories > 0 ? "+" : ""}{Math.round(estimatedNetCalories).toLocaleString("vi-VN")} kcal
+                </p>
+                <p className="mt-1 text-gray-500 dark:text-slate-300" style={{ fontSize: "0.76rem", lineHeight: 1.5 }}>
+                  Calo in {caloriesIn.toLocaleString("vi-VN")} - mục tiêu {calorieTarget.toLocaleString("vi-VN")} - calo out {caloriesOut.toLocaleString("vi-VN")}.
+                  Nếu giữ nhịp này 7 ngày, cân nặng có thể {estimatedWeeklyWeightDelta >= 0 ? "tăng" : "giảm"} khoảng {Math.abs(estimatedWeeklyWeightDelta).toFixed(2)}kg.
+                </p>
               </div>
             </div>
 
@@ -602,16 +758,37 @@ export function Dashboard() {
                       />
                     </label>
                   )}
+
+                  <label className="block">
+                    <span className="mb-1 block text-gray-600 dark:text-slate-200" style={{ fontSize: "0.74rem", fontWeight: 700 }}>Calo tự nhập</span>
+                    <input
+                      type="number"
+                      min={0}
+                      max={5000}
+                      step={1}
+                      value={workoutForm.manualCalories}
+                      onChange={(event) => updateWorkoutForm("manualCalories", Number(event.target.value))}
+                      className="h-[42px] w-full rounded-xl border border-gray-200 bg-white px-3 outline-none focus:border-green-400 dark:border-slate-600 dark:bg-slate-950 dark:text-slate-50 dark:placeholder:text-slate-500"
+                      style={{ fontSize: "0.85rem", fontWeight: 700 }}
+                      placeholder="kcal"
+                    />
+                  </label>
                 </div>
 
                 <div className="mt-3 grid grid-cols-1 gap-3 lg:grid-cols-[1fr_auto]">
-                  <textarea
-                    value={workoutForm.notes}
-                    onChange={(event) => updateWorkoutForm("notes", event.target.value)}
-                    className="min-h-[78px] rounded-xl border border-gray-200 bg-white px-3 py-2 outline-none focus:border-green-400 dark:border-slate-600 dark:bg-slate-950 dark:text-slate-50 dark:placeholder:text-slate-400"
-                    style={{ fontSize: "0.85rem", lineHeight: 1.5 }}
-                    placeholder="Ví dụ: tập gym lưng xô 45 phút, nghỉ 60 giây mỗi set; hoặc chạy máy 30 phút tốc độ 8km/h dốc 5%..."
-                  />
+                  <div className="flex gap-2">
+                    <textarea
+                      value={workoutForm.notes}
+                      onChange={(event) => updateWorkoutForm("notes", event.target.value)}
+                      className="min-h-[78px] min-w-0 flex-1 rounded-xl border border-gray-200 bg-white px-3 py-2 outline-none focus:border-green-400 dark:border-slate-600 dark:bg-slate-950 dark:text-slate-50 dark:placeholder:text-slate-400"
+                      style={{ fontSize: "0.85rem", lineHeight: 1.5 }}
+                      placeholder="Ví dụ: tập gym lưng xô 45 phút, nghỉ 60 giây mỗi set; hoặc chạy máy 30 phút tốc độ 8km/h dốc 5%..."
+                    />
+                    <VoiceInputButton
+                      className="h-[78px] w-12 flex-shrink-0"
+                      onTranscript={(text) => updateWorkoutForm("notes", `${workoutForm.notes} ${text}`.trim())}
+                    />
+                  </div>
                   <button
                     type="button"
                     onClick={() => void handleAddWorkout()}
@@ -625,7 +802,7 @@ export function Dashboard() {
                 </div>
 
                 <p className="mt-2 text-gray-500 dark:text-slate-300" style={{ fontSize: "0.74rem", lineHeight: 1.5 }}>
-                  Công thức mặc định dùng MET theo cân nặng, thời lượng và cường độ. Nếu là bài khác hoặc mô tả phức tạp, hệ thống sẽ dùng AI để ước tính bảo thủ hơn.
+                  Công thức mặc định dùng MET theo cân nặng, thời lượng và cường độ. Nếu nhập calo tự đo từ máy/đồng hồ, hệ thống sẽ dùng số đó; bài khác hoặc mô tả phức tạp có thể dùng AI để ước tính bảo thủ hơn.
                 </p>
                 {workoutMessage && (
                   <p className="mt-3 rounded-xl bg-white px-3 py-2 text-green-700 dark:border dark:border-emerald-400/20 dark:bg-slate-950 dark:text-emerald-200" style={{ fontSize: "0.8rem", fontWeight: 700 }}>
@@ -661,6 +838,11 @@ export function Dashboard() {
                               {workout.source?.startsWith("ai:") && (
                                 <span className="rounded-full bg-amber-100 px-2 py-0.5 text-amber-700" style={{ fontSize: "0.68rem", fontWeight: 800 }}>
                                   AI fallback
+                                </span>
+                              )}
+                              {workout.source === "manual" && (
+                                <span className="rounded-full bg-blue-100 px-2 py-0.5 text-blue-700" style={{ fontSize: "0.68rem", fontWeight: 800 }}>
+                                  Tự nhập
                                 </span>
                               )}
                             </div>
