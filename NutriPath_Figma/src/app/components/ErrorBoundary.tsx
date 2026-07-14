@@ -1,13 +1,13 @@
-import { Component, type ReactNode } from "react";
+import { useState, useCallback, type ReactNode, Component } from "react";
 import { AlertTriangle, RefreshCw } from "lucide-react";
 
-interface Props {
+interface ErrorBoundaryProps {
   children: ReactNode;
   fallback?: ReactNode;
   onError?: (error: Error, errorInfo: React.ErrorInfo) => void;
 }
 
-interface State {
+interface ErrorBoundaryState {
   hasError: boolean;
   error: Error | null;
 }
@@ -24,26 +24,22 @@ interface State {
  * - Server-side rendering (SSR) errors
  * - Errors in the boundary itself
  */
-export class ErrorBoundary extends Component<Props, State> {
-  constructor(props: Props) {
+export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
+  constructor(props: ErrorBoundaryProps) {
     super(props);
     this.state = { hasError: false, error: null };
   }
 
-  static getDerivedStateFromError(error: Error): State {
-    // Update state so the next render shows the fallback UI
+  static getDerivedStateFromError(error: Error): ErrorBoundaryState {
     return { hasError: true, error };
   }
 
   componentDidCatch(error: Error, errorInfo: React.ErrorInfo): void {
-    // Log error to error reporting service (e.g., Sentry)
     console.error("[ErrorBoundary] Caught error:", {
       message: error.message,
       stack: error.stack,
       componentStack: errorInfo.componentStack,
     });
-
-    // Call custom error handler if provided
     this.props.onError?.(error, errorInfo);
   }
 
@@ -59,12 +55,10 @@ export class ErrorBoundary extends Component<Props, State> {
 
   render() {
     if (this.state.hasError && this.state.error) {
-      // Custom fallback UI
       if (this.props.fallback) {
         return this.props.fallback;
       }
 
-      // Default fallback UI
       return (
         <div className="min-h-screen bg-gray-50 flex items-center justify-center p-8">
           <div className="max-w-md w-full">
@@ -81,7 +75,6 @@ export class ErrorBoundary extends Component<Props, State> {
                 Ứng dụng gặp sự cố không mong muốn. Bạn có thể thử tải lại trang hoặc quay về trang chủ.
               </p>
 
-              {/* Error details for development */}
               {import.meta.env.DEV && this.state.error && (
                 <div className="mb-6 text-left">
                   <p className="text-xs font-mono text-red-600 bg-red-50 rounded-lg p-3 overflow-auto max-h-32">
@@ -121,8 +114,6 @@ export class ErrorBoundary extends Component<Props, State> {
 /**
  * Hook version of ErrorBoundary for functional components
  */
-import { useState, useCallback } from "react";
-
 interface UseErrorBoundaryOptions {
   onError?: (error: Error) => void;
 }
@@ -164,7 +155,7 @@ export function useErrorBoundary(options?: UseErrorBoundaryOptions) {
                     Thử lại
                   </button>
                   <button
-                    onClick={() => (window.location.href = "/")}
+                    onClick={() => { window.location.href = "/"; }}
                     className="px-4 py-2 border border-gray-200 rounded-lg text-sm"
                   >
                     Trang chủ
