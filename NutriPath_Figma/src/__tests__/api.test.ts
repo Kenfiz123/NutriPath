@@ -3,6 +3,7 @@ import {
   apiFetch,
   clearStoredSession,
   getCurrentMemberId,
+  getDashboard,
   getStoredSession,
   setStoredSession,
   type AuthSession,
@@ -69,5 +70,16 @@ describe("cookie-backed API session", () => {
 
   it("rejects member-specific calls until the cookie session has been hydrated", () => {
     expect(() => getCurrentMemberId()).toThrow("Bạn cần đăng nhập để xem dữ liệu cá nhân.");
+  });
+
+  it("forwards an AbortSignal to dashboard fetch requests", async () => {
+    setStoredSession({ member });
+    vi.mocked(fetch).mockResolvedValue(jsonResponse({}));
+    const controller = new AbortController();
+
+    await getDashboard({ signal: controller.signal });
+
+    const requestOptions = vi.mocked(fetch).mock.calls[0][1] as RequestInit;
+    expect(requestOptions.signal).toBe(controller.signal);
   });
 });

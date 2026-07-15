@@ -77,7 +77,7 @@ export function getCurrentMemberId() {
   return memberId;
 }
 
-export async function apiFetch<T>(path: string, options: { method?: string; body?: RequestBody; auth?: boolean } = {}): Promise<T> {
+export async function apiFetch<T>(path: string, options: { method?: string; body?: RequestBody; auth?: boolean; signal?: AbortSignal } = {}): Promise<T> {
   const headers: Record<string, string> = {
     "Content-Type": "application/json",
     "X-Requested-With": "XMLHttpRequest",
@@ -88,6 +88,7 @@ export async function apiFetch<T>(path: string, options: { method?: string; body
     headers,
     body: options.body ? JSON.stringify(options.body) : undefined,
     credentials: "include",
+    signal: options.signal,
   });
 
   if (response.status === 401 && options.auth !== false) {
@@ -972,8 +973,11 @@ export function logout() {
   return apiFetch<{ loggedOut: boolean }>("/api/auth/logout", { method: "POST" });
 }
 
-export function getDashboard(date = getLocalDateString()) {
-  return apiFetch<DashboardData>(`/api/members/${getCurrentMemberId()}/dashboard?date=${encodeURIComponent(date)}`);
+export function getDashboard(options: { date?: string; signal?: AbortSignal } = {}) {
+  const date = options.date ?? getLocalDateString();
+  return apiFetch<DashboardData>(`/api/members/${getCurrentMemberId()}/dashboard?date=${encodeURIComponent(date)}`, {
+    signal: options.signal,
+  });
 }
 
 export function getNutritionReport(options: { days?: number; endDate?: string } = {}) {

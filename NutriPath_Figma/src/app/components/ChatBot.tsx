@@ -3,19 +3,21 @@ import {
   Bot,
   Crown,
   Lock,
-  MessageCircle,
   Mic,
   Send,
   User,
   X,
 } from "lucide-react";
 import {
-  getChatHistory,
   getQuickReplies,
   getStoredSession,
   sendChatMessage,
   setStoredSession,
 } from "../api";
+import {
+  getChatHistoryCached,
+  invalidateChatHistoryCache,
+} from "../services/chatCache";
 
 interface Message {
   id: string;
@@ -68,8 +70,12 @@ function formatMessageTime(value: string) {
   });
 }
 
-export function ChatBot() {
-  const [isOpen, setIsOpen] = useState(false);
+interface ChatBotProps {
+  memberId: string;
+  onClose: () => void;
+}
+
+export function ChatBot({ memberId, onClose }: ChatBotProps) {
   const [messages, setMessages] = useState<Message[]>(initialMessages);
   const [quickReplies, setQuickReplies] = useState<string[]>([]);
   const [inputText, setInputText] = useState("");
@@ -93,14 +99,10 @@ export function ChatBot() {
   }, [messages, isTyping]);
 
   useEffect(() => {
-    if (!isOpen || bootstrapRequestedRef.current) return;
+    if (bootstrapRequestedRef.current) return;
     bootstrapRequestedRef.current = true;
 
-    getQuickReplies()
-      .then((data) => setQuickReplies(data.quickReplies))
-      .catch(() => setQuickReplies([]));
-
-    getChatHistory()
+    getChatHistoryCached(memberId)
       .then((data) => {
         if (data.quickReplies?.length) setQuickReplies(data.quickReplies);
         if (data.messages?.length) {
@@ -112,8 +114,12 @@ export function ChatBot() {
           );
         }
       })
-      .catch(() => undefined);
-  }, [isOpen]);
+      .catch(() => {
+        getQuickReplies()
+          .then((data) => setQuickReplies(data.quickReplies))
+          .catch(() => setQuickReplies([]));
+      });
+  }, [memberId]);
 
   useEffect(() => {
     const handleMemberUpdated = () => {
@@ -183,6 +189,7 @@ export function ChatBot() {
       if (data.quickReplies?.length) {
         setQuickReplies(data.quickReplies);
       }
+      invalidateChatHistoryCache(memberId);
     } catch (error) {
       setIsTyping(false);
       // SECURITY FIX: Display error separately, not as AI message
@@ -243,8 +250,7 @@ export function ChatBot() {
 
   return (
     <>
-      {isOpen && (
-        <div
+      <div
           id="nutribot-dialog"
           className="fixed bottom-24 right-6 z-50 flex flex-col overflow-hidden rounded-2xl border border-gray-100 bg-white shadow-2xl"
           style={{
@@ -284,7 +290,7 @@ export function ChatBot() {
               </div>
 
               <button
-                onClick={() => setIsOpen(false)}
+                onClick={onClose}
                 aria-label="Đóng cửa sổ NutriBot"
                 className="rounded-full p-1.5 text-white transition-colors hover:bg-white/20"
               >
@@ -456,34 +462,7 @@ export function ChatBot() {
               <Send className="h-4 w-4" />
             </button>
           </div>
-        </div>
-      )}
-
-      <button
-        onClick={() => setIsOpen(!isOpen)}
-        aria-label={isOpen ? "Đóng NutriBot" : "Mở NutriBot"}
-        aria-controls="nutribot-dialog"
-        aria-expanded={isOpen}
-        className={`fixed bottom-6 right-6 z-50 flex h-14 w-14 items-center justify-center rounded-full shadow-lg transition-all hover:scale-110 ${
-          isOpen
-            ? "bg-gray-700"
-            : "bg-gradient-to-br from-green-500 to-emerald-600"
-        }`}
-      >
-        {isOpen ? (
-          <X className="h-6 w-6 text-white" />
-        ) : (
-          <MessageCircle className="h-6 w-6 text-white" />
-        )}
-        {!isOpen && (
-          <span
-            className="absolute -right-1 -top-1 flex h-4 w-4 items-center justify-center rounded-full bg-red-500 text-white"
-            style={{ fontSize: "0.6rem", fontWeight: 700 }}
-          >
-            1
-          </span>
-        )}
-      </button>
+      </div>
     </>
   );
 }

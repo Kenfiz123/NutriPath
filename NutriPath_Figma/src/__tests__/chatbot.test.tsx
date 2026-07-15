@@ -17,9 +17,17 @@ import {
   sendChatMessage,
 } from "../app/api";
 import { ChatBot } from "../app/components/ChatBot";
+import { invalidateChatHistoryCache } from "../app/services/chatCache";
+
+function renderChatBot(memberId = "member-1") {
+  const onClose = vi.fn();
+  render(<ChatBot memberId={memberId} onClose={onClose} />);
+  return { onClose };
+}
 
 describe("ChatBot", () => {
   beforeEach(() => {
+    invalidateChatHistoryCache();
     vi.clearAllMocks();
     vi.mocked(getStoredSession).mockReturnValue({
       member: { id: "member-1", access: { aiCoach: false } },
@@ -29,62 +37,43 @@ describe("ChatBot", () => {
     } as never);
     vi.mocked(getChatHistory).mockResolvedValue({
       messages: [],
-      quickReplies: [],
+      quickReplies: ["Gợi ý bữa sáng"],
     } as never);
   });
 
-  it("exposes an accessible collapsed toggle without loading chat data", () => {
-    render(<ChatBot />);
-
-    const toggle = screen.getByRole("button", { name: "Mở NutriBot" });
-    expect(toggle).toHaveAttribute("aria-expanded", "false");
-    expect(toggle).toHaveAttribute("aria-controls", "nutribot-dialog");
-    expect(getChatHistory).not.toHaveBeenCalled();
-    expect(getQuickReplies).not.toHaveBeenCalled();
-  });
-
-  it("opens the dialog with accessible input and controls", async () => {
+  it("renders the mounted dialog with accessible controls", async () => {
     const user = userEvent.setup();
-    render(<ChatBot />);
+    const { onClose } = renderChatBot();
 
-    const toggle = screen.getByRole("button", { name: "Mở NutriBot" });
-    await user.click(toggle);
-
-    expect(toggle).toHaveAttribute("aria-expanded", "true");
     expect(
       screen.getByRole("textbox", { name: "Tin nhắn cho NutriBot" }),
     ).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Gửi tin nhắn" })).toBeDisabled();
-    expect(
+
+    await user.click(
       screen.getByRole("button", { name: "Đóng cửa sổ NutriBot" }),
-    ).toBeInTheDocument();
+    );
+    expect(onClose).toHaveBeenCalledOnce();
   });
 
-  it("loads quick replies from the API", async () => {
-    const user = userEvent.setup();
-    render(<ChatBot />);
-    await user.click(screen.getByRole("button", { name: "Mở NutriBot" }));
+  it("loads history and quick replies through the cached history request", async () => {
+    renderChatBot();
+
+    expect(
+      await screen.findByRole("button", { name: "Gợi ý bữa sáng" }),
+    ).toBeInTheDocument();
+    expect(getChatHistory).toHaveBeenCalledOnce();
+    expect(getQuickReplies).not.toHaveBeenCalled();
+  });
+
+  it("falls back to the quick replies endpoint when history cannot load", async () => {
+    vi.mocked(getChatHistory).mockRejectedValueOnce(new Error("History unavailable"));
+    renderChatBot();
 
     expect(
       await screen.findByRole("button", { name: "Gợi ý bữa sáng" }),
     ).toBeInTheDocument();
     expect(getQuickReplies).toHaveBeenCalledOnce();
-    expect(getChatHistory).toHaveBeenCalledOnce();
-  });
-
-  it("does not reload chat data when the panel is reopened", async () => {
-    const user = userEvent.setup();
-    render(<ChatBot />);
-
-    await user.click(screen.getByRole("button", { name: "Mở NutriBot" }));
-    await waitFor(() => expect(getChatHistory).toHaveBeenCalledOnce());
-    await user.click(
-      screen.getByRole("button", { name: "Đóng cửa sổ NutriBot" }),
-    );
-    await user.click(screen.getByRole("button", { name: "Mở NutriBot" }));
-
-    expect(getQuickReplies).toHaveBeenCalledOnce();
-    expect(getChatHistory).toHaveBeenCalledOnce();
   });
 
   it("sends a message and renders the AI response", async () => {
@@ -106,8 +95,7 @@ describe("ChatBot", () => {
       quickReplies: [],
     } as never);
     const user = userEvent.setup();
-    render(<ChatBot />);
-    await user.click(screen.getByRole("button", { name: "Mở NutriBot" }));
+    renderChatBot();
     await user.type(
       screen.getByRole("textbox", { name: "Tin nhắn cho NutriBot" }),
       "Gợi ý bữa sáng",
@@ -130,8 +118,7 @@ describe("ChatBot", () => {
       new Error("Không thể kết nối NutriBot"),
     );
     const user = userEvent.setup();
-    render(<ChatBot />);
-    await user.click(screen.getByRole("button", { name: "Mở NutriBot" }));
+    renderChatBot();
     await user.type(
       screen.getByRole("textbox", { name: "Tin nhắn cho NutriBot" }),
       "Xin chào",
@@ -150,10 +137,11 @@ describe("ChatBot", () => {
     vi.mocked(getStoredSession).mockReturnValue({
       member: { id: "svip-1", access: { aiCoach: true } },
     } as never);
-    const user = userEvent.setup();
-    render(<ChatBot />);
-    await user.click(screen.getByRole("button", { name: "Mở NutriBot" }));
+    renderChatBot("svip-1");
 
     expect(screen.getByRole("button", { name: "AI Coach" })).toBeEnabled();
+    expect(
+      await screen.findByRole("button", { name: "Gợi ý bữa sáng" }),
+    ).toBeInTheDocument();
   });
 });

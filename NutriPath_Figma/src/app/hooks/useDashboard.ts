@@ -34,13 +34,15 @@ export function useDashboard(): UseDashboardResult {
 
   useEffect(() => {
     let active = true;
+    const controller = new AbortController();
 
     const loadDashboard = async () => {
       setError(null);
       try {
-        const data = await getDashboard();
+        const data = await getDashboard({ signal: controller.signal });
         if (active) setDashboard(data);
       } catch (err) {
+        if (err instanceof Error && err.name === "AbortError") return;
         if (active) {
           setError(
             err instanceof Error
@@ -63,6 +65,7 @@ export function useDashboard(): UseDashboardResult {
 
     return () => {
       active = false;
+      controller.abort();
       window.removeEventListener("nutripath:member-updated", loadDashboard);
     };
   }, []);
