@@ -66,10 +66,19 @@ create table if not exists public.nutripath_payments (
   member_id text not null,
   invoice text unique,
   status text,
+  gateway text,
+  transaction_ref text,
+  provider_transaction_no text,
+  created_at timestamptz,
   paid_at timestamptz,
   data jsonb not null,
   updated_at timestamptz not null default now()
 );
+
+alter table public.nutripath_payments add column if not exists gateway text;
+alter table public.nutripath_payments add column if not exists transaction_ref text;
+alter table public.nutripath_payments add column if not exists provider_transaction_no text;
+alter table public.nutripath_payments add column if not exists created_at timestamptz;
 
 create table if not exists public.nutripath_auth_credentials (
   id text primary key,
@@ -153,6 +162,10 @@ create index if not exists nutripath_meal_logs_member_date_idx
 
 create index if not exists nutripath_payments_member_paid_idx
   on public.nutripath_payments (member_id, paid_at desc);
+
+create unique index if not exists nutripath_payments_transaction_ref_uidx
+  on public.nutripath_payments (transaction_ref)
+  where transaction_ref is not null;
 
 create index if not exists nutripath_chat_messages_member_time_idx
   on public.nutripath_chat_messages (member_id, message_time desc);

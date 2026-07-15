@@ -70,6 +70,30 @@ export interface RegisterPayload {
   };
 }
 
+function isValidSessionToken(token: unknown): token is string {
+  if (typeof token !== "string") return false;
+
+  const value = token.trim();
+  if (/^[a-f0-9]{64}$/i.test(value)) return true;
+
+  const jwtParts = value.split(".");
+  if (jwtParts.length !== 3
+    || !jwtParts.every((part) => part.length > 0 && /^[A-Za-z0-9_-]+$/.test(part))) {
+    return false;
+  }
+
+  try {
+    const decodePart = (part: string) => {
+      const base64 = part.replace(/-/g, "+").replace(/_/g, "/");
+      const padded = base64.padEnd(Math.ceil(base64.length / 4) * 4, "=");
+      return JSON.parse(atob(padded)) as Record<string, unknown>;
+    };
+    return Boolean(decodePart(jwtParts[0]) && decodePart(jwtParts[1]));
+  } catch {
+    return false;
+  }
+}
+
 export function getStoredSession(): AuthSession | null {
   if (typeof window === "undefined") return null;
   const raw = window.localStorage.getItem(SESSION_KEY);
@@ -77,7 +101,10 @@ export function getStoredSession(): AuthSession | null {
 
   try {
     const session = JSON.parse(raw) as AuthSession;
-    if (!session?.token || !session?.member?.id) return null;
+    if (!isValidSessionToken(session?.token) || !session?.member?.id) {
+      window.localStorage.removeItem(SESSION_KEY);
+      return null;
+    }
     return session;
   } catch {
     window.localStorage.removeItem(SESSION_KEY);
@@ -127,11 +154,9 @@ export async function apiFetch<T>(path: string, options: { method?: string; body
   // Get token only if auth is not explicitly disabled
   const token = options.auth === false ? null : getStoredSession()?.token;
 
-  // SECURITY: Validate token format before sending (basic sanity check)
-  // Tokens should be JWT format (header.payload.signature with dots)
+  // SECURITY: Accept only Supabase JWTs or NutriPath's 256-bit opaque session tokens.
   if (token) {
-    const tokenParts = token.split(".");
-    if (tokenParts.length !== 3) {
+    if (!isValidSessionToken(token)) {
       // Invalid token format - possible tampering or injection attempt
       console.error("[Security] Invalid token format detected, clearing session");
       clearStoredSession();
@@ -751,7 +776,11 @@ export interface Payment {
   amount: number;
   currency: string;
   status: string;
-  paidAt: string;
+  gateway?: string;
+  transactionRef?: string;
+  providerTransactionNo?: string | null;
+  createdAt?: string;
+  paidAt: string | null;
 }
 
 export interface CheckoutQuote {
@@ -774,9 +803,31 @@ export interface PaymentPayload {
   memberId: string;
   planId: "vip" | "svip";
   billing: "monthly" | "annual";
-  paymentMethod: "card" | "momo" | "zalopay" | "bank";
+  paymentMethod: "vnpay";
   discountCode?: string;
   trialDays?: number;
+}
+
+export interface VnpayPaymentPayload {
+  memberId: string;
+  planId: "vip" | "svip";
+  billing: "monthly" | "annual";
+  discountCode?: string;
+  bankCode?: "" | "VNPAYQR" | "VNBANK" | "INTCARD";
+}
+
+export interface VnpayPaymentStatus {
+  transactionRef: string;
+  paymentStatus: "pending" | "paid" | "failed" | "not_found";
+  payment: Payment | null;
+  member: Member | null;
+}
+
+export interface VnpayReturnResult extends VnpayPaymentStatus {
+  signatureValid: boolean;
+  responseCode: string | null;
+  transactionStatus: string | null;
+  message: string;
 }
 
 export interface ChatMessage {
@@ -1166,6 +1217,22 @@ export function createPayment(payload: PaymentPayload) {
     method: "POST",
     body: payload,
   });
+}
+
+export function createVnpayPayment(payload: VnpayPaymentPayload) {
+  return apiFetch<{ payment: Payment; quote: CheckoutQuote; paymentUrl: string; expiresAt: string }>(
+    "/api/payments/vnpay/create",
+    { method: "POST", body: payload },
+  );
+}
+
+export function verifyVnpayReturn(queryString: string) {
+  const normalizedQuery = queryString.startsWith("?") ? queryString.slice(1) : queryString;
+  return apiFetch<VnpayReturnResult>(`/api/payments/vnpay/return?${normalizedQuery}`);
+}
+
+export function getVnpayPaymentStatus(transactionRef: string) {
+  return apiFetch<VnpayPaymentStatus>(`/api/payments/vnpay/status/${encodeURIComponent(transactionRef)}`);
 }
 
 export function getFaqs() {

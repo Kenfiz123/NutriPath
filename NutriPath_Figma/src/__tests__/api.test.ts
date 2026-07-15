@@ -9,6 +9,8 @@
 
 import { describe, it, expect, beforeEach, vi } from "vitest";
 
+const validOpaqueSessionToken = "a".repeat(64);
+
 // Mock localStorage for tests
 const localStorageMock = (() => {
   let store: Record<string, string> = {};
@@ -38,7 +40,7 @@ describe("Session Management", () => {
       const { getStoredSession, setStoredSession } = await import("../app/api");
 
       const mockSession = {
-        token: "valid.jwt.token",
+        token: validOpaqueSessionToken,
         member: { id: "user-123", name: "Test User", email: "test@example.com" },
       };
 
@@ -46,7 +48,7 @@ describe("Session Management", () => {
       const session = getStoredSession();
 
       expect(session).not.toBeNull();
-      expect(session?.token).toBe("valid.jwt.token");
+      expect(session?.token).toBe(validOpaqueSessionToken);
       expect(session?.member.id).toBe("user-123");
     });
 
@@ -66,7 +68,7 @@ describe("Session Management", () => {
       const { getStoredSession, setStoredSession } = await import("../app/api");
 
       const mockSession = {
-        token: "valid.jwt.token",
+        token: validOpaqueSessionToken,
         member: { id: "" },
       };
 
@@ -95,7 +97,7 @@ describe("Session Management", () => {
       const { getCurrentMemberId, setStoredSession } = await import("../app/api");
 
       const mockSession = {
-        token: "valid.jwt.token",
+        token: validOpaqueSessionToken,
         member: { id: "user-456", name: "Test" },
       };
 

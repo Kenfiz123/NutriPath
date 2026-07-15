@@ -8,6 +8,7 @@ import {
   Crown,
   Leaf,
   Lock,
+  QrCode,
   RotateCcw,
   Shield,
   Smartphone,
@@ -16,6 +17,7 @@ import {
 } from "lucide-react";
 import {
   createPayment,
+  createVnpayPayment,
   getCheckoutQuote,
   getCurrentMemberId,
   getPlans,
@@ -25,15 +27,22 @@ import {
 } from "../api";
 
 type PlanId = "vip" | "svip";
-type PaymentMethod = "card" | "momo" | "zalopay" | "bank";
+type PaymentMethod = "vnpay" | "vnpayqr" | "bank" | "card";
 type Billing = "monthly" | "annual";
 
 const paymentMethods: Array<{ id: PaymentMethod; label: string; icon: typeof CreditCard }> = [
-  { id: "card", label: "Thẻ tín dụng", icon: CreditCard },
-  { id: "momo", label: "MoMo", icon: Smartphone },
-  { id: "zalopay", label: "ZaloPay", icon: Smartphone },
-  { id: "bank", label: "Ngân hàng", icon: Building2 },
+  { id: "vnpay", label: "Chọn tại VNPAY", icon: Smartphone },
+  { id: "vnpayqr", label: "VNPAY-QR", icon: QrCode },
+  { id: "bank", label: "ATM / ngân hàng", icon: Building2 },
+  { id: "card", label: "Thẻ quốc tế", icon: CreditCard },
 ];
+
+const bankCodeByMethod: Record<PaymentMethod, "" | "VNPAYQR" | "VNBANK" | "INTCARD"> = {
+  vnpay: "",
+  vnpayqr: "VNPAYQR",
+  bank: "VNBANK",
+  card: "INTCARD",
+};
 
 const planColors: Record<PlanId, { icon: typeof Star; badge: string; accent: string; subtle: string }> = {
   vip: {
@@ -54,128 +63,6 @@ function formatMoney(amount: number, currency = "VND") {
   return `${amount.toLocaleString("vi-VN")}${currency === "VND" ? "đ" : ` ${currency}`}`;
 }
 
-function formatCard(value: string) {
-  const digits = value.replace(/\D/g, "").slice(0, 16);
-  return digits.replace(/(.{4})/g, "$1 ").trim();
-}
-
-function formatExpiry(value: string) {
-  const digits = value.replace(/\D/g, "").slice(0, 4);
-  if (digits.length <= 2) return digits;
-  return `${digits.slice(0, 2)}/${digits.slice(2)}`;
-}
-
-/**
- * Validate card number bằng Luhn algorithm (dùng để kiểm tra số thẻ hợp lệ)
- * @param cardNumber - số thẻ đã được format (có khoảng trắng)
- * @returns true nếu số thẻ hợp lệ theo Luhn
- */
-function validateCardNumber(cardNumber: string): boolean {
-  // Chỉ lấy digits
-  const digits = cardNumber.replace(/\s/g, "");
-
-  // Card number phải có 13-19 digits
-  if (!/^\d{13,19}$/.test(digits)) {
-    return false;
-  }
-
-  // Luhn algorithm
-  let sum = 0;
-  let isEven = false;
-
-  for (let i = digits.length - 1; i >= 0; i--) {
-    let digit = parseInt(digits[i], 10);
-
-    if (isEven) {
-      digit *= 2;
-      if (digit > 9) {
-        digit -= 9;
-      }
-    }
-
-    sum += digit;
-    isEven = !isEven;
-  }
-
-  return sum % 10 === 0;
-}
-
-/**
- * Validate expiry date
- * @param expiry - format MM/YY
- * @returns true nếu expiry hợp lệ và không trong quá khứ
- */
-function validateExpiry(expiry: string): boolean {
-  const match = expiry.match(/^(\d{2})\/(\d{2})$/);
-  if (!match) return false;
-
-  const month = parseInt(match[1], 10);
-  const year = parseInt(match[2], 10) + 2000;
-
-  if (month < 1 || month > 12) return false;
-
-  const now = new Date();
-  const expDate = new Date(year, month - 1, 1);
-  const lastDayOfMonth = new Date(year, month, 0).getDate();
-  expDate.setDate(lastDayOfMonth);
-
-  return expDate >= now;
-}
-
-/**
- * Validate CVV
- * @param cvv - 3-4 digits
- * @param isAmex - true nếu là thẻ Amex (cần 4 digits)
- */
-function validateCVV(cvv: string, isAmex = false): boolean {
-  const pattern = isAmex ? /^\d{4}$/ : /^\d{3}$/;
-  return pattern.test(cvv);
-}
-
-/**
- * Kiểm tra loại thẻ dựa vào prefix (chỉ dùng để hiển thị, không bảo mật)
- */
-function detectCardType(cardNumber: string): "visa" | "mastercard" | "amex" | "discover" | "unknown" {
-  const digits = cardNumber.replace(/\s/g, "");
-
-  if (/^4/.test(digits)) return "visa";
-  if (/^5[1-5]/.test(digits)) return "mastercard";
-  if (/^3[47]/.test(digits)) return "amex";
-  if (/^6(?:011|5)/.test(digits)) return "discover";
-
-  return "unknown";
-}
-
-/**
- * Lấy error message cho card validation
- */
-function getCardValidationError(cardNumber: string, expiry: string, cvv: string): string | null {
-  const digits = cardNumber.replace(/\s/g, "");
-  const isAmex = detectCardType(cardNumber) === "amex";
-
-  if (!digits) {
-    return "Vui lòng nhập số thẻ.";
-  }
-
-  if (digits.length < 13) {
-    return "Số thẻ quá ngắn.";
-  }
-
-  if (!validateCardNumber(cardNumber)) {
-    return "Số thẻ không hợp lệ.";
-  }
-
-  if (!validateExpiry(expiry)) {
-    return "Ngày hết hạn không hợp lệ hoặc thẻ đã hết hạn.";
-  }
-
-  if (!validateCVV(cvv, isAmex)) {
-    return isAmex ? "CVV phải có 4 chữ số." : "CVV phải có 3 chữ số.";
-  }
-
-  return null;
-}
-
 export function Checkout() {
   const [searchParams, setSearchParams] = useSearchParams();
   const initialPlan = searchParams.get("plan") === "svip" ? "svip" : "vip";
@@ -185,7 +72,7 @@ export function Checkout() {
   const [selectedPlan, setSelectedPlan] = useState<PlanId>(initialPlan);
   const [billing, setBilling] = useState<Billing>(initialBilling);
   const [trialDays, setTrialDays] = useState(initialTrialDays);
-  const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>("card");
+  const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>("vnpay");
   const [discountInput, setDiscountInput] = useState("");
   const [appliedDiscountCode, setAppliedDiscountCode] = useState("");
   const [plans, setPlans] = useState<Plan[]>([]);
@@ -197,11 +84,6 @@ export function Checkout() {
     planName: string;
     quote: CheckoutQuote;
   } | null>(null);
-
-  const [cardNumber, setCardNumber] = useState("");
-  const [expiry, setExpiry] = useState("");
-  const [cvv, setCvv] = useState("");
-  const [cardName, setCardName] = useState("");
 
   useEffect(() => {
     getPlans(billing)
@@ -250,37 +132,36 @@ export function Checkout() {
     if (!quote) return;
     const isTrialCheckout = (quote.trialDays ?? 0) > 0;
 
-    // Validate card data nếu dùng thẻ và không phải trial
-    if (!isTrialCheckout && paymentMethod === "card") {
-      const validationError = getCardValidationError(cardNumber, expiry, cvv);
-      if (validationError) {
-        setError(validationError);
-        return;
-      }
-      if (!cardName.trim()) {
-        setError("Vui lòng nhập tên chủ thẻ.");
-        return;
-      }
-    }
-
     setSubmitting(true);
     setError(null);
 
     try {
       const memberId = getCurrentMemberId();
-      const data = await createPayment({
+      if (isTrialCheckout) {
+        const data = await createPayment({
+          memberId,
+          planId: selectedPlan,
+          billing,
+          paymentMethod: "vnpay",
+          discountCode: appliedDiscountCode,
+          trialDays: quote.trialDays ?? 0,
+        });
+        syncStoredMember(data.member);
+        setCompleted({
+          planName: data.member.subscription?.planId?.toUpperCase() ?? selectedPlan.toUpperCase(),
+          quote: data.quote,
+        });
+        return;
+      }
+
+      const data = await createVnpayPayment({
         memberId,
         planId: selectedPlan,
         billing,
-        paymentMethod,
         discountCode: appliedDiscountCode,
-        trialDays: quote.trialDays ?? 0,
+        bankCode: bankCodeByMethod[paymentMethod],
       });
-      syncStoredMember(data.member);
-      setCompleted({
-        planName: data.member.subscription?.planId?.toUpperCase() ?? selectedPlan.toUpperCase(),
-        quote: data.quote,
-      });
+      window.location.assign(data.paymentUrl);
     } catch (checkoutError) {
       setError(checkoutError instanceof Error ? checkoutError.message : "Thanh toán chưa hoàn tất.");
     } finally {
@@ -442,56 +323,9 @@ export function Checkout() {
                 ))}
               </div>
 
-              {paymentMethod === "card" && !isTrialCheckout && (
-                <div className="mt-5 space-y-4">
-                  <label className="block">
-                    <span className="text-gray-700" style={{ fontSize: "0.8rem", fontWeight: 700 }}>Số thẻ</span>
-                    <input
-                      type="text"
-                      value={cardNumber}
-                      onChange={(event) => setCardNumber(formatCard(event.target.value))}
-                      placeholder="1234 5678 9012 3456"
-                      className="mt-2 w-full rounded-xl border border-gray-200 bg-gray-50 px-4 py-3 outline-none focus:border-green-500 focus:ring-2 focus:ring-green-100"
-                    />
-                  </label>
-                  <div className="grid gap-3 sm:grid-cols-2">
-                    <label className="block">
-                      <span className="text-gray-700" style={{ fontSize: "0.8rem", fontWeight: 700 }}>Ngày hết hạn</span>
-                      <input
-                        type="text"
-                        value={expiry}
-                        onChange={(event) => setExpiry(formatExpiry(event.target.value))}
-                        placeholder="MM/YY"
-                        className="mt-2 w-full rounded-xl border border-gray-200 bg-gray-50 px-4 py-3 outline-none focus:border-green-500 focus:ring-2 focus:ring-green-100"
-                      />
-                    </label>
-                    <label className="block">
-                      <span className="text-gray-700" style={{ fontSize: "0.8rem", fontWeight: 700 }}>CVV</span>
-                      <input
-                        type="text"
-                        value={cvv}
-                        onChange={(event) => setCvv(event.target.value.replace(/\D/g, "").slice(0, 3))}
-                        placeholder="123"
-                        className="mt-2 w-full rounded-xl border border-gray-200 bg-gray-50 px-4 py-3 outline-none focus:border-green-500 focus:ring-2 focus:ring-green-100"
-                      />
-                    </label>
-                  </div>
-                  <label className="block">
-                    <span className="text-gray-700" style={{ fontSize: "0.8rem", fontWeight: 700 }}>Tên chủ thẻ</span>
-                    <input
-                      type="text"
-                      value={cardName}
-                      onChange={(event) => setCardName(event.target.value.toUpperCase())}
-                      placeholder="NGUYEN VAN A"
-                      className="mt-2 w-full rounded-xl border border-gray-200 bg-gray-50 px-4 py-3 outline-none focus:border-green-500 focus:ring-2 focus:ring-green-100"
-                    />
-                  </label>
-                </div>
-              )}
-
-              {paymentMethod !== "card" && !isTrialCheckout && (
-                <div className="mt-5 rounded-2xl border border-gray-100 bg-gray-50 px-5 py-4 text-gray-600" style={{ fontSize: "0.85rem", lineHeight: 1.7 }}>
-                  Đây là luồng thanh toán mô phỏng an toàn. Sau khi bấm hoàn tất, backend sẽ kích hoạt gói và không lưu dữ liệu thanh toán nhạy cảm.
+              {!isTrialCheckout && (
+                <div className="mt-5 rounded-2xl border border-blue-100 bg-blue-50 px-5 py-4 text-blue-800 dark:border-blue-900/70 dark:bg-blue-950/40 dark:text-blue-200" style={{ fontSize: "0.85rem", lineHeight: 1.7 }}>
+                  Bạn sẽ được chuyển sang VNPAY Sandbox để nhập thông tin thanh toán. NutriPath không nhận hoặc lưu số thẻ, CVV và OTP.
                 </div>
               )}
             </div>
@@ -580,7 +414,7 @@ export function Checkout() {
                     style={{ fontSize: "1rem", fontWeight: 800 }}
                   >
                     <Lock className="h-5 w-5" />
-                    {submitting ? "Đang kích hoạt gói..." : quote.trialDays ? "Kích hoạt dùng thử" : "Hoàn tất thanh toán"}
+                    {submitting ? (quote.trialDays ? "Đang kích hoạt gói..." : "Đang chuyển sang VNPAY...") : quote.trialDays ? "Kích hoạt dùng thử" : "Thanh toán qua VNPAY"}
                     <ArrowRight className="h-5 w-5" />
                   </button>
                 </>
@@ -590,9 +424,9 @@ export function Checkout() {
             <div className="rounded-3xl border border-gray-100 bg-white p-5 shadow-sm">
               <div className="space-y-3">
                 {[
-                  { icon: Shield, text: "Backend không lưu số thẻ, CVV hoặc dữ liệu thanh toán nhạy cảm." },
-                  { icon: Lock, text: "Quyền gói được kích hoạt ngay sau khi backend xác nhận thanh toán." },
-                  { icon: RotateCcw, text: "Có thể nâng cấp lại bất cứ lúc nào bằng luồng checkout thật." },
+                  { icon: Shield, text: "NutriPath không lưu số thẻ, CVV, OTP hoặc dữ liệu ngân hàng nhạy cảm." },
+                  { icon: Lock, text: "Gói chỉ được kích hoạt sau khi IPN VNPAY có checksum và số tiền hợp lệ." },
+                  { icon: RotateCcw, text: "Return URL chỉ hiển thị kết quả; không thể tự nâng gói bằng cách sửa URL." },
                 ].map(({ icon: Icon, text }) => (
                   <div key={text} className="flex items-start gap-2.5">
                     <Icon className="mt-0.5 h-4 w-4 flex-shrink-0 text-green-500" />

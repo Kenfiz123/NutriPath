@@ -139,6 +139,11 @@ Backend sẽ tạo/đọc các bảng `nutripath_members`, `nutripath_foods`, `n
 |---|---|---|
 | `PORT` | `8080` | Port cho API server |
 | `CORS_ORIGIN` | `http://127.0.0.1:5173` | Allowed CORS origin (Frontend URL) |
+| `FRONTEND_URL` | `http://127.0.0.1:5173` | Frontend base URL used for payment returns |
+| `VNPAY_TMN_CODE` | empty | VNPAY Terminal ID; backend only |
+| `VNPAY_HASH_SECRET` | empty | VNPAY checksum secret; backend only |
+| `VNPAY_URL` | Sandbox URL | VNPAY payment gateway URL |
+| `VNPAY_RETURN_URL` | `/payment-result` on frontend | Browser return URL after payment |
 | `NUTRIPATH_DATA_SOURCE` | `json` | Nguồn dữ liệu: `json`, `sqlserver` hoặc `supabase` |
 | `NUTRIPATH_DB` | `./data/db.json` | Đường dẫn file JSON database |
 | `NUTRIPATH_SQL_SERVER` | `localhost` | SQL Server hostname |
@@ -160,6 +165,14 @@ Backend sẽ tạo/đọc các bảng `nutripath_members`, `nutripath_foods`, `n
 | `GROQ_RPM_LIMIT` | `30` | Rate limit requests/phút cho Groq |
 | `GROQ_RPD_LIMIT` | `1000` | Rate limit requests/ngày cho Groq |
 | `CHAT_ADMIN_KEY` | *(trống; tự cấu hình)* | Admin key nội bộ cho chat management. Không commit giá trị thật. |
+
+Với môi trường deploy hiện tại, đăng ký IPN URL tại VNPAY là:
+
+```text
+https://nutripath-l4rk.onrender.com/api/payments/vnpay/ipn
+```
+
+Chỉ đặt `VNPAY_TMN_CODE` và `VNPAY_HASH_SECRET` trên Render. Frontend Vercel không cần và không được chứa hai giá trị này.
 
 > **Lưu ý:** AI Chat sẽ dùng canned responses nếu không có API key. Khi có `GEMINI_API_KEY`, chatbot sẽ trả lời bằng AI thực.
 

@@ -1,7 +1,13 @@
 import assert from "node:assert/strict";
+import { createHmac } from "node:crypto";
 import { unlink } from "node:fs/promises";
 import path from "node:path";
 import { createServer } from "../src/app.js";
+
+process.env.VNPAY_TMN_CODE = "TEST1234";
+process.env.VNPAY_HASH_SECRET = "test-hash-secret-for-local-controller-flow";
+process.env.VNPAY_URL = "https://sandbox.vnpayment.vn/paymentv2/vpcpay.html";
+process.env.VNPAY_RETURN_URL = "http://127.0.0.1:5173/payment-result";
 
 const dbPath = path.resolve("data/controller-flow-test-db.json");
 const server = await createServer({ dbPath });
@@ -29,6 +35,14 @@ async function request(pathname, options = {}) {
 
 function authHeaders(token) {
   return { Authorization: `Bearer ${token}` };
+}
+
+function signedVnpayQuery(params) {
+  const hashData = new URLSearchParams(
+    Object.entries(params).sort(([left], [right]) => left.localeCompare(right)),
+  ).toString();
+  const secureHash = createHmac("sha512", process.env.VNPAY_HASH_SECRET).update(hashData, "utf8").digest("hex");
+  return `${hashData}&vnp_SecureHash=${secureHash}`;
 }
 
 function localDateString(date = new Date()) {
@@ -122,12 +136,45 @@ try {
   });
   assert.ok(quote.quote.total > 0);
 
-  const { json: payment } = await request("/api/payments", {
+  const { json: pendingPayment } = await request("/api/payments/vnpay/create", {
     method: "POST",
     headers,
-    body: JSON.stringify({ memberId, planId: "vip", billing: "monthly", paymentMethod: "test-card" }),
+    body: JSON.stringify({ memberId, planId: "vip", billing: "monthly", bankCode: "VNBANK" }),
   });
-  assert.equal(payment.member.tier, "vip");
+  assert.equal(pendingPayment.payment.status, "pending");
+  assert.match(pendingPayment.paymentUrl, /^https:\/\/sandbox\.vnpayment\.vn\/paymentv2\/vpcpay\.html\?/);
+
+  const transactionRef = pendingPayment.payment.transactionRef;
+  const vnpayParams = {
+    vnp_Amount: String(pendingPayment.quote.total * 100),
+    vnp_BankCode: "NCB",
+    vnp_CardType: "ATM",
+    vnp_PayDate: "20260715120000",
+    vnp_ResponseCode: "00",
+    vnp_TmnCode: process.env.VNPAY_TMN_CODE,
+    vnp_TransactionNo: "15000001",
+    vnp_TransactionStatus: "00",
+    vnp_TxnRef: transactionRef,
+  };
+  const signedQuery = signedVnpayQuery(vnpayParams);
+  const { json: ipn } = await request(`/api/payments/vnpay/ipn?${signedQuery}`);
+  assert.equal(ipn.RspCode, "00");
+
+  const { json: status } = await request(`/api/payments/vnpay/status/${transactionRef}`, { headers });
+  assert.equal(status.paymentStatus, "paid");
+  assert.equal(status.member.tier, "vip");
+
+  const { json: duplicateIpn } = await request(`/api/payments/vnpay/ipn?${signedQuery}`);
+  assert.equal(duplicateIpn.RspCode, "02");
+
+  const { json: paymentReturn } = await request(`/api/payments/vnpay/return?${signedQuery}`, { headers });
+  assert.equal(paymentReturn.signatureValid, true);
+  assert.equal(paymentReturn.paymentStatus, "paid");
+
+  const tamperedQuery = new URLSearchParams(signedQuery);
+  tamperedQuery.set("vnp_Amount", String(Number(vnpayParams.vnp_Amount) + 100));
+  const { json: invalidIpn } = await request(`/api/payments/vnpay/ipn?${tamperedQuery.toString()}`);
+  assert.equal(invalidIpn.RspCode, "97");
 
   const { json: profile } = await request(`/api/members/${memberId}/profile`, { headers });
   assert.equal(profile.member.id, memberId);

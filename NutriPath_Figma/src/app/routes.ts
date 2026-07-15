@@ -42,6 +42,7 @@ const Admin = lazyWithRetry(() => import("./pages/Admin"), (module) => module.Ad
 const PricingPlans = lazyWithRetry(() => import("./pages/PricingPlans"), (module) => module.PricingPlans);
 const SVIPLanding = lazyWithRetry(() => import("./pages/SVIPLanding"), (module) => module.SVIPLanding);
 const Checkout = lazyWithRetry(() => import("./pages/Checkout"), (module) => module.Checkout);
+const PaymentResult = lazyWithRetry(() => import("./pages/PaymentResult"), (module) => module.PaymentResult);
 const MemberProfile = lazyWithRetry(() => import("./pages/MemberProfile"), (module) => module.MemberProfile);
 const Reports = lazyWithRetry(() => import("./pages/Reports"), (module) => module.Reports);
 const Login = lazyWithRetry(() => import("./pages/Login"), (module) => module.Login);
@@ -147,6 +148,7 @@ const PublicSVIPLanding = lazyComponent(SVIPLanding);
 const ProtectedDashboard = protectedComponent(Dashboard);
 const ProtectedMealTracker = protectedComponent(MealTracker);
 const ProtectedCheckout = protectedComponent(Checkout);
+const ProtectedPaymentResult = protectedComponent(PaymentResult);
 const ProtectedMemberProfile = protectedComponent(MemberProfile);
 const ProtectedReports = protectedComponent(Reports);
 const ProtectedAdmin = adminComponent(Admin);
@@ -170,6 +172,7 @@ export const router = createBrowserRouter([
       { path: "pricing", Component: PublicPricingPlans },
       { path: "svip", Component: PublicSVIPLanding },
       { path: "checkout", Component: ProtectedCheckout },
+      { path: "payment-result", Component: ProtectedPaymentResult },
       { path: "member", Component: ProtectedMemberProfile },
       { path: "reports", Component: ProtectedReports },
     ],

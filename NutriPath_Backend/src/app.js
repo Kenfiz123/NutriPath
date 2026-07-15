@@ -171,7 +171,8 @@ function sendJson(req, res, status, payload) {
     "Content-Type": "application/hal+json; charset=utf-8",
     "Access-Control-Allow-Origin": origin,
     "Access-Control-Allow-Methods": "GET,POST,PATCH,PUT,DELETE,OPTIONS",
-    "Access-Control-Allow-Headers": "Content-Type, Authorization",
+    "Access-Control-Allow-Headers": "Content-Type, Authorization, X-Requested-With",
+    Vary: "Origin",
     "Cache-Control": "no-store",
   });
   res.end(JSON.stringify(payload, null, 2));
@@ -1742,7 +1743,7 @@ function planResource(req, plan) {
       self: link(req, `/api/plans/${plan.id}`),
       collection: link(req, "/api/plans"),
       quote: link(req, "/api/checkout/quote", "POST"),
-      checkout: link(req, "/api/payments", "POST"),
+      checkout: link(req, "/api/payments/vnpay/create", "POST"),
     },
   };
 }

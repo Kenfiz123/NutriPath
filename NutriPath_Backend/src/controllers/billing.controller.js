@@ -1,3 +1,11 @@
+import {
+  buildVnpayPaymentUrl,
+  createVnpayTxnRef,
+  getVnpayConfig,
+  normalizeVnpayBankCode,
+  verifyVnpaySignature,
+} from "../vnpay.js";
+
 export function registerBillingRoutes(ctx) {
   const {
     CUSTOM_FOOD_UNITS,
@@ -177,9 +185,76 @@ export function registerBillingRoutes(ctx) {
     verifyPassword
   } = ctx;
 
-  route("GET", "/api/members/:memberId/payments", async ({ req, store, params }) => {
-    const member = getMember(store.db, params.memberId);
+  function requirePaymentOwner(req, store, memberId) {
+    const { member: sessionMember } = requireSession(req, store);
+    const member = getMember(store.db, memberId);
     if (!member) notFound(req, "Member not found.");
+    if (sessionMember.id !== member.id && sessionMember.role?.toLowerCase() !== "admin") {
+      forbidden("Bạn không được thanh toán thay cho thành viên này.");
+    }
+    return member;
+  }
+
+  function activateMembership(store, member, payment, plan, trialDays = 0) {
+    const now = new Date();
+    const todayString = toLocalDateString(now);
+    const existingSubscription = getSubscriptionSnapshot(store.db, member);
+    const sameActivePlan = existingSubscription.planId === plan.id && ["active", "trialing"].includes(existingSubscription.status);
+    const startedAt = sameActivePlan ? (existingSubscription.startedAt || todayString) : todayString;
+    const purchaseAt = sameActivePlan ? (existingSubscription.purchaseAt || startedAt) : todayString;
+    const currentRenewal = parseDate(existingSubscription.renewsAt);
+    const renewalBase = !trialDays && sameActivePlan && currentRenewal && currentRenewal > parseDate(todayString)
+      ? currentRenewal
+      : now;
+    const renews = new Date(renewalBase);
+    if (trialDays) {
+      renews.setDate(renews.getDate() + trialDays);
+    } else {
+      renews.setMonth(renews.getMonth() + (payment.billing === "annual" ? 12 : 1));
+    }
+    const renewsAt = toLocalDateString(renews);
+    const daysTotal = daysBetweenDates(startedAt, renewsAt) || trialDays || (payment.billing === "annual" ? 365 : 30);
+    const daysRemaining = Math.max(0, daysBetweenDates(todayString, renewsAt) ?? daysTotal);
+
+    member.tier = plan.id;
+    member.subscription = {
+      planId: plan.id,
+      billing: payment.billing,
+      status: trialDays ? "trialing" : "active",
+      startedAt,
+      purchaseAt,
+      renewsAt,
+      daysTotal,
+      daysRemaining,
+    };
+    if (trialDays) member.trialUsedAt = now.toISOString();
+
+    upsertNotification(
+      store,
+      member.id,
+      "membership-payment",
+      trialDays ? "Đã kích hoạt dùng thử" : "Gói thành viên đã được kích hoạt",
+      `${plan.name} ${payment.billing === "annual" ? "năm" : "tháng"} có hiệu lực đến ${renewsAt}.`,
+      {
+        key: `${member.id}:membership-payment:${payment.id}`,
+        actionHref: "/member",
+        priority: "high",
+      },
+    );
+  }
+
+  async function persistFinalizedPayment(store, member, payment) {
+    if (store.dataSource === "sqlserver") {
+      await saveSqlServerPaymentAndSubscription(member, payment, member.subscription);
+      await store.reload();
+      return getMember(store.db, member.id);
+    }
+    await store.save();
+    return member;
+  }
+
+  route("GET", "/api/members/:memberId/payments", async ({ req, store, params }) => {
+    const member = requirePaymentOwner(req, store, params.memberId);
     const payments = store.db.payments.filter((payment) => payment.memberId === member.id);
     return collectionResponse(req, "payments", payments, {
       itemMapper: (payment) => paymentResource(req, payment),
@@ -223,35 +298,22 @@ export function registerBillingRoutes(ctx) {
   }));
 
   route("POST", "/api/payments", async ({ req, store, body }) => {
-    const { member: sessionMember } = requireSession(req, store);
     requireFields(body, ["memberId", "planId", "billing", "paymentMethod"]);
-    let member = getMember(store.db, body.memberId);
-    if (!member) notFound(req, "Member not found.");
-    if (sessionMember.id !== member.id && sessionMember.role?.toLowerCase() !== "admin") {
-      forbidden("Bạn không được thanh toán thay cho thành viên này.");
-    }
+    let member = requirePaymentOwner(req, store, body.memberId);
     const plan = getPlan(store.db, body.planId);
     if (!plan) notFound(req, "Plan not found.");
     const quote = buildQuote(store.db, body);
-    const now = new Date();
-    const todayString = toLocalDateString(now);
     const trialDays = quote.trialDays || 0;
-    const existingSubscription = getSubscriptionSnapshot(store.db, member);
-    const sameActivePlan = existingSubscription.planId === plan.id && ["active", "trialing"].includes(existingSubscription.status);
-    const startedAt = sameActivePlan ? (existingSubscription.startedAt || todayString) : todayString;
-    const currentRenewal = parseDate(existingSubscription.renewsAt);
-    const renewalBase = !trialDays && sameActivePlan && currentRenewal && currentRenewal > parseDate(todayString)
-      ? currentRenewal
-      : now;
-    const renews = new Date(renewalBase);
-    if (trialDays) {
-      renews.setDate(renews.getDate() + trialDays);
-    } else {
-      renews.setMonth(renews.getMonth() + (body.billing === "annual" ? 12 : 1));
+    if (!trialDays) {
+      badRequest("Thanh toán gói trả phí phải được thực hiện qua VNPAY.", {
+        endpoint: "/api/payments/vnpay/create",
+      });
     }
-    const renewsAt = toLocalDateString(renews);
-    const daysTotal = daysBetweenDates(startedAt, renewsAt) || trialDays || (body.billing === "annual" ? 365 : 30);
-    const daysRemaining = Math.max(0, daysBetweenDates(todayString, renewsAt) ?? daysTotal);
+    const usedTrial = Boolean(member.trialUsedAt)
+      || store.db.payments.some((payment) => payment.memberId === member.id && payment.status === "trial");
+    if (usedTrial) conflict("Tài khoản này đã sử dụng gói dùng thử.");
+
+    const now = new Date();
     const payment = {
       id: store.nextId("pay", store.db.payments),
       memberId: member.id,
@@ -261,34 +323,14 @@ export function registerBillingRoutes(ctx) {
       paymentMethod: body.paymentMethod,
       amount: quote.total,
       currency: "VND",
-      status: trialDays ? "trial" : "paid",
+      status: "trial",
+      gateway: "trial",
+      createdAt: now.toISOString(),
       paidAt: now.toISOString(),
     };
-    member.tier = plan.id;
-    member.subscription = {
-      planId: plan.id,
-      billing: body.billing,
-      status: trialDays ? "trialing" : "active",
-      startedAt,
-      purchaseAt: startedAt,
-      renewsAt,
-      daysTotal,
-      daysRemaining,
-    };
-    upsertNotification(store, member.id, "membership-payment", trialDays ? "Đã kích hoạt dùng thử" : "Gói thành viên đã được kích hoạt", `${plan.name} ${body.billing === "annual" ? "năm" : "tháng"} có hiệu lực đến ${renewsAt}.`, {
-      key: `${member.id}:membership-payment:${payment.id}`,
-      actionHref: "/member",
-      priority: "high",
-    });
-
-    if (store.dataSource === "sqlserver") {
-      await saveSqlServerPaymentAndSubscription(member, payment, member.subscription);
-      await store.reload();
-      member = getMember(store.db, body.memberId);
-    } else {
-      store.db.payments.unshift(payment);
-      await store.save();
-    }
+    activateMembership(store, member, payment, plan, trialDays);
+    store.db.payments.unshift(payment);
+    member = await persistFinalizedPayment(store, member, payment);
 
     return {
       payment: paymentResource(req, payment),
@@ -303,9 +345,164 @@ export function registerBillingRoutes(ctx) {
     };
   });
 
+  route("POST", "/api/payments/vnpay/create", async ({ req, store, body }) => {
+    requireFields(body, ["memberId", "planId", "billing"]);
+    const member = requirePaymentOwner(req, store, body.memberId);
+    const plan = getPlan(store.db, body.planId);
+    if (!plan || plan.id === "free") notFound(req, "Paid plan not found.");
+    if (store.dataSource === "sqlserver") {
+      serviceUnavailable("VNPAY checkout currently requires the Supabase or JSON data source.");
+    }
+
+    const quote = buildQuote(store.db, { ...body, trialDays: 0 });
+    const config = getVnpayConfig();
+    const transactionRef = createVnpayTxnRef();
+    const bankCode = normalizeVnpayBankCode(body.bankCode);
+    const now = new Date();
+    const payment = {
+      id: store.nextId("pay", store.db.payments),
+      memberId: member.id,
+      invoice: `INV-${now.getFullYear()}-${String(store.db.payments.length + 1).padStart(4, "0")}`,
+      planId: plan.id,
+      billing: body.billing,
+      paymentMethod: "vnpay",
+      gateway: "vnpay",
+      transactionRef,
+      amount: quote.total,
+      currency: "VND",
+      status: "pending",
+      bankCode: bankCode || null,
+      createdAt: now.toISOString(),
+      paidAt: null,
+    };
+    const { paymentUrl, expiresAt } = buildVnpayPaymentUrl({
+      config,
+      amount: payment.amount,
+      transactionRef,
+      orderInfo: `Thanh toan goi ${plan.name} hoa don ${payment.invoice}`,
+      ipAddress: getClientIp(req),
+      bankCode,
+      now,
+    });
+    payment.expiresAt = expiresAt;
+    store.db.payments.unshift(payment);
+    await store.save();
+
+    return {
+      payment: paymentResource(req, payment),
+      quote,
+      paymentUrl,
+      expiresAt,
+      _links: {
+        status: link(req, `/api/payments/vnpay/status/${transactionRef}`),
+        ipn: link(req, "/api/payments/vnpay/ipn"),
+        return: link(req, "/api/payments/vnpay/return"),
+      },
+    };
+  });
+
+  route("GET", "/api/payments/vnpay/ipn", async ({ req, store, url }) => {
+    try {
+      const config = getVnpayConfig();
+      const verification = verifyVnpaySignature(url.searchParams, config);
+      if (!verification.valid || verification.params.vnp_TmnCode !== config.tmnCode) {
+        return { RspCode: "97", Message: "Invalid signature" };
+      }
+
+      const transactionRef = verification.params.vnp_TxnRef;
+      const payment = store.db.payments.find((item) => item.transactionRef === transactionRef);
+      if (!payment) return { RspCode: "01", Message: "Order not found" };
+
+      const receivedAmount = Number(verification.params.vnp_Amount);
+      if (!Number.isSafeInteger(receivedAmount) || receivedAmount !== payment.amount * 100) {
+        return { RspCode: "04", Message: "Invalid amount" };
+      }
+      if (payment.status !== "pending") {
+        return { RspCode: "02", Message: "Order already confirmed" };
+      }
+
+      const now = new Date().toISOString();
+      const succeeded = verification.params.vnp_ResponseCode === "00"
+        && verification.params.vnp_TransactionStatus === "00";
+      payment.status = succeeded ? "paid" : "failed";
+      payment.paidAt = succeeded ? now : null;
+      payment.failedAt = succeeded ? null : now;
+      payment.providerTransactionNo = verification.params.vnp_TransactionNo || null;
+      payment.bankCode = verification.params.vnp_BankCode || payment.bankCode || null;
+      payment.cardType = verification.params.vnp_CardType || null;
+      payment.responseCode = verification.params.vnp_ResponseCode || null;
+      payment.transactionStatus = verification.params.vnp_TransactionStatus || null;
+      payment.vnpayPayDate = verification.params.vnp_PayDate || null;
+
+      if (succeeded) {
+        const member = getMember(store.db, payment.memberId);
+        const plan = getPlan(store.db, payment.planId);
+        if (!member || !plan) return { RspCode: "01", Message: "Order data not found" };
+        activateMembership(store, member, payment, plan);
+      }
+      await store.save();
+      return { RspCode: "00", Message: "Confirm Success" };
+    } catch (error) {
+      console.error("VNPAY IPN processing error:", error);
+      await store.reload().catch(() => {});
+      return { RspCode: "99", Message: "Unknown error" };
+    }
+  });
+
+  route("GET", "/api/payments/vnpay/return", async ({ req, store, url }) => {
+    const { member: sessionMember } = requireSession(req, store);
+    const config = getVnpayConfig();
+    const verification = verifyVnpaySignature(url.searchParams, config);
+    const signatureValid = verification.valid && verification.params.vnp_TmnCode === config.tmnCode;
+    const transactionRef = verification.params.vnp_TxnRef || "";
+    const payment = signatureValid
+      ? store.db.payments.find((item) => item.transactionRef === transactionRef)
+      : null;
+    if (payment && payment.memberId !== sessionMember.id && sessionMember.role?.toLowerCase() !== "admin") {
+      forbidden("Bạn không được xem giao dịch này.");
+    }
+
+    return {
+      signatureValid,
+      transactionRef,
+      responseCode: verification.params.vnp_ResponseCode || null,
+      transactionStatus: verification.params.vnp_TransactionStatus || null,
+      paymentStatus: payment?.status || "not_found",
+      payment: payment ? paymentResource(req, payment) : null,
+      member: signatureValid && payment?.status === "paid" ? memberResource(req, getMember(store.db, payment.memberId), store.db) : null,
+      message: !signatureValid
+        ? "Chữ ký phản hồi VNPAY không hợp lệ."
+        : payment?.status === "paid"
+        ? "Thanh toán thành công và gói thành viên đã được kích hoạt."
+        : payment?.status === "pending"
+          ? "VNPAY đã chuyển hướng về, hệ thống đang chờ IPN xác nhận."
+          : "Giao dịch chưa được xác nhận thành công.",
+    };
+  });
+
+  route("GET", "/api/payments/vnpay/status/:transactionRef", async ({ req, store, params }) => {
+    const { member: sessionMember } = requireSession(req, store);
+    const payment = store.db.payments.find((item) => item.transactionRef === params.transactionRef);
+    if (!payment) notFound(req, "Payment not found.");
+    if (payment.memberId !== sessionMember.id && sessionMember.role?.toLowerCase() !== "admin") {
+      forbidden("Bạn không được xem giao dịch này.");
+    }
+    return {
+      transactionRef: payment.transactionRef,
+      paymentStatus: payment.status,
+      payment: paymentResource(req, payment),
+      member: payment.status === "paid" ? memberResource(req, getMember(store.db, payment.memberId), store.db) : null,
+      _links: { self: currentLink(req), profile: link(req, `/api/members/${payment.memberId}/profile`) },
+    };
+  });
+
   route("GET", "/api/payments/:id", async ({ req, store, params }) => {
+    const { member: sessionMember } = requireSession(req, store);
     const payment = store.db.payments.find((item) => item.id === params.id);
     if (!payment) notFound(req, "Payment not found.");
+    if (payment.memberId !== sessionMember.id && sessionMember.role?.toLowerCase() !== "admin") {
+      forbidden("Bạn không được xem giao dịch này.");
+    }
     return paymentResource(req, payment);
   });
 }

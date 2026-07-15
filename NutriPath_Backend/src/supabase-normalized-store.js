@@ -121,10 +121,19 @@ async function ensureNormalizedSchema(pool) {
       member_id text NOT NULL,
       invoice text UNIQUE,
       status text,
+      gateway text,
+      transaction_ref text,
+      provider_transaction_no text,
+      created_at timestamptz,
       paid_at timestamptz,
       data jsonb NOT NULL,
       updated_at timestamptz NOT NULL DEFAULT now()
     );
+
+    ALTER TABLE ${table("nutripath_payments")} ADD COLUMN IF NOT EXISTS gateway text;
+    ALTER TABLE ${table("nutripath_payments")} ADD COLUMN IF NOT EXISTS transaction_ref text;
+    ALTER TABLE ${table("nutripath_payments")} ADD COLUMN IF NOT EXISTS provider_transaction_no text;
+    ALTER TABLE ${table("nutripath_payments")} ADD COLUMN IF NOT EXISTS created_at timestamptz;
 
     CREATE TABLE IF NOT EXISTS ${table("nutripath_auth_credentials")} (
       id text PRIMARY KEY,
@@ -203,6 +212,7 @@ async function ensureNormalizedSchema(pool) {
     CREATE INDEX IF NOT EXISTS nutripath_foods_category_idx ON ${table("nutripath_foods")} (category);
     CREATE INDEX IF NOT EXISTS nutripath_meal_logs_member_date_idx ON ${table("nutripath_meal_logs")} (member_id, log_date DESC);
     CREATE INDEX IF NOT EXISTS nutripath_payments_member_paid_idx ON ${table("nutripath_payments")} (member_id, paid_at DESC);
+    CREATE UNIQUE INDEX IF NOT EXISTS nutripath_payments_transaction_ref_uidx ON ${table("nutripath_payments")} (transaction_ref) WHERE transaction_ref IS NOT NULL;
     CREATE INDEX IF NOT EXISTS nutripath_chat_messages_member_time_idx ON ${table("nutripath_chat_messages")} (member_id, message_time DESC);
     CREATE INDEX IF NOT EXISTS nutripath_notifications_member_read_idx ON ${table("nutripath_notifications")} (member_id, read_at);
   `);
@@ -520,11 +530,21 @@ export async function persistSupabaseNormalizedData(data) {
         member_id,
         invoice: optionalText(payment.invoice),
         status: optionalText(payment.status),
+        gateway: optionalText(payment.gateway),
+        transaction_ref: optionalText(payment.transactionRef),
+        provider_transaction_no: optionalText(payment.providerTransactionNo),
+        created_at: timestampOrNull(payment.createdAt),
         paid_at: timestampOrNull(payment.paidAt),
         data: withColumnValues(payment, { id, memberId: member_id }),
       };
     }).filter(Boolean), (payment) => payment.id);
-    await bulkInsert(client, "nutripath_payments", ["id", "member_id", "invoice", "status", "paid_at", "data"], "id text, member_id text, invoice text, status text, paid_at timestamptz, data jsonb", payments);
+    await bulkInsert(
+      client,
+      "nutripath_payments",
+      ["id", "member_id", "invoice", "status", "gateway", "transaction_ref", "provider_transaction_no", "created_at", "paid_at", "data"],
+      "id text, member_id text, invoice text, status text, gateway text, transaction_ref text, provider_transaction_no text, created_at timestamptz, paid_at timestamptz, data jsonb",
+      payments,
+    );
 
     const authCredentials = uniqueBy((state.authCredentials || []).map((credential, index) => {
       const id = requiredText(credential.id, `cred-${index + 1}`);
