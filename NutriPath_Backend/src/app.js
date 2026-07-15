@@ -42,6 +42,7 @@ const sessions = new Map();
 const chatRateBuckets = new Map();
 const geminiRateStates = new Map();
 const SESSION_TTL_MS = 1000 * 60 * 60 * 12;
+const SESSION_COOKIE_NAME = "nutripath_session";
 const PASSWORD_ITERATIONS = 120000;
 const CHAT_RATE_WINDOW_MS = 60 * 60 * 1000;
 const GEMINI_RPM_LIMIT = Number(process.env.GEMINI_RPM_LIMIT || 5);
@@ -165,16 +166,37 @@ function matchRoute(pattern, pathname) {
   return params;
 }
 
+function getAllowedCorsOrigin(req) {
+  const requestOrigin = String(req.headers.origin || "").trim();
+  if (!requestOrigin) return null;
+
+  const configuredOrigins = String(process.env.CORS_ORIGIN || "")
+    .split(",")
+    .map((value) => value.trim().replace(/\/+$/, ""))
+    .filter(Boolean);
+  const allowedOrigins = configuredOrigins.length > 0
+    ? configuredOrigins
+    : ["http://127.0.0.1:5173", "http://localhost:5173"];
+
+  return allowedOrigins.includes(requestOrigin.replace(/\/+$/, "")) ? requestOrigin : null;
+}
+
 function sendJson(req, res, status, payload) {
-  const origin = process.env.CORS_ORIGIN || "*";
-  res.writeHead(status, {
+  const origin = getAllowedCorsOrigin(req);
+  const headers = {
     "Content-Type": "application/hal+json; charset=utf-8",
-    "Access-Control-Allow-Origin": origin,
     "Access-Control-Allow-Methods": "GET,POST,PATCH,PUT,DELETE,OPTIONS",
     "Access-Control-Allow-Headers": "Content-Type, Authorization, X-Requested-With",
     Vary: "Origin",
     "Cache-Control": "no-store",
-  });
+    "X-Content-Type-Options": "nosniff",
+  };
+  if (origin) {
+    headers["Access-Control-Allow-Origin"] = origin;
+    headers["Access-Control-Allow-Credentials"] = "true";
+  }
+  if (req.sessionCookie) headers["Set-Cookie"] = req.sessionCookie;
+  res.writeHead(status, headers);
   res.end(JSON.stringify(payload, null, 2));
 }
 
@@ -608,8 +630,60 @@ function getBearerToken(req) {
   return token;
 }
 
+function getCookieValue(req, name) {
+  const cookieHeader = String(req.headers.cookie || "");
+  for (const item of cookieHeader.split(";")) {
+    const separator = item.indexOf("=");
+    if (separator === -1) continue;
+    const key = item.slice(0, separator).trim();
+    if (key !== name) continue;
+    try {
+      return decodeURIComponent(item.slice(separator + 1).trim());
+    } catch {
+      return null;
+    }
+  }
+  return null;
+}
+
+function getSessionToken(req) {
+  return getCookieValue(req, SESSION_COOKIE_NAME) || getBearerToken(req);
+}
+
+function requestIsSecure(req) {
+  const forwardedProto = String(req.headers["x-forwarded-proto"] || "")
+    .split(",")[0]
+    .trim()
+    .toLowerCase();
+  return Boolean(req.socket?.encrypted) || forwardedProto === "https" || process.env.NODE_ENV === "production";
+}
+
+function buildSessionCookie(req, token, maxAgeSeconds) {
+  const parts = [
+    `${SESSION_COOKIE_NAME}=${encodeURIComponent(token)}`,
+    "Path=/",
+    "HttpOnly",
+    `Max-Age=${Math.max(0, Math.floor(maxAgeSeconds))}`,
+    requestIsSecure(req) ? "SameSite=None" : "SameSite=Lax",
+  ];
+  if (requestIsSecure(req)) parts.push("Secure");
+  return parts.join("; ");
+}
+
+function clearSessionCookie(req) {
+  req.sessionCookie = buildSessionCookie(req, "", 0);
+}
+
+function assertTrustedMutation(req, pathname) {
+  if (!pathname.startsWith("/api/")) return;
+  if (!new Set(["POST", "PATCH", "PUT", "DELETE"]).has(req.method)) return;
+  if (req.method === "POST" && pathname === "/api/payments/payos/webhook") return;
+  if (req.headers["x-requested-with"] === "XMLHttpRequest") return;
+  forbidden("Yêu cầu thay đổi dữ liệu không có xác thực nguồn hợp lệ.");
+}
+
 function getActiveSession(req, store) {
-  const token = getBearerToken(req);
+  const token = getSessionToken(req);
   const session = token ? sessions.get(token) : null;
   if (!token || !session || session.expiresAt <= Date.now()) {
     if (token) sessions.delete(token);
@@ -629,9 +703,9 @@ function authSessionResponse(req, member, db = null) {
   const token = crypto.randomBytes(32).toString("hex");
   const expiresAt = Date.now() + SESSION_TTL_MS;
   sessions.set(token, { memberId: member.id, expiresAt });
+  req.sessionCookie = buildSessionCookie(req, token, SESSION_TTL_MS / 1000);
 
   return {
-    token,
     expiresAt: new Date(expiresAt).toISOString(),
     member: memberResource(req, member, db),
     _links: {
@@ -645,7 +719,7 @@ function authSessionResponse(req, member, db = null) {
 }
 
 function requireSession(req, store) {
-  const token = getBearerToken(req);
+  const token = getSessionToken(req);
   const session = token ? sessions.get(token) : null;
   if (!token || !session || session.expiresAt <= Date.now()) {
     if (token) sessions.delete(token);
@@ -3632,6 +3706,7 @@ registerControllers({
   chatBlockMessage,
   chatHistoryResource,
   collectionResponse,
+  clearSessionCookie,
   conflict,
   countTrackedMealDays,
   createMealLogDraft,
@@ -3671,6 +3746,7 @@ registerControllers({
   getAdminUsersData,
   getAiProviders,
   getBearerToken,
+  getSessionToken,
   getChatAdminKey,
   getClientIp,
   getDrinkWaterEquivalentGlasses,
@@ -3797,6 +3873,7 @@ export async function createServer(options = {}) {
       const safeUrl = rawUrl.startsWith("//") ? rawUrl.replace(/^\/+/, "/") : rawUrl;
       const requestUrl = new URL(safeUrl, `http://${req.headers.host || "127.0.0.1:8080"}`);
       const pathname = normalizePath(requestUrl.pathname);
+      assertTrustedMutation(req, pathname);
       const matched = routes.find((candidate) => candidate.method === req.method && matchRoute(candidate.pattern, pathname));
 
       if (!matched) {

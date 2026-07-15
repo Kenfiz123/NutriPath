@@ -5,6 +5,13 @@ import {
   normalizeVnpayBankCode,
   verifyVnpaySignature,
 } from "../vnpay.js";
+import {
+  createPayosOrderCode,
+  createPayosPaymentLink,
+  getPayosConfig,
+  getPayosPaymentLink,
+  verifyPayosWebhook,
+} from "../payos.js";
 
 export function registerBillingRoutes(ctx) {
   const {
@@ -253,6 +260,41 @@ export function registerBillingRoutes(ctx) {
     return member;
   }
 
+  async function finalizePayosPayment(store, payment, providerData) {
+    if (payment.status === "paid") return getMember(store.db, payment.memberId);
+    const receivedAmount = Number(providerData.amountPaid ?? providerData.amount);
+    if (!Number.isSafeInteger(receivedAmount) || receivedAmount !== payment.amount) {
+      badRequest("Số tiền PayOS không khớp với đơn hàng.");
+    }
+    if (providerData.currency && providerData.currency !== payment.currency) {
+      badRequest("Đơn vị tiền tệ PayOS không khớp với đơn hàng.");
+    }
+
+    const member = getMember(store.db, payment.memberId);
+    const plan = getPlan(store.db, payment.planId);
+    if (!member || !plan) badRequest("Không tìm thấy dữ liệu gói của đơn PayOS.");
+
+    const now = new Date().toISOString();
+    payment.status = "paid";
+    payment.paidAt = now;
+    payment.failedAt = null;
+    payment.providerTransactionNo = providerData.reference || payment.providerTransactionNo || null;
+    payment.payosPaymentLinkId = providerData.paymentLinkId || providerData.id || payment.payosPaymentLinkId || null;
+    payment.transactionStatus = "PAID";
+    payment.responseCode = providerData.code || "00";
+    payment.providerPaidAt = providerData.transactionDateTime || now;
+    activateMembership(store, member, payment, plan);
+    return persistFinalizedPayment(store, member, payment);
+  }
+
+  async function failPayosPayment(store, payment, providerStatus) {
+    if (payment.status !== "pending") return;
+    payment.status = "failed";
+    payment.failedAt = new Date().toISOString();
+    payment.transactionStatus = providerStatus;
+    await store.save();
+  }
+
   route("GET", "/api/members/:memberId/payments", async ({ req, store, params }) => {
     const member = requirePaymentOwner(req, store, params.memberId);
     const payments = store.db.payments.filter((payment) => payment.memberId === member.id);
@@ -305,8 +347,8 @@ export function registerBillingRoutes(ctx) {
     const quote = buildQuote(store.db, body);
     const trialDays = quote.trialDays || 0;
     if (!trialDays) {
-      badRequest("Thanh toán gói trả phí phải được thực hiện qua VNPAY.", {
-        endpoint: "/api/payments/vnpay/create",
+      badRequest("Thanh toán gói trả phí phải được thực hiện qua PayOS hoặc VNPAY.", {
+        endpoints: ["/api/payments/payos/create", "/api/payments/vnpay/create"],
       });
     }
     const usedTrial = Boolean(member.trialUsedAt)
@@ -342,6 +384,127 @@ export function registerBillingRoutes(ctx) {
         profile: link(req, `/api/members/${member.id}/profile`),
         dashboard: link(req, `/api/members/${member.id}/dashboard`),
       },
+    };
+  });
+
+  route("POST", "/api/payments/payos/create", async ({ req, store, body }) => {
+    requireFields(body, ["memberId", "planId", "billing"]);
+    const member = requirePaymentOwner(req, store, body.memberId);
+    const plan = getPlan(store.db, body.planId);
+    if (!plan || plan.id === "free") notFound(req, "Paid plan not found.");
+    if (store.dataSource === "sqlserver") {
+      serviceUnavailable("PayOS checkout currently requires the Supabase or JSON data source.");
+    }
+
+    const quote = buildQuote(store.db, { ...body, trialDays: 0 });
+    if (!Number.isSafeInteger(quote.total) || quote.total <= 0) badRequest("Số tiền thanh toán không hợp lệ.");
+    const config = getPayosConfig();
+    const orderCode = createPayosOrderCode();
+    const now = new Date();
+    let providerResult;
+    try {
+      providerResult = await createPayosPaymentLink({
+        config,
+        orderCode,
+        amount: quote.total,
+        itemName: `Goi ${plan.name} ${body.billing === "annual" ? "nam" : "thang"}`,
+        now,
+      });
+    } catch (error) {
+      console.error("PayOS create payment link failed:", error?.name || "PayOSError", error?.status || "");
+      serviceUnavailable("Không thể tạo liên kết thanh toán PayOS lúc này. Vui lòng thử lại sau.");
+    }
+
+    const paymentLink = providerResult.paymentLink;
+    if (!paymentLink?.checkoutUrl || String(paymentLink.orderCode) !== String(orderCode)) {
+      serviceUnavailable("PayOS trả về liên kết thanh toán không hợp lệ.");
+    }
+    const payment = {
+      id: store.nextId("pay", store.db.payments),
+      memberId: member.id,
+      invoice: `INV-${now.getFullYear()}-${String(store.db.payments.length + 1).padStart(4, "0")}`,
+      planId: plan.id,
+      billing: body.billing,
+      paymentMethod: "payos",
+      gateway: "payos",
+      transactionRef: String(orderCode),
+      payosOrderCode: orderCode,
+      payosPaymentLinkId: paymentLink.paymentLinkId || null,
+      providerTransactionNo: paymentLink.paymentLinkId || null,
+      amount: quote.total,
+      currency: "VND",
+      status: "pending",
+      transactionStatus: paymentLink.status || "PENDING",
+      createdAt: now.toISOString(),
+      expiresAt: providerResult.expiresAt,
+      paidAt: null,
+    };
+    store.db.payments.unshift(payment);
+    await store.save();
+
+    return {
+      payment: paymentResource(req, payment),
+      quote,
+      paymentUrl: paymentLink.checkoutUrl,
+      qrCode: paymentLink.qrCode || null,
+      expiresAt: providerResult.expiresAt,
+      _links: {
+        status: link(req, `/api/payments/payos/status/${orderCode}`),
+        webhook: link(req, "/api/payments/payos/webhook", "POST"),
+      },
+    };
+  });
+
+  route("POST", "/api/payments/payos/webhook", async ({ store, body }) => {
+    let providerData;
+    try {
+      providerData = await verifyPayosWebhook(body, getPayosConfig());
+    } catch (error) {
+      console.warn("Rejected invalid PayOS webhook:", error?.name || "InvalidSignatureError");
+      badRequest("Webhook PayOS không hợp lệ.");
+    }
+
+    const orderCode = String(providerData.orderCode || "");
+    const payment = store.db.payments.find(
+      (item) => item.gateway === "payos" && String(item.transactionRef) === orderCode,
+    );
+    // PayOS sends a signed sample payload while registering the webhook.
+    if (!payment) return { success: true, message: "Webhook received." };
+    if (providerData.code !== "00") return { success: true, message: "No successful payment to process." };
+
+    await finalizePayosPayment(store, payment, providerData);
+    return { success: true, message: "Payment confirmed." };
+  });
+
+  route("GET", "/api/payments/payos/status/:orderCode", async ({ req, store, params }) => {
+    const { member: sessionMember } = requireSession(req, store);
+    const payment = store.db.payments.find(
+      (item) => item.gateway === "payos" && String(item.transactionRef) === String(params.orderCode),
+    );
+    if (!payment) notFound(req, "Payment not found.");
+    if (payment.memberId !== sessionMember.id && sessionMember.role?.toLowerCase() !== "admin") {
+      forbidden("Bạn không được xem giao dịch này.");
+    }
+
+    if (payment.status === "pending") {
+      try {
+        const providerPayment = await getPayosPaymentLink(Number(payment.transactionRef), getPayosConfig());
+        if (providerPayment.status === "PAID") {
+          await finalizePayosPayment(store, payment, providerPayment);
+        } else if (["CANCELLED", "EXPIRED", "FAILED"].includes(providerPayment.status)) {
+          await failPayosPayment(store, payment, providerPayment.status);
+        }
+      } catch (error) {
+        console.warn("PayOS status reconciliation skipped:", error?.name || "PayOSError", error?.status || "");
+      }
+    }
+
+    return {
+      transactionRef: payment.transactionRef,
+      paymentStatus: payment.status,
+      payment: paymentResource(req, payment),
+      member: payment.status === "paid" ? memberResource(req, getMember(store.db, payment.memberId), store.db) : null,
+      _links: { self: currentLink(req), profile: link(req, `/api/members/${payment.memberId}/profile`) },
     };
   });
 

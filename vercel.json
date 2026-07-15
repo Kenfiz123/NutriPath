@@ -7,6 +7,10 @@
   "outputDirectory": "NutriPath_Figma/dist",
   "rewrites": [
     {
+      "source": "/api/:path*",
+      "destination": "https://nutripath-l4rk.onrender.com/api/:path*"
+    },
+    {
       "source": "/(.*)",
       "destination": "/index.html"
     }

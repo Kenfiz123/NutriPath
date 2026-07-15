@@ -9,6 +9,12 @@ process.env.VNPAY_TMN_CODE = "TEST1234";
 process.env.VNPAY_HASH_SECRET = "test-hash-secret-for-local-controller-flow";
 process.env.VNPAY_URL = "https://sandbox.vnpayment.vn/paymentv2/vpcpay.html";
 process.env.VNPAY_RETURN_URL = "http://127.0.0.1:5173/payment-result";
+process.env.PAYOS_CLIENT_ID = "test-client-id";
+process.env.PAYOS_API_KEY = "test-api-key";
+process.env.PAYOS_CHECKSUM_KEY = "test-checksum-key-for-controller-flow";
+process.env.PAYOS_BASE_URL = "https://payos.test.local";
+process.env.PAYOS_RETURN_URL = "http://127.0.0.1:5173/payment-result";
+process.env.PAYOS_CANCEL_URL = "http://127.0.0.1:5173/payment-result";
 
 const dbPath = path.resolve("data/controller-flow-test-db.json");
 seedData.members.push({
@@ -25,26 +31,54 @@ const server = await createServer({ dbPath });
 await new Promise((resolve) => server.listen(0, "127.0.0.1", resolve));
 const address = server.address();
 const baseUrl = `http://127.0.0.1:${address.port}`;
+const nativeFetch = globalThis.fetch;
+let capturedPayosRequest = null;
+globalThis.fetch = async (input, init) => {
+  const requestUrl = typeof input === "string" || input instanceof URL ? String(input) : input.url;
+  if (requestUrl === "https://payos.test.local/v2/payment-requests" && init?.method === "POST") {
+    const headers = new Headers(init.headers);
+    assert.equal(headers.get("x-client-id"), process.env.PAYOS_CLIENT_ID);
+    assert.equal(headers.get("x-api-key"), process.env.PAYOS_API_KEY);
+    capturedPayosRequest = JSON.parse(String(init.body));
+    assert.ok(capturedPayosRequest.signature, "Expected the SDK to sign the PayOS request.");
+    return new Response(JSON.stringify({
+      code: "00",
+      desc: "success",
+      data: {
+        orderCode: capturedPayosRequest.orderCode,
+        amount: capturedPayosRequest.amount,
+        paymentLinkId: "flow-payos-link",
+        status: "PENDING",
+        checkoutUrl: "https://pay.payos.vn/web/flow-payos-link",
+        qrCode: "flow-payos-qr",
+      },
+    }), { status: 200, headers: { "Content-Type": "application/json" } });
+  }
+  return nativeFetch(input, init);
+};
 
 async function request(pathname, options = {}) {
+  const { expectStatus, trusted = true, ...fetchOptions } = options;
   const response = await fetch(`${baseUrl}${pathname}`, {
-    ...options,
+    ...fetchOptions,
     headers: {
       "Content-Type": "application/json",
+      ...(trusted ? { "X-Requested-With": "XMLHttpRequest" } : {}),
       ...(options.headers || {}),
     },
   });
   const json = await response.json().catch(() => ({}));
-  if (options.expectStatus) {
-    assert.equal(response.status, options.expectStatus, `${options.method || "GET"} ${pathname}: ${JSON.stringify(json)}`);
+  if (expectStatus) {
+    assert.equal(response.status, expectStatus, `${options.method || "GET"} ${pathname}: ${JSON.stringify(json)}`);
   } else {
     assert.ok(response.ok, `${options.method || "GET"} ${pathname} failed: ${JSON.stringify(json)}`);
   }
   return { response, json };
 }
 
-function authHeaders(token) {
-  return { Authorization: `Bearer ${token}` };
+function cookieHeaders(setCookie) {
+  assert.ok(setCookie, "Expected an HttpOnly session cookie.");
+  return { Cookie: setCookie.split(";", 1)[0] };
 }
 
 function signedVnpayQuery(params) {
@@ -55,6 +89,20 @@ function signedVnpayQuery(params) {
   return `${hashData}&vnp_SecureHash=${secureHash}`;
 }
 
+function signedPayosWebhook(data) {
+  const content = Object.keys(data)
+    .sort()
+    .map((key) => `${key}=${data[key] ?? ""}`)
+    .join("&");
+  return {
+    code: "00",
+    desc: "success",
+    success: true,
+    data,
+    signature: createHmac("sha256", process.env.PAYOS_CHECKSUM_KEY).update(content).digest("hex"),
+  };
+}
+
 function localDateString(date = new Date()) {
   const year = date.getFullYear();
   const month = String(date.getMonth() + 1).padStart(2, "0");
@@ -63,29 +111,72 @@ function localDateString(date = new Date()) {
 }
 
 try {
+  const payosSample = signedPayosWebhook({
+    orderCode: 123,
+    amount: 2000,
+    description: "VQRIO123",
+    accountNumber: "12345678",
+    reference: "TF230204212323",
+    transactionDateTime: "2026-07-15 12:00:00",
+    currency: "VND",
+    paymentLinkId: "sample-link-id",
+    code: "00",
+    desc: "success",
+  });
+  const { json: payosWebhookAck } = await request("/api/payments/payos/webhook", {
+    method: "POST",
+    trusted: false,
+    body: JSON.stringify(payosSample),
+  });
+  assert.equal(payosWebhookAck.success, true);
+
+  await request("/api/payments/payos/webhook", {
+    method: "POST",
+    trusted: false,
+    body: JSON.stringify({ ...payosSample, signature: "invalid" }),
+    expectStatus: 400,
+  });
+
   const email = `flow-${Date.now()}@example.com`;
   const password = "Flow@123456";
 
-  const { json: registered } = await request("//api/auth/register", {
+  const { response: registerResponse, json: registered } = await request("//api/auth/register", {
     method: "POST",
     body: JSON.stringify({ name: "Flow Test", email, password }),
   });
-  assert.ok(registered.token);
+  assert.equal(registered.token, undefined);
   assert.equal(registered.member.email, email);
+  assert.match(registerResponse.headers.get("set-cookie") || "", /nutripath_session=.*HttpOnly/i);
 
-  const { json: loggedIn } = await request("/api/auth/login", {
+  await request("/api/auth/login", {
     method: "POST",
+    trusted: false,
+    body: JSON.stringify({ email, password }),
+    expectStatus: 403,
+  });
+
+  const { response: loginResponse, json: loggedIn } = await request("/api/auth/login", {
+    method: "POST",
+    headers: { "x-forwarded-proto": "https" },
     body: JSON.stringify({ email, password }),
   });
-  const token = loggedIn.token;
   const memberId = loggedIn.member.id;
-  assert.ok(token);
+  assert.equal(loggedIn.token, undefined);
+  const loginCookie = loginResponse.headers.get("set-cookie");
+  assert.match(loginCookie || "", /HttpOnly/i);
+  assert.match(loginCookie || "", /SameSite=None/i);
+  assert.match(loginCookie || "", /Secure/i);
+  assert.match(loginCookie || "", /Path=\//i);
 
-  const headers = authHeaders(token);
+  const headers = cookieHeaders(loginCookie);
   const { json: me } = await request("/api/auth/me", { headers });
   assert.equal(me.member.id, memberId);
 
   const today = localDateString();
+  const { json: dashboard } = await request(`/api/members/${memberId}/dashboard?date=${today}`, { headers });
+  assert.equal(dashboard.greeting, `Xin chào, ${loggedIn.member.name}`);
+  assert.doesNotMatch(dashboard.greeting, /Ã|Â|Ä‘|á»/);
+
   const { json: mealLog } = await request(`/api/members/${memberId}/meal-logs/${today}`, { headers });
   assert.equal(mealLog.memberId, memberId);
 
@@ -186,8 +277,45 @@ try {
   const { json: invalidIpn } = await request(`/api/payments/vnpay/ipn?${tamperedQuery.toString()}`);
   assert.equal(invalidIpn.RspCode, "97");
 
+  const { json: pendingPayos } = await request("/api/payments/payos/create", {
+    method: "POST",
+    headers,
+    body: JSON.stringify({ memberId, planId: "svip", billing: "monthly" }),
+  });
+  assert.equal(pendingPayos.payment.status, "pending");
+  assert.equal(pendingPayos.payment.gateway, "payos");
+  assert.equal(pendingPayos.paymentUrl, "https://pay.payos.vn/web/flow-payos-link");
+  assert.equal(capturedPayosRequest.amount, pendingPayos.quote.total);
+  assert.match(capturedPayosRequest.returnUrl, /gateway=payos/);
+
+  const payosOrderCode = Number(pendingPayos.payment.transactionRef);
+  const confirmedPayosWebhook = signedPayosWebhook({
+    orderCode: payosOrderCode,
+    amount: pendingPayos.quote.total,
+    description: capturedPayosRequest.description,
+    accountNumber: "12345678",
+    reference: "FLOW-PAYOS-REFERENCE",
+    transactionDateTime: "2026-07-15 12:05:00",
+    currency: "VND",
+    paymentLinkId: "flow-payos-link",
+    code: "00",
+    desc: "success",
+  });
+  const { json: payosConfirmed } = await request("/api/payments/payos/webhook", {
+    method: "POST",
+    trusted: false,
+    body: JSON.stringify(confirmedPayosWebhook),
+  });
+  assert.equal(payosConfirmed.success, true);
+
+  const { json: payosStatus } = await request(`/api/payments/payos/status/${payosOrderCode}`, { headers });
+  assert.equal(payosStatus.paymentStatus, "paid");
+  assert.equal(payosStatus.member.tier, "svip");
+
   const { json: profile } = await request(`/api/members/${memberId}/profile`, { headers });
   assert.equal(profile.member.id, memberId);
+
+  await request("/api/admin/overview", { expectStatus: 401 });
 
   await request("/api/admin/overview", {
     headers,
@@ -195,13 +323,14 @@ try {
   });
 
   const adminPassword = "FlowAdmin@123456";
-  const { json: adminRegistration } = await request("/api/auth/register", {
+  const { response: adminRegisterResponse, json: adminRegistration } = await request("/api/auth/register", {
     method: "POST",
     body: JSON.stringify({ name: "Flow Admin", email: "flow-admin@example.com", password: adminPassword }),
   });
   assert.equal(adminRegistration.member.role, "admin");
 
-  const adminHeaders = authHeaders(adminRegistration.token);
+  assert.equal(adminRegistration.token, undefined);
+  const adminHeaders = cookieHeaders(adminRegisterResponse.headers.get("set-cookie"));
   const { json: adminPayments } = await request(
     `/api/admin/payments?status=paid&planId=vip&search=${encodeURIComponent(email)}`,
     { headers: adminHeaders },
@@ -233,8 +362,17 @@ try {
   const { json: history } = await request("/api/chat/history", { headers });
   assert.ok(Array.isArray(history.messages));
 
+  const { response: logoutResponse, json: logoutResult } = await request("/api/auth/logout", {
+    method: "POST",
+    headers,
+  });
+  assert.equal(logoutResult.loggedOut, true);
+  assert.match(logoutResponse.headers.get("set-cookie") || "", /Max-Age=0/i);
+  await request("/api/auth/me", { headers, expectStatus: 401 });
+
   console.log(`Controller flow test passed against ${baseUrl}`);
 } finally {
+  globalThis.fetch = nativeFetch;
   await new Promise((resolve) => server.close(resolve));
   await unlink(dbPath).catch(() => {});
 }

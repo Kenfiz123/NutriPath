@@ -16,6 +16,7 @@ import {
   Tag,
 } from "lucide-react";
 import {
+  createPayosPayment,
   createPayment,
   createVnpayPayment,
   getCheckoutQuote,
@@ -27,17 +28,19 @@ import {
 } from "../api";
 
 type PlanId = "vip" | "svip";
-type PaymentMethod = "vnpay" | "vnpayqr" | "bank" | "card";
+type PaymentMethod = "payos" | "vnpay" | "vnpayqr" | "bank" | "card";
+type VnpayPaymentMethod = Exclude<PaymentMethod, "payos">;
 type Billing = "monthly" | "annual";
 
 const paymentMethods: Array<{ id: PaymentMethod; label: string; icon: typeof CreditCard }> = [
+  { id: "payos", label: "PayOS VietQR", icon: QrCode },
   { id: "vnpay", label: "Chọn tại VNPAY", icon: Smartphone },
   { id: "vnpayqr", label: "VNPAY-QR", icon: QrCode },
   { id: "bank", label: "ATM / ngân hàng", icon: Building2 },
   { id: "card", label: "Thẻ quốc tế", icon: CreditCard },
 ];
 
-const bankCodeByMethod: Record<PaymentMethod, "" | "VNPAYQR" | "VNBANK" | "INTCARD"> = {
+const bankCodeByMethod: Record<VnpayPaymentMethod, "" | "VNPAYQR" | "VNBANK" | "INTCARD"> = {
   vnpay: "",
   vnpayqr: "VNPAYQR",
   bank: "VNBANK",
@@ -72,7 +75,7 @@ export function Checkout() {
   const [selectedPlan, setSelectedPlan] = useState<PlanId>(initialPlan);
   const [billing, setBilling] = useState<Billing>(initialBilling);
   const [trialDays, setTrialDays] = useState(initialTrialDays);
-  const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>("vnpay");
+  const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>("payos");
   const [discountInput, setDiscountInput] = useState("");
   const [appliedDiscountCode, setAppliedDiscountCode] = useState("");
   const [plans, setPlans] = useState<Plan[]>([]);
@@ -127,6 +130,7 @@ export function Checkout() {
   const palette = planColors[selectedPlan];
   const PlanIcon = palette.icon;
   const isTrialCheckout = trialDays > 0;
+  const gatewayName = paymentMethod === "payos" ? "PayOS" : "VNPAY";
 
   async function handleCheckout() {
     if (!quote) return;
@@ -154,13 +158,20 @@ export function Checkout() {
         return;
       }
 
-      const data = await createVnpayPayment({
-        memberId,
-        planId: selectedPlan,
-        billing,
-        discountCode: appliedDiscountCode,
-        bankCode: bankCodeByMethod[paymentMethod],
-      });
+      const data = paymentMethod === "payos"
+        ? await createPayosPayment({
+          memberId,
+          planId: selectedPlan,
+          billing,
+          discountCode: appliedDiscountCode,
+        })
+        : await createVnpayPayment({
+          memberId,
+          planId: selectedPlan,
+          billing,
+          discountCode: appliedDiscountCode,
+          bankCode: bankCodeByMethod[paymentMethod],
+        });
       window.location.assign(data.paymentUrl);
     } catch (checkoutError) {
       setError(checkoutError instanceof Error ? checkoutError.message : "Thanh toán chưa hoàn tất.");
@@ -325,7 +336,9 @@ export function Checkout() {
 
               {!isTrialCheckout && (
                 <div className="mt-5 rounded-2xl border border-blue-100 bg-blue-50 px-5 py-4 text-blue-800 dark:border-blue-900/70 dark:bg-blue-950/40 dark:text-blue-200" style={{ fontSize: "0.85rem", lineHeight: 1.7 }}>
-                  Bạn sẽ được chuyển sang VNPAY Sandbox để nhập thông tin thanh toán. NutriPath không nhận hoặc lưu số thẻ, CVV và OTP.
+                  {paymentMethod === "payos"
+                    ? "Bạn sẽ được chuyển sang PayOS để quét VietQR hoặc chọn phương thức ngân hàng được hỗ trợ. NutriPath không nhận hoặc lưu thông tin tài khoản ngân hàng và OTP."
+                    : "Bạn sẽ được chuyển sang VNPAY Sandbox để nhập thông tin thanh toán. NutriPath không nhận hoặc lưu số thẻ, CVV và OTP."}
                 </div>
               )}
             </div>
@@ -414,7 +427,7 @@ export function Checkout() {
                     style={{ fontSize: "1rem", fontWeight: 800 }}
                   >
                     <Lock className="h-5 w-5" />
-                    {submitting ? (quote.trialDays ? "Đang kích hoạt gói..." : "Đang chuyển sang VNPAY...") : quote.trialDays ? "Kích hoạt dùng thử" : "Thanh toán qua VNPAY"}
+                    {submitting ? (quote.trialDays ? "Đang kích hoạt gói..." : `Đang chuyển sang ${gatewayName}...`) : quote.trialDays ? "Kích hoạt dùng thử" : `Thanh toán qua ${gatewayName}`}
                     <ArrowRight className="h-5 w-5" />
                   </button>
                 </>
@@ -425,7 +438,7 @@ export function Checkout() {
               <div className="space-y-3">
                 {[
                   { icon: Shield, text: "NutriPath không lưu số thẻ, CVV, OTP hoặc dữ liệu ngân hàng nhạy cảm." },
-                  { icon: Lock, text: "Gói chỉ được kích hoạt sau khi IPN VNPAY có checksum và số tiền hợp lệ." },
+                  { icon: Lock, text: "Gói chỉ được kích hoạt sau khi webhook/IPN có chữ ký và số tiền hợp lệ." },
                   { icon: RotateCcw, text: "Return URL chỉ hiển thị kết quả; không thể tự nâng gói bằng cách sửa URL." },
                 ].map(({ icon: Icon, text }) => (
                   <div key={text} className="flex items-start gap-2.5">

@@ -1,32 +1,10 @@
-/**
- * SECURITY WARNING: This file stores authentication tokens in localStorage.
- *
- * localStorage is vulnerable to XSS attacks - any injected script can read tokens.
- *
- * RECOMMENDED FIX (requires backend support):
- * 1. Backend should issue tokens as httpOnly cookies
- * 2. Replace localStorage-based auth with cookie-based auth
- * 3. Set cookie with: SameSite=Strict, Secure, HttpOnly flags
- *
- * Until backend supports httpOnly cookies, we add XSS protection measures:
- * - Token is not displayed in UI
- * - Token is cleared on any fetch error (potential tampering)
- * - Session is validated on every critical operation
- */
-
-const DEFAULT_API_BASE_URL = "http://127.0.0.1:8080";
-const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL ?? DEFAULT_API_BASE_URL).replace(/\/+$/, "");
-const SESSION_KEY = "nutripath_session";
-
-// Detect if backend supports cookie-based auth (set by backend response header)
-const COOKIE_AUTH_HEADER = "X-Supports-Cookie-Auth";
+const LEGACY_SESSION_KEY = "nutripath_session";
+let activeSession: AuthSession | null = null;
 
 function buildApiUrl(path: string) {
-  const normalizedPath = path.startsWith("/") ? path : `/${path}`;
-  return `${API_BASE_URL}${normalizedPath}`;
+  return path.startsWith("/") ? path : `/${path}`;
 }
 
-// Session stored in localStorage (legacy, less secure)
 function getLocalDateString(date = new Date()) {
   const year = date.getFullYear();
   const month = String(date.getMonth() + 1).padStart(2, "0");
@@ -46,7 +24,6 @@ export interface MemberPreferences {
 }
 
 export interface AuthSession {
-  token: string;
   expiresAt?: string;
   member: Member;
 }
@@ -70,54 +47,19 @@ export interface RegisterPayload {
   };
 }
 
-function isValidSessionToken(token: unknown): token is string {
-  if (typeof token !== "string") return false;
-
-  const value = token.trim();
-  if (/^[a-f0-9]{64}$/i.test(value)) return true;
-
-  const jwtParts = value.split(".");
-  if (jwtParts.length !== 3
-    || !jwtParts.every((part) => part.length > 0 && /^[A-Za-z0-9_-]+$/.test(part))) {
-    return false;
-  }
-
-  try {
-    const decodePart = (part: string) => {
-      const base64 = part.replace(/-/g, "+").replace(/_/g, "/");
-      const padded = base64.padEnd(Math.ceil(base64.length / 4) * 4, "=");
-      return JSON.parse(atob(padded)) as Record<string, unknown>;
-    };
-    return Boolean(decodePart(jwtParts[0]) && decodePart(jwtParts[1]));
-  } catch {
-    return false;
-  }
-}
-
 export function getStoredSession(): AuthSession | null {
-  if (typeof window === "undefined") return null;
-  const raw = window.localStorage.getItem(SESSION_KEY);
-  if (!raw) return null;
-
-  try {
-    const session = JSON.parse(raw) as AuthSession;
-    if (!isValidSessionToken(session?.token) || !session?.member?.id) {
-      window.localStorage.removeItem(SESSION_KEY);
-      return null;
-    }
-    return session;
-  } catch {
-    window.localStorage.removeItem(SESSION_KEY);
-    return null;
-  }
+  if (typeof window !== "undefined") window.localStorage.removeItem(LEGACY_SESSION_KEY);
+  return activeSession;
 }
 
 export function setStoredSession(session: AuthSession) {
-  window.localStorage.setItem(SESSION_KEY, JSON.stringify(session));
+  if (typeof window !== "undefined") window.localStorage.removeItem(LEGACY_SESSION_KEY);
+  activeSession = session;
 }
 
 export function clearStoredSession() {
-  window.localStorage.removeItem(SESSION_KEY);
+  if (typeof window !== "undefined") window.localStorage.removeItem(LEGACY_SESSION_KEY);
+  activeSession = null;
 }
 
 export function syncStoredMember(member: Member) {
@@ -135,47 +77,21 @@ export function getCurrentMemberId() {
   return memberId;
 }
 
-/**
- * Security-enhanced API fetch with XSS protection measures.
- *
- * Protections added:
- * 1. CSRF-like header (X-Requested-With) for same-origin requests
- * 2. Automatic session invalidation on auth errors (401/403)
- * 3. Token validation against expected patterns before sending
- */
 export async function apiFetch<T>(path: string, options: { method?: string; body?: RequestBody; auth?: boolean } = {}): Promise<T> {
   const headers: Record<string, string> = {
     "Content-Type": "application/json",
-    // CSRF-like protection: browsers set this automatically for same-origin requests
-    // Backend should verify this header exists
     "X-Requested-With": "XMLHttpRequest",
   };
-
-  // Get token only if auth is not explicitly disabled
-  const token = options.auth === false ? null : getStoredSession()?.token;
-
-  // SECURITY: Accept only Supabase JWTs or NutriPath's 256-bit opaque session tokens.
-  if (token) {
-    if (!isValidSessionToken(token)) {
-      // Invalid token format - possible tampering or injection attempt
-      console.error("[Security] Invalid token format detected, clearing session");
-      clearStoredSession();
-      throw new Error("Phiên đăng nhập không hợp lệ. Vui lòng đăng nhập lại.");
-    }
-    headers.Authorization = `Bearer ${token}`;
-  }
 
   const response = await fetch(buildApiUrl(path), {
     method: options.method ?? "GET",
     headers,
     body: options.body ? JSON.stringify(options.body) : undefined,
-    credentials: "same-origin", // Send cookies for same-origin requests
+    credentials: "include",
   });
 
-  // SECURITY: Handle auth errors - clear session to prevent stale/compromised tokens
-  if (response.status === 401 || response.status === 403) {
+  if (response.status === 401 && options.auth !== false) {
     clearStoredSession();
-    // Dispatch event to update UI
     if (typeof window !== "undefined") {
       window.dispatchEvent(new CustomEvent("nutripath:session-expired"));
     }
@@ -816,12 +732,21 @@ export interface VnpayPaymentPayload {
   bankCode?: "" | "VNPAYQR" | "VNBANK" | "INTCARD";
 }
 
+export interface PayosPaymentPayload {
+  memberId: string;
+  planId: "vip" | "svip";
+  billing: "monthly" | "annual";
+  discountCode?: string;
+}
+
 export interface VnpayPaymentStatus {
   transactionRef: string;
   paymentStatus: "pending" | "paid" | "failed" | "not_found";
   payment: Payment | null;
   member: Member | null;
 }
+
+export type PayosPaymentStatus = VnpayPaymentStatus;
 
 export interface VnpayReturnResult extends VnpayPaymentStatus {
   signatureValid: boolean;
@@ -1262,6 +1187,13 @@ export function createVnpayPayment(payload: VnpayPaymentPayload) {
   );
 }
 
+export function createPayosPayment(payload: PayosPaymentPayload) {
+  return apiFetch<{ payment: Payment; quote: CheckoutQuote; paymentUrl: string; qrCode: string | null; expiresAt: string }>(
+    "/api/payments/payos/create",
+    { method: "POST", body: payload },
+  );
+}
+
 export function verifyVnpayReturn(queryString: string) {
   const normalizedQuery = queryString.startsWith("?") ? queryString.slice(1) : queryString;
   return apiFetch<VnpayReturnResult>(`/api/payments/vnpay/return?${normalizedQuery}`);
@@ -1269,6 +1201,10 @@ export function verifyVnpayReturn(queryString: string) {
 
 export function getVnpayPaymentStatus(transactionRef: string) {
   return apiFetch<VnpayPaymentStatus>(`/api/payments/vnpay/status/${encodeURIComponent(transactionRef)}`);
+}
+
+export function getPayosPaymentStatus(orderCode: string) {
+  return apiFetch<PayosPaymentStatus>(`/api/payments/payos/status/${encodeURIComponent(orderCode)}`);
 }
 
 export function getFaqs() {

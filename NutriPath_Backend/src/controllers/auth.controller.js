@@ -43,6 +43,7 @@ export function registerAuthRoutes(ctx) {
     chatBlockMessage,
     chatHistoryResource,
     collectionResponse,
+    clearSessionCookie,
     conflict,
     countTrackedMealDays,
     csvValue,
@@ -79,6 +80,7 @@ export function registerAuthRoutes(ctx) {
     getAdminUsersData,
     getAiProviders,
     getBearerToken,
+    getSessionToken,
     getChatAdminKey,
     getClientIp,
     getDrinkWaterEquivalentGlasses,
@@ -330,8 +332,9 @@ export function registerAuthRoutes(ctx) {
   });
 
   route("POST", "/api/auth/logout", async ({ req }) => {
-    const token = getBearerToken(req);
+    const token = getSessionToken(req);
     if (token) sessions.delete(token);
+    clearSessionCookie(req);
     return {
       loggedOut: true,
       _links: {

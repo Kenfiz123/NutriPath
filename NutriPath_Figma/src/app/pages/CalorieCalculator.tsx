@@ -145,7 +145,7 @@ export function CalorieCalculator() {
   const [notice, setNotice] = useState<string | null>(null);
 
   const session = getStoredSession();
-  const isLoggedIn = Boolean(session?.token);
+  const isLoggedIn = Boolean(session);
   const tier = session?.member?.tier ?? "free";
   const isSvip = tier === "svip";
   const lastSaved = session?.member?.nutritionProfile?.updatedAt;

@@ -80,7 +80,10 @@ Ví dụ `GET /api` trả về các link entrypoint:
 - `GET /api/recipes?tag=Low-cal&search=canh`: kho công thức.
 - `GET /api/plans?billing=annual`: gói Free/VIP/SVIP kèm price preview.
 - `POST /api/checkout/quote`: tính đơn hàng, VAT, mã `NUTRIPATH10`.
-- `POST /api/payments`: checkout demo, nâng cấp member, không lưu dữ liệu thẻ.
+- `POST /api/payments`: kích hoạt gói dùng thử, không lưu dữ liệu thẻ.
+- `POST /api/payments/payos/create`: tạo liên kết thanh toán PayOS production.
+- `POST /api/payments/payos/webhook`: xác minh chữ ký PayOS và kích hoạt gói sau khi đối chiếu số tiền.
+- `GET /api/payments/payos/status/:orderCode`: đọc trạng thái đơn PayOS của user hiện tại.
 - `POST /api/chat/messages`: NutriBot response.
 - `GET /api/admin/overview`: dashboard admin.
 - `GET /api/admin/users`: quản lý người dùng.
@@ -116,3 +119,23 @@ Reset seed:
 ```bash
 curl -X POST http://127.0.0.1:8080/api/dev/reset
 ```
+
+## PayOS production
+
+Đặt `PAYOS_CLIENT_ID`, `PAYOS_API_KEY` và `PAYOS_CHECKSUM_KEY` trong `.env` backend hoặc Environment của Render. Không đưa các khóa này vào frontend/Vercel và không commit `.env`.
+
+Các URL production đề xuất:
+
+```text
+PAYOS_BASE_URL=https://api-merchant.payos.vn
+PAYOS_RETURN_URL=https://nutri-path-ochre.vercel.app/payment-result?gateway=payos
+PAYOS_CANCEL_URL=https://nutri-path-ochre.vercel.app/payment-result?gateway=payos&cancelled=true
+```
+
+Đăng ký webhook trên PayOS trỏ tới:
+
+```text
+https://nutripath-l4rk.onrender.com/api/payments/payos/webhook
+```
+
+Return/cancel URL chỉ phục vụ giao diện. Quyền thành viên chỉ được kích hoạt sau khi backend xác minh webhook hoặc đối soát trạng thái trực tiếp với PayOS.

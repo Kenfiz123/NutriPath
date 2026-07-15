@@ -1,7 +1,8 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "react-router";
 import { AlertTriangle, ArrowRight, CheckCircle2, Clock3, Leaf, RefreshCw, XCircle } from "lucide-react";
 import {
+  getPayosPaymentStatus,
   getVnpayPaymentStatus,
   syncStoredMember,
   verifyVnpayReturn,
@@ -9,6 +10,7 @@ import {
 } from "../api";
 
 type ResultState = "checking" | "pending" | "paid" | "failed" | "invalid" | "error";
+type PaymentGateway = "payos" | "vnpay";
 
 const responseMessages: Record<string, string> = {
   "00": "Giao dịch tại VNPAY thành công.",
@@ -27,10 +29,12 @@ const responseMessages: Record<string, string> = {
 };
 
 export function PaymentResult() {
+  const query = useMemo(() => new URLSearchParams(window.location.search), []);
+  const gateway: PaymentGateway = query.get("gateway") === "payos" || query.has("orderCode") ? "payos" : "vnpay";
+  const gatewayName = gateway === "payos" ? "PayOS" : "VNPAY";
   const [state, setState] = useState<ResultState>("checking");
-  const [message, setMessage] = useState("Đang kiểm tra chữ ký và trạng thái giao dịch...");
+  const [message, setMessage] = useState("Đang kiểm tra trạng thái giao dịch...");
   const [transactionRef, setTransactionRef] = useState("");
-  const [responseCode, setResponseCode] = useState<string | null>(null);
   const responseCodeRef = useRef<string | null>(null);
 
   const applyPaymentStatus = useCallback((result: VnpayPaymentStatus) => {
@@ -42,36 +46,79 @@ export function PaymentResult() {
     }
     if (result.paymentStatus === "failed") {
       setState("failed");
-      setMessage(responseMessages[responseCodeRef.current || ""] || "Giao dịch không thành công. Tài khoản chưa bị trừ quyền hoặc nâng gói.");
+      setMessage(
+        gateway === "vnpay"
+          ? responseMessages[responseCodeRef.current || ""] || "Giao dịch không thành công. Tài khoản chưa được nâng gói."
+          : "Giao dịch PayOS đã bị hủy, hết hạn hoặc không thành công. Tài khoản chưa được nâng gói.",
+      );
       return true;
     }
     setState("pending");
-    setMessage("VNPAY đã chuyển bạn về NutriPath. Hệ thống đang chờ IPN xác nhận giao dịch.");
+    setMessage(`${gatewayName} đã chuyển bạn về NutriPath. Hệ thống đang chờ xác nhận thanh toán từ máy chủ.`);
     return false;
-  }, []);
+  }, [gateway, gatewayName]);
+
+  const loadStatus = useCallback((reference: string) => (
+    gateway === "payos" ? getPayosPaymentStatus(reference) : getVnpayPaymentStatus(reference)
+  ), [gateway]);
 
   const refreshStatus = useCallback(async () => {
     if (!transactionRef) return false;
     try {
-      const result = await getVnpayPaymentStatus(transactionRef);
-      return applyPaymentStatus(result);
+      return applyPaymentStatus(await loadStatus(transactionRef));
     } catch (error) {
       setState("error");
       setMessage(error instanceof Error ? error.message : "Không tải được trạng thái giao dịch.");
       return true;
     }
-  }, [applyPaymentStatus, transactionRef]);
+  }, [applyPaymentStatus, loadStatus, transactionRef]);
 
   useEffect(() => {
     let cancelled = false;
     let timer: ReturnType<typeof setTimeout> | undefined;
 
+    const pollStatus = (reference: string) => {
+      let attempts = 0;
+      const poll = async () => {
+        if (cancelled || attempts >= 10) return;
+        attempts += 1;
+        try {
+          const latest = await loadStatus(reference);
+          if (cancelled || applyPaymentStatus(latest)) return;
+          timer = setTimeout(poll, 2000);
+        } catch (error) {
+          if (cancelled) return;
+          setState("error");
+          setMessage(error instanceof Error ? error.message : "Không tải được trạng thái giao dịch.");
+        }
+      };
+      timer = setTimeout(poll, 1200);
+    };
+
     async function verifyAndPoll() {
       try {
+        if (gateway === "payos") {
+          const orderCode = query.get("orderCode") || "";
+          if (!/^\d+$/.test(orderCode)) {
+            setState("invalid");
+            setMessage("Không tìm thấy mã đơn PayOS hợp lệ trong liên kết trả về.");
+            return;
+          }
+          setTransactionRef(orderCode);
+          const result = await getPayosPaymentStatus(orderCode);
+          if (cancelled || applyPaymentStatus(result)) return;
+          if (query.get("cancelled") === "true" || query.get("cancel") === "true") {
+            setState("failed");
+            setMessage("Bạn đã hủy thanh toán PayOS. Gói thành viên chưa được kích hoạt.");
+            return;
+          }
+          pollStatus(orderCode);
+          return;
+        }
+
         const result = await verifyVnpayReturn(window.location.search);
         if (cancelled) return;
         setTransactionRef(result.transactionRef);
-        setResponseCode(result.responseCode);
         responseCodeRef.current = result.responseCode;
 
         if (!result.signatureValid) {
@@ -98,15 +145,7 @@ export function PaymentResult() {
 
         setState("pending");
         setMessage(result.message);
-        let attempts = 0;
-        const poll = async () => {
-          if (cancelled || attempts >= 10) return;
-          attempts += 1;
-          const latest = await getVnpayPaymentStatus(result.transactionRef);
-          if (cancelled || applyPaymentStatus(latest)) return;
-          timer = setTimeout(poll, 2000);
-        };
-        timer = setTimeout(poll, 1200);
+        pollStatus(result.transactionRef);
       } catch (error) {
         if (cancelled) return;
         setState("error");
@@ -119,12 +158,12 @@ export function PaymentResult() {
       cancelled = true;
       if (timer) clearTimeout(timer);
     };
-  }, [applyPaymentStatus]);
+  }, [applyPaymentStatus, gateway, loadStatus, query]);
 
   const visual = state === "paid"
     ? { icon: CheckCircle2, iconClass: "text-green-600 dark:text-green-400", surface: "bg-green-100 dark:bg-green-950/60", title: "Thanh toán thành công" }
     : state === "pending" || state === "checking"
-      ? { icon: Clock3, iconClass: "text-amber-600 dark:text-amber-300", surface: "bg-amber-100 dark:bg-amber-950/60", title: state === "checking" ? "Đang xác minh giao dịch" : "Đang chờ VNPAY xác nhận" }
+      ? { icon: Clock3, iconClass: "text-amber-600 dark:text-amber-300", surface: "bg-amber-100 dark:bg-amber-950/60", title: state === "checking" ? "Đang xác minh giao dịch" : `Đang chờ ${gatewayName} xác nhận` }
       : state === "invalid"
         ? { icon: AlertTriangle, iconClass: "text-orange-600 dark:text-orange-300", surface: "bg-orange-100 dark:bg-orange-950/60", title: "Phản hồi không hợp lệ" }
         : { icon: XCircle, iconClass: "text-red-600 dark:text-red-300", surface: "bg-red-100 dark:bg-red-950/60", title: "Thanh toán chưa hoàn tất" };

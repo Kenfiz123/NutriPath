@@ -15,6 +15,7 @@ async function request(pathname, options = {}) {
     ...options,
     headers: {
       "Content-Type": "application/json",
+      "X-Requested-With": "XMLHttpRequest",
       ...(options.headers || {}),
     },
   });

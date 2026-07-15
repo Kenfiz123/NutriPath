@@ -18,7 +18,11 @@ import {
   X,
 } from "lucide-react";
 import { useAuth } from "../../auth";
-import { getNotifications, markAllNotificationsRead, type AppNotification } from "../../api";
+import { markAllNotificationsRead, type AppNotification } from "../../api";
+import {
+  getNotificationsCached,
+  invalidateNotificationCache,
+} from "../../services/notificationCache";
 import { ThemeToggle } from "../ThemeToggle";
 
 const navLinks = [
@@ -42,17 +46,18 @@ export function Navbar({ isLanding = false }: NavbarProps) {
   const [notifications, setNotifications] = useState<AppNotification[]>([]);
   const [unreadCount, setUnreadCount] = useState(0);
   const member = session?.member;
+  const memberId = member?.id;
   const canAccessAdmin = member?.role?.toLowerCase() === "admin";
 
   useEffect(() => {
-    if (!member) {
+    if (!memberId) {
       setNotifications([]);
       setUnreadCount(0);
       return;
     }
 
     let active = true;
-    getNotifications({ limit: 5 })
+    getNotificationsCached(memberId)
       .then((data) => {
         if (!active) return;
         setNotifications(data._embedded.notifications);
@@ -67,15 +72,19 @@ export function Navbar({ isLanding = false }: NavbarProps) {
     return () => {
       active = false;
     };
-  }, [member?.id, member?.calorieTarget, member?.subscription?.daysRemaining]);
+  }, [memberId]);
 
   const navBg = isLanding
     ? "bg-transparent absolute top-0 left-0 right-0 z-50"
     : "bg-white border-b border-gray-100 sticky top-0 z-50 shadow-sm dark:bg-slate-900 dark:border-slate-800";
 
-  const linkColor = isLanding ? "text-white/90 hover:text-white" : "text-gray-600 hover:text-green-600 dark:text-slate-300 dark:hover:text-green-300";
+  const linkColor = isLanding
+    ? "text-white/90 hover:text-white"
+    : "text-gray-600 hover:text-green-600 dark:text-slate-300 dark:hover:text-green-300";
   const logoColor = isLanding ? "text-white" : "text-green-600";
-  const buttonGhost = isLanding ? "text-white/90 hover:text-white hover:bg-white/10" : "text-gray-600 hover:text-green-700 hover:bg-green-50 dark:text-slate-300 dark:hover:bg-slate-800 dark:hover:text-green-300";
+  const buttonGhost = isLanding
+    ? "text-white/90 hover:text-white hover:bg-white/10"
+    : "text-gray-600 hover:text-green-700 hover:bg-green-50 dark:text-slate-300 dark:hover:bg-slate-800 dark:hover:text-green-300";
 
   const handleLogout = async () => {
     await logout();
@@ -84,7 +93,13 @@ export function Navbar({ isLanding = false }: NavbarProps) {
 
   const handleMarkAllNotificationsRead = async () => {
     await markAllNotificationsRead().catch(() => null);
-    setNotifications((items) => items.map((item) => ({ ...item, readAt: item.readAt || new Date().toISOString() })));
+    invalidateNotificationCache(memberId);
+    setNotifications((items) =>
+      items.map((item) => ({
+        ...item,
+        readAt: item.readAt || new Date().toISOString(),
+      })),
+    );
     setUnreadCount(0);
   };
 
@@ -92,10 +107,17 @@ export function Navbar({ isLanding = false }: NavbarProps) {
     <nav className={navBg}>
       <div className="max-w-[1440px] mx-auto px-8 h-16 flex items-center justify-between">
         <Link to="/" className="flex items-center gap-2">
-          <div className={`w-8 h-8 rounded-xl flex items-center justify-center ${isLanding ? "bg-white/20" : "bg-green-600"}`}>
+          <div
+            className={`w-8 h-8 rounded-xl flex items-center justify-center ${isLanding ? "bg-white/20" : "bg-green-600"}`}
+          >
             <Leaf className="w-5 h-5 text-white" />
           </div>
-          <span className={`font-extrabold tracking-tight ${logoColor}`} style={{ fontSize: "1.1rem" }}>NutriPath</span>
+          <span
+            className={`font-extrabold tracking-tight ${logoColor}`}
+            style={{ fontSize: "1.1rem" }}
+          >
+            NutriPath
+          </span>
         </Link>
 
         <div className="hidden md:flex items-center gap-1">
@@ -107,7 +129,9 @@ export function Navbar({ isLanding = false }: NavbarProps) {
                 to={href}
                 className={`flex items-center gap-1.5 px-3 py-2 rounded-lg transition-all ${
                   isActive
-                    ? isLanding ? "bg-white/20 text-white" : "bg-green-50 text-green-700 dark:bg-green-500/15 dark:text-green-300"
+                    ? isLanding
+                      ? "bg-white/20 text-white"
+                      : "bg-green-50 text-green-700 dark:bg-green-500/15 dark:text-green-300"
                     : linkColor
                 }`}
                 style={{ fontSize: "0.875rem", fontWeight: 500 }}
@@ -160,7 +184,9 @@ export function Navbar({ isLanding = false }: NavbarProps) {
                 {notificationsOpen && (
                   <div className="absolute right-0 top-11 z-50 w-80 rounded-2xl border border-gray-100 bg-white p-3 shadow-xl dark:border-slate-700 dark:bg-slate-900">
                     <div className="mb-2 flex items-center justify-between px-1">
-                      <p className="text-sm font-bold text-gray-900 dark:text-slate-50">Thông báo</p>
+                      <p className="text-sm font-bold text-gray-900 dark:text-slate-50">
+                        Thông báo
+                      </p>
                       <button
                         type="button"
                         onClick={() => void handleMarkAllNotificationsRead()}
@@ -170,20 +196,28 @@ export function Navbar({ isLanding = false }: NavbarProps) {
                       </button>
                     </div>
                     <div className="space-y-2">
-                      {notifications.length ? notifications.map((item) => (
-                        <Link
-                          key={item.id}
-                          to={item.actionHref || "/member"}
-                          onClick={() => setNotificationsOpen(false)}
-                          className={`block rounded-xl px-3 py-2.5 ${item.readAt ? "bg-slate-50 dark:bg-slate-800" : "bg-green-50 dark:bg-green-500/10"}`}
-                        >
-                          <div className="flex items-start justify-between gap-2">
-                            <p className="text-sm font-semibold text-gray-900 dark:text-slate-50">{item.title}</p>
-                            {!item.readAt && <span className="mt-1 h-2 w-2 flex-shrink-0 rounded-full bg-green-500" />}
-                          </div>
-                          <p className="mt-0.5 text-xs leading-5 text-gray-500 dark:text-slate-300">{item.text}</p>
-                        </Link>
-                      )) : (
+                      {notifications.length ? (
+                        notifications.map((item) => (
+                          <Link
+                            key={item.id}
+                            to={item.actionHref || "/member"}
+                            onClick={() => setNotificationsOpen(false)}
+                            className={`block rounded-xl px-3 py-2.5 ${item.readAt ? "bg-slate-50 dark:bg-slate-800" : "bg-green-50 dark:bg-green-500/10"}`}
+                          >
+                            <div className="flex items-start justify-between gap-2">
+                              <p className="text-sm font-semibold text-gray-900 dark:text-slate-50">
+                                {item.title}
+                              </p>
+                              {!item.readAt && (
+                                <span className="mt-1 h-2 w-2 flex-shrink-0 rounded-full bg-green-500" />
+                              )}
+                            </div>
+                            <p className="mt-0.5 text-xs leading-5 text-gray-500 dark:text-slate-300">
+                              {item.text}
+                            </p>
+                          </Link>
+                        ))
+                      ) : (
                         <div className="rounded-xl bg-slate-50 px-3 py-3 text-xs text-slate-500 dark:bg-slate-800 dark:text-slate-300">
                           Chưa có thông báo mới.
                         </div>
@@ -193,10 +227,16 @@ export function Navbar({ isLanding = false }: NavbarProps) {
                 )}
               </div>
               <Link to="/member" className="flex items-center gap-2">
-                <div className={`w-8 h-8 rounded-full flex items-center justify-center ${isLanding ? "bg-white/20 text-white" : "bg-green-100 text-green-700 dark:bg-green-500/15 dark:text-green-300"}`} style={{ fontSize: "0.78rem", fontWeight: 800 }}>
+                <div
+                  className={`w-8 h-8 rounded-full flex items-center justify-center ${isLanding ? "bg-white/20 text-white" : "bg-green-100 text-green-700 dark:bg-green-500/15 dark:text-green-300"}`}
+                  style={{ fontSize: "0.78rem", fontWeight: 800 }}
+                >
                   {member.initials}
                 </div>
-                <span className={`${isLanding ? "text-white" : "text-gray-700 dark:text-slate-100"} hover:underline max-w-[130px] truncate`} style={{ fontSize: "0.875rem", fontWeight: 600 }}>
+                <span
+                  className={`${isLanding ? "text-white" : "text-gray-700 dark:text-slate-100"} hover:underline max-w-[130px] truncate`}
+                  style={{ fontSize: "0.875rem", fontWeight: 600 }}
+                >
                   {member.name}
                 </span>
               </Link>
@@ -223,7 +263,9 @@ export function Navbar({ isLanding = false }: NavbarProps) {
               <Link
                 to="/register"
                 className={`flex items-center gap-1.5 px-4 py-2 rounded-xl transition-all ${
-                  isLanding ? "bg-white text-green-700 hover:bg-green-50" : "bg-green-600 text-white hover:bg-green-700"
+                  isLanding
+                    ? "bg-white text-green-700 hover:bg-green-50"
+                    : "bg-green-600 text-white hover:bg-green-700"
                 }`}
                 style={{ fontSize: "0.875rem", fontWeight: 700 }}
               >
@@ -232,7 +274,6 @@ export function Navbar({ isLanding = false }: NavbarProps) {
               </Link>
             </>
           )}
-
         </div>
 
         <div className="flex items-center gap-2 md:hidden">
@@ -241,13 +282,19 @@ export function Navbar({ isLanding = false }: NavbarProps) {
             className={`p-2 ${isLanding ? "text-white" : "text-gray-600 dark:text-slate-200"}`}
             onClick={() => setMobileOpen(!mobileOpen)}
           >
-            {mobileOpen ? <X className="w-6 h-6" /> : <Menu className="w-6 h-6" />}
+            {mobileOpen ? (
+              <X className="w-6 h-6" />
+            ) : (
+              <Menu className="w-6 h-6" />
+            )}
           </button>
         </div>
       </div>
 
       {mobileOpen && (
-        <div className={`md:hidden ${isLanding ? "bg-green-700/95" : "bg-white border-b border-gray-100 dark:bg-slate-900 dark:border-slate-800"} px-6 py-4`}>
+        <div
+          className={`md:hidden ${isLanding ? "bg-green-700/95" : "bg-white border-b border-gray-100 dark:bg-slate-900 dark:border-slate-800"} px-6 py-4`}
+        >
           {navLinks.map(({ href, label, icon: Icon }) => (
             <Link
               key={href}
@@ -278,7 +325,9 @@ export function Navbar({ isLanding = false }: NavbarProps) {
               Admin
             </Link>
           )}
-          <div className={`mt-3 pt-3 border-t ${isLanding ? "border-white/20" : "border-gray-100 dark:border-slate-800"}`}>
+          <div
+            className={`mt-3 pt-3 border-t ${isLanding ? "border-white/20" : "border-gray-100 dark:border-slate-800"}`}
+          >
             {member ? (
               <>
                 <Link
@@ -286,7 +335,10 @@ export function Navbar({ isLanding = false }: NavbarProps) {
                   className={`flex items-center gap-2 py-2.5 ${isLanding ? "text-white" : "text-gray-700 dark:text-slate-200"}`}
                   onClick={() => setMobileOpen(false)}
                 >
-                  <span className={`w-8 h-8 rounded-full flex items-center justify-center ${isLanding ? "bg-white/20" : "bg-green-100 text-green-700 dark:bg-green-500/15 dark:text-green-300"}`} style={{ fontSize: "0.78rem", fontWeight: 800 }}>
+                  <span
+                    className={`w-8 h-8 rounded-full flex items-center justify-center ${isLanding ? "bg-white/20" : "bg-green-100 text-green-700 dark:bg-green-500/15 dark:text-green-300"}`}
+                    style={{ fontSize: "0.78rem", fontWeight: 800 }}
+                  >
                     {member.initials}
                   </span>
                   {member.name}
