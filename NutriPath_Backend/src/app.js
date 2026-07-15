@@ -1,5 +1,4 @@
 import http from "node:http";
-import https from "node:https";
 import crypto from "node:crypto";
 import { existsSync, readFileSync } from "node:fs";
 import { registerControllers } from "./controllers/index.js";
@@ -486,57 +485,9 @@ function supabaseAuthServiceError(projectUrl, fetchError, fallbackError = null) 
   );
 }
 
-function requestSupabaseUserWithHttps(projectUrl, anonKey, token, timeoutMs) {
-  return new Promise((resolve, reject) => {
-    let url;
-    try {
-      url = new URL("/auth/v1/user", `${projectUrl}/`);
-    } catch (error) {
-      reject(error);
-      return;
-    }
-
-    const req = https.request(
-      url,
-      {
-        method: "GET",
-        timeout: timeoutMs,
-        headers: {
-          Accept: "application/json",
-          apikey: anonKey,
-          Authorization: `Bearer ${token}`,
-        },
-      },
-      (res) => {
-        const chunks = [];
-        res.on("data", (chunk) => chunks.push(chunk));
-        res.on("end", () => {
-          let payload = null;
-          try {
-            const raw = Buffer.concat(chunks).toString("utf8");
-            payload = raw ? JSON.parse(raw) : null;
-          } catch {
-            payload = null;
-          }
-          resolve({
-            ok: res.statusCode >= 200 && res.statusCode < 300,
-            status: res.statusCode || 0,
-            statusText: res.statusMessage || "",
-            payload,
-            transport: "https",
-          });
-        });
-      },
-    );
-
-    req.on("timeout", () => req.destroy(Object.assign(new Error("Supabase Auth request timed out."), { code: "ETIMEDOUT" })));
-    req.on("error", reject);
-    req.end();
-  });
-}
-
 async function requestSupabaseUser(projectUrl, anonKey, token) {
-  const timeoutMs = Math.max(3000, Number(process.env.SUPABASE_AUTH_TIMEOUT_MS || 10000));
+  const configuredTimeout = Number(process.env.SUPABASE_AUTH_TIMEOUT_MS || 5000);
+  const timeoutMs = Math.min(5000, Math.max(2000, Number.isFinite(configuredTimeout) ? configuredTimeout : 5000));
   let authUrl;
   try {
     authUrl = new URL("/auth/v1/user", `${projectUrl}/`).toString();
@@ -544,7 +495,6 @@ async function requestSupabaseUser(projectUrl, anonKey, token) {
     serviceUnavailable("SUPABASE_URL không hợp lệ trên backend.", { projectUrl, error: getErrorSummary(error) });
   }
 
-  let fetchError = null;
   let timer = null;
   try {
     const controller = new AbortController();
@@ -564,21 +514,13 @@ async function requestSupabaseUser(projectUrl, anonKey, token) {
       transport: "fetch",
     };
   } catch (error) {
-    fetchError = error;
-    console.warn("Supabase Auth fetch failed, retrying with node:https:", getErrorSummary(error));
+    console.error("Supabase Auth verification failed:", {
+      projectHost: new URL(authUrl).host,
+      error: getErrorSummary(error),
+    });
+    supabaseAuthServiceError(projectUrl, error);
   } finally {
     if (timer) clearTimeout(timer);
-  }
-
-  try {
-    return await requestSupabaseUserWithHttps(projectUrl, anonKey, token, timeoutMs);
-  } catch (fallbackError) {
-    console.error("Supabase Auth verification request failed:", {
-      projectHost: new URL(authUrl).host,
-      fetchError: getErrorSummary(fetchError),
-      fallbackError: getErrorSummary(fallbackError),
-    });
-    supabaseAuthServiceError(projectUrl, fetchError, fallbackError);
   }
 }
 

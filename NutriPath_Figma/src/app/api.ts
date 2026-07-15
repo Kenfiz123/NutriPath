@@ -949,11 +949,12 @@ export function login(email: string, password: string) {
   });
 }
 
-export function loginWithSupabase(accessToken: string) {
+export function loginWithSupabase(accessToken: string, options: { signal?: AbortSignal } = {}) {
   return apiFetch<AuthSession>("/api/auth/supabase", {
     method: "POST",
     body: { accessToken },
     auth: false,
+    signal: options.signal,
   });
 }
 

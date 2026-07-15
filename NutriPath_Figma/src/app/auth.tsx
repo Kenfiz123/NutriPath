@@ -23,7 +23,7 @@ interface AuthContextValue {
   initializing: boolean;
   login(email: string, password: string): Promise<AuthSession>;
   loginWithSocialProvider(provider: SocialAuthProvider, returnTo?: string): Promise<void>;
-  completeSocialLogin(accessToken: string): Promise<AuthSession>;
+  completeSocialLogin(accessToken: string, options?: { signal?: AbortSignal }): Promise<AuthSession>;
   register(payload: RegisterPayload): Promise<AuthSession>;
   logout(): Promise<void>;
 }
@@ -83,8 +83,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     async loginWithSocialProvider(provider, returnTo = "/dashboard") {
       await signInWithSocialProvider(provider, returnTo);
     },
-    async completeSocialLogin(accessToken) {
-      const nextSession = await loginWithSupabase(accessToken);
+    async completeSocialLogin(accessToken, options = {}) {
+      const nextSession = await loginWithSupabase(accessToken, options);
       authVersion.current += 1;
       setStoredSession(nextSession);
       setSession(nextSession);

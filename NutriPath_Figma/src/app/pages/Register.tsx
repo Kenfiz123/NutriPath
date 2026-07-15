@@ -1,6 +1,6 @@
 import { FormEvent, useState } from "react";
 import { Link, useNavigate } from "react-router";
-import { ArrowRight, Eye, EyeOff, Leaf, Lock, Mail, Target, UserRound } from "lucide-react";
+import { ArrowRight, Eye, EyeOff, Leaf, Loader2, Lock, Mail, Target, UserRound } from "lucide-react";
 import { useAuth } from "../auth";
 import type { RegisterPayload } from "../api";
 import { isSupabaseAuthConfigured, type SocialAuthProvider } from "../supabaseAuth";
@@ -181,8 +181,10 @@ export function Register() {
               className="flex items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-3 text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60"
               style={{ fontWeight: 800 }}
             >
-              <span className="flex h-6 w-6 items-center justify-center rounded-full border border-slate-200 text-sm text-red-500">G</span>
-              {socialSubmitting === "google" ? "Đang mở..." : "Google"}
+              {socialSubmitting === "google"
+                ? <Loader2 className="h-5 w-5 animate-spin" />
+                : <span className="flex h-6 w-6 items-center justify-center rounded-full border border-slate-200 text-sm text-red-500">G</span>}
+              {socialSubmitting === "google" ? "Đang mở Google..." : "Google"}
             </button>
             <button
               type="button"
@@ -191,10 +193,18 @@ export function Register() {
               className="flex items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-3 text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60"
               style={{ fontWeight: 800 }}
             >
-              <span className="flex h-6 w-6 items-center justify-center rounded-full bg-blue-600 text-sm text-white">f</span>
-              {socialSubmitting === "facebook" ? "Đang mở..." : "Facebook"}
+              {socialSubmitting === "facebook"
+                ? <Loader2 className="h-5 w-5 animate-spin" />
+                : <span className="flex h-6 w-6 items-center justify-center rounded-full bg-blue-600 text-sm text-white">f</span>}
+              {socialSubmitting === "facebook" ? "Đang mở Facebook..." : "Facebook"}
             </button>
           </div>
+
+          {socialSubmitting ? (
+            <p role="status" aria-live="polite" className="mt-3 text-center text-xs font-medium text-green-700">
+              Đang chuyển đến {socialSubmitting === "google" ? "Google" : "Facebook"}...
+            </p>
+          ) : null}
 
           {!socialAuthReady ? (
             <p className="mt-3 text-center text-xs text-amber-600">
