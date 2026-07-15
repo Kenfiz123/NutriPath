@@ -4,11 +4,13 @@ import { ArrowRight, Eye, EyeOff, Leaf, Loader2, Lock, Mail, Target, UserRound }
 import { useAuth } from "../auth";
 import type { RegisterPayload } from "../api";
 import { isSupabaseAuthConfigured, type SocialAuthProvider } from "../supabaseAuth";
+import { useLanguage } from "../language";
 
 type Goal = NonNullable<RegisterPayload["goal"]>;
 
 export function Register() {
   const { loginWithSocialProvider, register } = useAuth();
+  const { t } = useLanguage();
   const navigate = useNavigate();
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
@@ -26,7 +28,7 @@ export function Register() {
     setError(null);
 
     if (password !== confirmPassword) {
-      setError("Mật khẩu xác nhận chưa khớp.");
+      setError(t("Mật khẩu xác nhận chưa khớp."));
       return;
     }
 
@@ -35,7 +37,7 @@ export function Register() {
       await register({ name, email, password, goal });
       navigate("/dashboard", { replace: true });
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Không tạo được tài khoản.");
+      setError(t(err instanceof Error ? err.message : "Không tạo được tài khoản."));
     } finally {
       setSubmitting(false);
     }
@@ -47,7 +49,7 @@ export function Register() {
     try {
       await loginWithSocialProvider(provider, "/dashboard");
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Không đăng ký được bằng mạng xã hội.");
+      setError(t(err instanceof Error ? err.message : "Không đăng ký được bằng mạng xã hội."));
       setSocialSubmitting(null);
     }
   };
@@ -63,15 +65,15 @@ export function Register() {
               </span>
               NutriPath
             </Link>
-            <h2 className="text-gray-950" style={{ fontSize: "1.7rem", fontWeight: 850 }}>Đăng ký</h2>
+            <h2 className="text-gray-950" style={{ fontSize: "1.7rem", fontWeight: 850 }}>{t("Đăng ký")}</h2>
             <p className="text-gray-500 mt-2" style={{ fontSize: "0.92rem" }}>
-              Tạo tài khoản để lưu hồ sơ và nhật ký dinh dưỡng trên SQL.
+              {t("Tạo tài khoản để lưu hồ sơ và nhật ký dinh dưỡng trên SQL.")}
             </p>
           </div>
 
           <form onSubmit={handleSubmit} className="space-y-4">
             <label className="block">
-              <span className="text-gray-700" style={{ fontSize: "0.84rem", fontWeight: 700 }}>Họ tên</span>
+              <span className="text-gray-700" style={{ fontSize: "0.84rem", fontWeight: 700 }}>{t("Họ tên")}</span>
               <div className="mt-2 flex items-center gap-2 rounded-xl border border-gray-200 bg-white px-3 py-3 focus-within:border-green-500 focus-within:ring-4 focus-within:ring-green-100">
                 <UserRound className="w-4 h-4 text-gray-400" />
                 <input
@@ -79,7 +81,7 @@ export function Register() {
                   value={name}
                   onChange={(event) => setName(event.target.value)}
                   className="w-full outline-none text-gray-800"
-                  placeholder="Nguyễn Minh An"
+                  placeholder={t("Nguyễn Minh An")}
                 />
               </div>
             </label>
@@ -100,7 +102,7 @@ export function Register() {
             </label>
 
             <label className="block">
-              <span className="text-gray-700" style={{ fontSize: "0.84rem", fontWeight: 700 }}>Mục tiêu</span>
+              <span className="text-gray-700" style={{ fontSize: "0.84rem", fontWeight: 700 }}>{t("Mục tiêu")}</span>
               <div className="mt-2 flex items-center gap-2 rounded-xl border border-gray-200 bg-white px-3 py-3 focus-within:border-green-500 focus-within:ring-4 focus-within:ring-green-100">
                 <Target className="w-4 h-4 text-gray-400" />
                 <select
@@ -108,15 +110,15 @@ export function Register() {
                   onChange={(event) => setGoal(event.target.value as Goal)}
                   className="w-full outline-none text-gray-800 bg-transparent"
                 >
-                  <option value="lose">Giảm cân</option>
-                  <option value="maintain">Giữ cân</option>
-                  <option value="gain">Tăng cơ</option>
+                  <option value="lose">{t("Giảm cân")}</option>
+                  <option value="maintain">{t("Giữ cân")}</option>
+                  <option value="gain">{t("Tăng cơ")}</option>
                 </select>
               </div>
             </label>
 
             <label className="block">
-              <span className="text-gray-700" style={{ fontSize: "0.84rem", fontWeight: 700 }}>Mật khẩu</span>
+              <span className="text-gray-700" style={{ fontSize: "0.84rem", fontWeight: 700 }}>{t("Mật khẩu")}</span>
               <div className="mt-2 flex items-center gap-2 rounded-xl border border-gray-200 bg-white px-3 py-3 focus-within:border-green-500 focus-within:ring-4 focus-within:ring-green-100">
                 <Lock className="w-4 h-4 text-gray-400" />
                 <input
@@ -126,7 +128,7 @@ export function Register() {
                   value={password}
                   onChange={(event) => setPassword(event.target.value)}
                   className="w-full outline-none text-gray-800"
-                  placeholder="Ít nhất 6 ký tự"
+                  placeholder={t("Ít nhất 6 ký tự")}
                 />
                 <button type="button" onClick={() => setShowPassword((value) => !value)} className="text-gray-400 hover:text-gray-700">
                   {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
@@ -135,7 +137,7 @@ export function Register() {
             </label>
 
             <label className="block">
-              <span className="text-gray-700" style={{ fontSize: "0.84rem", fontWeight: 700 }}>Xác nhận mật khẩu</span>
+              <span className="text-gray-700" style={{ fontSize: "0.84rem", fontWeight: 700 }}>{t("Xác nhận mật khẩu")}</span>
               <div className="mt-2 flex items-center gap-2 rounded-xl border border-gray-200 bg-white px-3 py-3 focus-within:border-green-500 focus-within:ring-4 focus-within:ring-green-100">
                 <Lock className="w-4 h-4 text-gray-400" />
                 <input
@@ -145,7 +147,7 @@ export function Register() {
                   value={confirmPassword}
                   onChange={(event) => setConfirmPassword(event.target.value)}
                   className="w-full outline-none text-gray-800"
-                  placeholder="Nhập lại mật khẩu"
+                  placeholder={t("Nhập lại mật khẩu")}
                 />
               </div>
             </label>
@@ -162,14 +164,14 @@ export function Register() {
               className="w-full flex items-center justify-center gap-2 rounded-xl bg-green-600 px-4 py-3.5 text-white hover:bg-green-700 transition-colors disabled:opacity-60"
               style={{ fontWeight: 800 }}
             >
-              {submitting ? "Đang tạo tài khoản..." : "Tạo tài khoản"}
+              {submitting ? t("Đang tạo tài khoản...") : t("Tạo tài khoản")}
               <ArrowRight className="w-4 h-4" />
             </button>
           </form>
 
           <div className="my-6 flex items-center gap-3">
             <div className="h-px flex-1 bg-slate-200" />
-            <span className="text-xs font-bold uppercase tracking-wide text-slate-400">hoặc</span>
+            <span className="text-xs font-bold uppercase tracking-wide text-slate-400">{t("hoặc")}</span>
             <div className="h-px flex-1 bg-slate-200" />
           </div>
 
@@ -184,7 +186,7 @@ export function Register() {
               {socialSubmitting === "google"
                 ? <Loader2 className="h-5 w-5 animate-spin" />
                 : <span className="flex h-6 w-6 items-center justify-center rounded-full border border-slate-200 text-sm text-red-500">G</span>}
-              {socialSubmitting === "google" ? "Đang mở Google..." : "Google"}
+              {socialSubmitting === "google" ? t("Đang mở Google...") : "Google"}
             </button>
             <button
               type="button"
@@ -196,26 +198,26 @@ export function Register() {
               {socialSubmitting === "facebook"
                 ? <Loader2 className="h-5 w-5 animate-spin" />
                 : <span className="flex h-6 w-6 items-center justify-center rounded-full bg-blue-600 text-sm text-white">f</span>}
-              {socialSubmitting === "facebook" ? "Đang mở Facebook..." : "Facebook"}
+              {socialSubmitting === "facebook" ? t("Đang mở Facebook...") : "Facebook"}
             </button>
           </div>
 
           {socialSubmitting ? (
             <p role="status" aria-live="polite" className="mt-3 text-center text-xs font-medium text-green-700">
-              Đang chuyển đến {socialSubmitting === "google" ? "Google" : "Facebook"}...
+              {t("Đang chuyển đến {provider}...", { provider: socialSubmitting === "google" ? "Google" : "Facebook" })}
             </p>
           ) : null}
 
           {!socialAuthReady ? (
             <p className="mt-3 text-center text-xs text-amber-600">
-              Cần cấu hình VITE_SUPABASE_URL và VITE_SUPABASE_ANON_KEY để bật Google/Facebook.
+              {t("Cần cấu hình VITE_SUPABASE_URL và VITE_SUPABASE_ANON_KEY để bật Google/Facebook.")}
             </p>
           ) : null}
 
           <p className="text-center text-gray-500 mt-6" style={{ fontSize: "0.9rem" }}>
-            Đã có tài khoản?{" "}
+            {t("Đã có tài khoản?")}{" "}
             <Link to="/login" className="text-green-700 hover:text-green-800" style={{ fontWeight: 800 }}>
-              Đăng nhập
+              {t("Đăng nhập")}
             </Link>
           </p>
         </section>
@@ -234,10 +236,10 @@ export function Register() {
                 <span style={{ fontSize: "0.86rem", fontWeight: 700 }}>Real Member Data</span>
               </div>
               <h1 style={{ fontSize: "2.8rem", lineHeight: 1.08, fontWeight: 850 }}>
-                Mỗi tài khoản có hồ sơ, mục tiêu và dữ liệu riêng.
+                {t("Mỗi tài khoản có hồ sơ, mục tiêu và dữ liệu riêng.")}
               </h1>
               <p className="text-green-50 mt-5" style={{ fontSize: "1rem", lineHeight: 1.8 }}>
-                Khi đăng ký, backend tạo member thật và credential thật. Website sẽ dùng session để gọi API theo đúng người đang đăng nhập.
+                {t("Khi đăng ký, backend tạo member thật và credential thật. Website sẽ dùng session để gọi API theo đúng người đang đăng nhập.")}
               </p>
             </div>
           </div>

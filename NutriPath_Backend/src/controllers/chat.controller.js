@@ -1,3 +1,36 @@
+function getChatLanguage(req) {
+  const rawHeader = req?.headers?.["accept-language"] || req?.headers?.get?.("accept-language") || "";
+  return String(rawHeader).toLowerCase().startsWith("en") ? "en" : "vi";
+}
+
+function localizeQuickReplies(replies, language) {
+  if (language !== "en") return replies;
+  const translations = new Map([
+    ["Tôi nên ăn gì hôm nay?", "What should I eat today?"],
+    ["Tính calo bữa sáng", "Estimate my breakfast calories"],
+    ["Gợi ý món Việt healthy", "Suggest healthy Vietnamese dishes"],
+    ["Thực đơn giảm cân thuần Việt", "Vietnamese weight-loss meal plan"],
+    ["AI Coach: xem giup ke hoach an hom nay", "AI Coach: review today's meal plan"],
+  ]);
+  return replies.map((reply) => translations.get(reply) || reply);
+}
+
+function englishCannedChatResponse(text) {
+  const cleaned = String(text || "").trim();
+  return `Thanks for your question about "${cleaned}". Tell me your health goal, portion size, or what you ate so I can give a more useful nutrition suggestion.`;
+}
+
+function localizeIntentReply(result, member, language) {
+  if (!result || language !== "en") return result;
+  const goal = Number(result.dailyCalorieGoal);
+  if (result.applied) return { ...result, reply: `Done, I set your daily calorie goal to ${goal.toLocaleString("en-US")} kcal.` };
+  if (!member) return { ...result, reply: "Please log in so I can save this calorie goal to your dashboard." };
+  if (!Number.isInteger(goal)) return { ...result, reply: "I couldn't read the daily calorie goal. Try: set my goal to 1,800 kcal per day." };
+  if (goal < 1200) return { ...result, reply: `${goal} kcal per day may be too low and unsafe, so I did not save it. Please consult a dietitian or doctor for aggressive weight-loss goals.` };
+  if (goal > 5000) return { ...result, reply: `${goal} kcal per day is unusually high and should be personalized to your activity and body weight, so I did not save it.` };
+  return result;
+}
+
 export function registerChatRoutes(ctx) {
   const {
     CUSTOM_FOOD_UNITS,
@@ -179,8 +212,9 @@ export function registerChatRoutes(ctx) {
 
   route("GET", "/api/chat/quick-replies", async ({ req, store }) => {
     const activeSession = getActiveSession(req, store);
+    const language = getChatLanguage(req);
     return {
-      quickReplies: getSafeChatQuickReplies(activeSession?.member || null),
+      quickReplies: localizeQuickReplies(getSafeChatQuickReplies(activeSession?.member || null), language),
       _links: {
         self: currentLink(req),
         sendMessage: link(req, "/api/chat/messages", "POST"),
@@ -190,11 +224,12 @@ export function registerChatRoutes(ctx) {
 
   route("GET", "/api/chat/history", async ({ req, store, url }) => {
     const activeSession = getActiveSession(req, store);
+    const language = getChatLanguage(req);
     const member = activeSession?.member || (url.searchParams.get("memberId") ? getMember(store.db, url.searchParams.get("memberId")) : null);
     if (!member) {
       return {
         messages: [],
-        quickReplies: getSafeChatQuickReplies(null),
+        quickReplies: localizeQuickReplies(getSafeChatQuickReplies(null), language),
         _links: {
           self: currentLink(req),
           sendMessage: link(req, "/api/chat/messages", "POST"),
@@ -204,7 +239,7 @@ export function registerChatRoutes(ctx) {
 
     return {
       messages: getMemberChatHistory(store.db, member.id),
-      quickReplies: getSafeChatQuickReplies(member),
+      quickReplies: localizeQuickReplies(getSafeChatQuickReplies(member), language),
       _links: {
         self: currentLink(req),
         sendMessage: link(req, "/api/chat/messages", "POST"),
@@ -218,6 +253,7 @@ export function registerChatRoutes(ctx) {
     const activeSession = getActiveSession(req, store);
     const member = activeSession?.member || (body.memberId ? getMember(store.db, body.memberId) : null);
     const chatMode = body.mode === "coach" ? "coach" : "assistant";
+    const language = getChatLanguage(req);
     const time = new Date().toISOString();
 
     if (isChatAdminKey(body.text)) {
@@ -242,7 +278,7 @@ export function registerChatRoutes(ctx) {
       return {
         messages,
         adminOverride: true,
-        quickReplies: getSafeChatQuickReplies(activeSession.member),
+        quickReplies: localizeQuickReplies(getSafeChatQuickReplies(activeSession.member), language),
         _links: {
           self: currentLink(req),
           quickReplies: link(req, "/api/chat/quick-replies"),
@@ -270,12 +306,16 @@ export function registerChatRoutes(ctx) {
       });
     }
     enforceSafeChatRateLimit(req, member, { adminOverride });
-    const aiResult = await generateSafeGeminiChatResponse(store, member, cleaned, { mode: chatMode });
+    const aiResult = await generateSafeGeminiChatResponse(store, member, cleaned, { mode: chatMode, language });
     const chatIntent = aiResult?.intent || parseCalorieGoalIntentFromText(cleaned);
-    const intentResult = await applyChatIntent(store, activeSession?.member || null, chatIntent);
+    const intentResult = localizeIntentReply(
+      await applyChatIntent(store, activeSession?.member || null, chatIntent),
+      activeSession?.member || null,
+      language,
+    );
     const aiText = intentResult?.reply
       || aiResult?.reply
-      || safeCannedChatResponse(store.db, cleaned);
+      || (language === "en" ? englishCannedChatResponse(cleaned) : safeCannedChatResponse(store.db, cleaned));
     const userMessage = {
       id: store.nextId("msg", []),
       sender: "user",
@@ -300,7 +340,7 @@ export function registerChatRoutes(ctx) {
       intent: chatIntent?.intent,
       dailyCalorieGoal: intentResult?.dailyCalorieGoal,
       member: intentResult?.member ? memberResource(req, intentResult.member, store.db) : undefined,
-      quickReplies: getSafeChatQuickReplies(member),
+      quickReplies: localizeQuickReplies(getSafeChatQuickReplies(member), language),
       _links: {
         self: currentLink(req),
         quickReplies: link(req, "/api/chat/quick-replies"),

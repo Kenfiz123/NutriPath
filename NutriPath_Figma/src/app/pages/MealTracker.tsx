@@ -14,6 +14,7 @@ import {
   X,
 } from "lucide-react";
 import { Cell, Pie, PieChart, ResponsiveContainer, Tooltip } from "recharts";
+import { useLanguage } from "../language";
 import {
   addWaterIntake,
   addMealItem,
@@ -55,8 +56,8 @@ function toIsoDate(date: Date) {
   return `${year}-${month}-${day}`;
 }
 
-function formatDate(date: Date) {
-  return date.toLocaleDateString("vi-VN", { weekday: "long", day: "numeric", month: "numeric", year: "numeric" });
+function formatDate(date: Date, locale: string) {
+  return date.toLocaleDateString(locale, { weekday: "long", day: "numeric", month: "numeric", year: "numeric" });
 }
 
 function getDayDiffFromToday(date: Date) {
@@ -75,14 +76,14 @@ function readImageAsDataUrl(file: File) {
   });
 }
 
-function recipeToMealItem(recipe: PersonalizedRecipe): AddMealItemPayload {
+function recipeToMealItem(recipe: PersonalizedRecipe, servingLabel: string, fallbackMealTime: string): AddMealItemPayload {
   return {
     name: recipe.name,
     calories: recipe.calories,
     protein: recipe.nutrition.protein,
     carbs: recipe.nutrition.carbs,
     fat: recipe.nutrition.fat,
-    portion: `${recipe.servings || 1} phần - ${recipe.mealTime || "Công thức AI"}`,
+    portion: `${recipe.servings || 1} ${servingLabel} - ${recipe.mealTime || fallbackMealTime}`,
     quantity: 1,
   };
 }
@@ -102,6 +103,7 @@ function createCustomIngredientDraft(): CustomIngredientDraft {
 }
 
 export function MealTracker() {
+  const { locale, t } = useLanguage();
   const [mealLog, setMealLog] = useState<MealLog | null>(null);
   const [foods, setFoods] = useState<Food[]>([]);
   const [savedAiRecipes, setSavedAiRecipes] = useState<PersonalizedRecipe[]>([]);
@@ -116,7 +118,7 @@ export function MealTracker() {
     protein: 0,
     carbs: 0,
     fat: 0,
-    portion: "1 phần tự nấu",
+    portion: `1 ${t("phần tự nấu")}`,
     quantity: 1,
   });
   const [nutritionIngredients, setNutritionIngredients] = useState<NutritionIngredient[]>([]);
@@ -154,16 +156,16 @@ export function MealTracker() {
         setError(null);
         setSaveStatus("saved");
       })
-      .catch((err) => setError(err instanceof Error ? err.message : "Không tải được nhật ký bữa ăn"))
+      .catch((err) => setError(err instanceof Error ? err.message : t("Không tải được nhật ký bữa ăn")))
       .finally(() => setLoading(false));
-  }, [dateKey]);
+  }, [dateKey, t]);
 
   useEffect(() => {
     if (!showFoodSearch || addMode !== "foods") return;
     getFoods(searchQuery)
       .then((data) => setFoods(data._embedded.foods))
-      .catch((err) => setError(err instanceof Error ? err.message : "Không tải được danh sách thực phẩm"));
-  }, [showFoodSearch, addMode, searchQuery]);
+      .catch((err) => setError(err instanceof Error ? err.message : t("Không tải được danh sách thực phẩm")));
+  }, [showFoodSearch, addMode, searchQuery, t]);
 
   useEffect(() => {
     if (!showFoodSearch || addMode !== "aiRecipes") return;
@@ -180,8 +182,8 @@ export function MealTracker() {
         setCustomUnits(ingredientData.units);
         setSavedCustomFoods(savedData._embedded.customFoods);
       })
-      .catch((err) => setError(err instanceof Error ? err.message : "Không tải được dữ liệu món tự nấu"));
-  }, [showFoodSearch, addMode]);
+      .catch((err) => setError(err instanceof Error ? err.message : t("Không tải được dữ liệu món tự nấu")));
+  }, [showFoodSearch, addMode, t]);
 
   const totals = mealLog?.summary.totals ?? { calories: 0, protein: 0, carbs: 0, fat: 0 };
   const targets = mealLog?.summary.targets ?? { calories: 1800, protein: 120, carbs: 220, fat: 60, waterGlasses: 8, waterMl: 2000 };
@@ -196,9 +198,9 @@ export function MealTracker() {
     () => [
       { name: "Protein", value: Math.round(totals.protein * 4) },
       { name: "Carbs", value: Math.round(totals.carbs * 4) },
-      { name: "Chất béo", value: Math.round(totals.fat * 9) },
+      { name: t("Chất béo"), value: Math.round(totals.fat * 9) },
     ],
-    [totals],
+    [t, totals],
   );
   const canGoPrevious = trackerAccess ? getDayDiffFromToday(currentDate) + 1 < trackerAccess.mealHistoryDays : true;
   const estimatedAddableItem = customEstimate?.addableItem;
@@ -224,7 +226,7 @@ export function MealTracker() {
       setSaveStatus("saved");
     } catch (err) {
       setSaveStatus("error");
-      setError(err instanceof Error ? err.message : "Không lưu được món ăn");
+      setError(err instanceof Error ? err.message : t("Không lưu được món ăn"));
     }
   };
 
@@ -267,7 +269,7 @@ export function MealTracker() {
       setCustomEstimateStatus("ready");
     } catch (err) {
       setCustomEstimateStatus("error");
-      setError(err instanceof Error ? err.message : "Không ước tính được món tự nấu");
+      setError(err instanceof Error ? err.message : t("Không ước tính được món tự nấu"));
     }
   };
 
@@ -278,7 +280,7 @@ export function MealTracker() {
       const updated = await addMealItem(dateKey, activeMealId, estimatedAddableItem);
       setMealLog(updated);
       setShowFoodSearch(false);
-      setCustomFood({ name: "", calories: 0, protein: 0, carbs: 0, fat: 0, portion: "1 phần tự nấu", quantity: 1 });
+      setCustomFood({ name: "", calories: 0, protein: 0, carbs: 0, fat: 0, portion: `1 ${t("phần tự nấu")}`, quantity: 1 });
       setCustomIngredientDrafts([createCustomIngredientDraft()]);
       setCustomServings(1);
       setCustomCookingMethod("");
@@ -287,7 +289,7 @@ export function MealTracker() {
       setSaveStatus("saved");
     } catch (err) {
       setSaveStatus("error");
-      setError(err instanceof Error ? err.message : "Không lưu được món tự nấu");
+      setError(err instanceof Error ? err.message : t("Không lưu được món tự nấu"));
     }
   };
 
@@ -300,7 +302,7 @@ export function MealTracker() {
       setCustomSaveStatus("saved");
     } catch (err) {
       setCustomSaveStatus("error");
-      setError(err instanceof Error ? err.message : "Không lưu được món cá nhân");
+      setError(err instanceof Error ? err.message : t("Không lưu được món cá nhân"));
     }
   };
 
@@ -322,18 +324,18 @@ export function MealTracker() {
       setSaveStatus("saved");
     } catch (err) {
       setSaveStatus("error");
-      setError(err instanceof Error ? err.message : "Không thêm được món cá nhân đã lưu");
+      setError(err instanceof Error ? err.message : t("Không thêm được món cá nhân đã lưu"));
     }
   };
 
   const handleDeleteSavedCustomFood = async (food: SavedCustomFood) => {
-    if (!window.confirm(`Xóa món cá nhân "${food.name}" khỏi danh sách đã lưu?`)) return;
+    if (!window.confirm(t("Xóa món cá nhân \"{name}\" khỏi danh sách đã lưu?", { name: food.name }))) return;
     setCustomDeleteId(food.id);
     try {
       await deleteSavedCustomFood(food.id);
       setSavedCustomFoods((current) => current.filter((item) => item.id !== food.id));
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Không xóa được món cá nhân đã lưu");
+      setError(err instanceof Error ? err.message : t("Không xóa được món cá nhân đã lưu"));
     } finally {
       setCustomDeleteId(null);
     }
@@ -343,13 +345,13 @@ export function MealTracker() {
     if (!activeMealId) return;
     setSaveStatus("saving");
     try {
-      const updated = await addMealItem(dateKey, activeMealId, recipeToMealItem(recipe));
+      const updated = await addMealItem(dateKey, activeMealId, recipeToMealItem(recipe, t("phần"), t("Công thức AI")));
       setMealLog(updated);
       setShowFoodSearch(false);
       setSaveStatus("saved");
     } catch (err) {
       setSaveStatus("error");
-      setError(err instanceof Error ? err.message : "Không lưu được công thức AI vào bữa ăn");
+      setError(err instanceof Error ? err.message : t("Không lưu được công thức AI vào bữa ăn"));
     }
   };
 
@@ -361,7 +363,7 @@ export function MealTracker() {
       setSaveStatus("saved");
     } catch (err) {
       setSaveStatus("error");
-      setError(err instanceof Error ? err.message : "Không xóa được món ăn");
+      setError(err instanceof Error ? err.message : t("Không xóa được món ăn"));
     }
   };
 
@@ -383,18 +385,18 @@ export function MealTracker() {
     } catch (err) {
       setMealLog(previous);
       setSaveStatus("error");
-      setError(err instanceof Error ? err.message : "Không lưu được lượng nước");
+      setError(err instanceof Error ? err.message : t("Không lưu được lượng nước"));
     }
   };
 
   const handlePhotoChange = async (file: File | undefined) => {
     if (!file) return;
     if (!["image/jpeg", "image/png", "image/webp"].includes(file.type)) {
-      setPhotoError("Vui lòng chọn ảnh JPEG, PNG hoặc WEBP");
+      setPhotoError(t("Vui lòng chọn ảnh JPEG, PNG hoặc WEBP"));
       return;
     }
     if (file.size > 5 * 1024 * 1024) {
-      setPhotoError("Ảnh quá lớn. Vui lòng chọn ảnh dưới 5MB");
+      setPhotoError(t("Ảnh quá lớn. Vui lòng chọn ảnh dưới 5MB"));
       return;
     }
     try {
@@ -405,13 +407,13 @@ export function MealTracker() {
       setPhotoAddableItem(null);
       setPhotoError(null);
     } catch (err) {
-      setPhotoError(err instanceof Error ? err.message : "Không đọc được ảnh món ăn");
+      setPhotoError(err instanceof Error ? err.message : t("Không đọc được ảnh món ăn"));
     }
   };
 
   const handleEstimatePhoto = async () => {
     if (!photoPreview) {
-      setPhotoError("Bạn cần chụp hoặc tải ảnh món ăn trước");
+      setPhotoError(t("Bạn cần chụp hoặc tải ảnh món ăn trước"));
       return;
     }
     setPhotoLoading(true);
@@ -421,7 +423,7 @@ export function MealTracker() {
       setPhotoEstimate(data.estimate);
       setPhotoAddableItem(data.addableItem);
     } catch (err) {
-      setPhotoError(err instanceof Error ? err.message : "Không nhận diện được calo từ ảnh");
+      setPhotoError(err instanceof Error ? err.message : t("Không nhận diện được calo từ ảnh"));
     } finally {
       setPhotoLoading(false);
     }
@@ -436,31 +438,31 @@ export function MealTracker() {
       setSaveStatus("saved");
     } catch (err) {
       setSaveStatus("error");
-      setError(err instanceof Error ? err.message : "Không lưu được món ăn từ ảnh");
+      setError(err instanceof Error ? err.message : t("Không lưu được món ăn từ ảnh"));
     }
   };
 
   if (loading) {
-    return <div className="min-h-screen bg-gray-50 p-8 text-gray-500">Đang tải nhật ký bữa ăn...</div>;
+    return <div className="min-h-screen bg-gray-50 p-8 text-gray-500">{t("Đang tải nhật ký bữa ăn...")}</div>;
   }
 
   if (error || !mealLog) {
-    return <div className="min-h-screen bg-gray-50 p-8 text-red-600">{error ?? "Không có dữ liệu nhật ký"}</div>;
+    return <div className="min-h-screen bg-gray-50 p-8 text-red-600">{error ?? t("Không có dữ liệu nhật ký")}</div>;
   }
 
   const saveStatusText = {
-    idle: "Tự động lưu",
-    saving: "Đang lưu...",
-    saved: "Đã lưu tự động",
-    error: "Lưu thất bại",
+    idle: t("Tự động lưu"),
+    saving: t("Đang lưu..."),
+    saved: t("Đã lưu tự động"),
+    error: t("Lưu thất bại"),
   }[saveStatus];
 
   return (
     <div className="min-h-screen bg-gray-50">
       <div className="mx-auto max-w-[1440px] px-4 py-6 sm:px-6 lg:px-8 lg:py-8">
         <div className="mb-6">
-          <h1 className="mb-1 text-gray-900" style={{ fontSize: "1.6rem", fontWeight: 800 }}>Nhật Ký Bữa Ăn</h1>
-          <p className="text-gray-500" style={{ fontSize: "0.9rem" }}>Dữ liệu lấy từ backend theo ngày bạn chọn</p>
+          <h1 className="mb-1 text-gray-900" style={{ fontSize: "1.6rem", fontWeight: 800 }}>{t("Nhật Ký Bữa Ăn")}</h1>
+          <p className="text-gray-500" style={{ fontSize: "0.9rem" }}>{t("Dữ liệu lấy từ backend theo ngày bạn chọn")}</p>
         </div>
 
         <div className="mb-4 flex justify-end">
@@ -480,18 +482,21 @@ export function MealTracker() {
             <div className="flex flex-wrap items-start justify-between gap-4">
               <div>
                 <p className="text-amber-900" style={{ fontSize: "0.92rem", fontWeight: 800 }}>
-                  Gói {trackerAccess.tier.toUpperCase()} đang mở Meal Tracker trong {trackerAccess.mealHistoryDays} ngày gần nhất
+                  {t("Gói {tier} đang mở Meal Tracker trong {days} ngày gần nhất", { tier: trackerAccess.tier.toUpperCase(), days: trackerAccess.mealHistoryDays })}
                 </p>
                 <p className="mt-1 text-amber-800" style={{ fontSize: "0.82rem", lineHeight: 1.6 }}>
-                  Tối đa {trackerAccess.mealItemsPerDay} món mỗi ngày, báo cáo dinh dưỡng {trackerAccess.analyticsWindowDays} ngày
-                  {trackerAccess.reportExports ? " và xuất báo cáo." : "."}
+                  {t("Tối đa {items} món mỗi ngày, báo cáo dinh dưỡng {days} ngày{exportSuffix}", {
+                    items: trackerAccess.mealItemsPerDay,
+                    days: trackerAccess.analyticsWindowDays,
+                    exportSuffix: trackerAccess.reportExports ? t(" và xuất báo cáo.") : ".",
+                  })}
                 </p>
               </div>
               <div className="rounded-xl border border-amber-200 bg-white px-4 py-3 text-right">
                 <p className="text-amber-900" style={{ fontSize: "1rem", fontWeight: 800 }}>
                   {trackerAccess.itemCount}/{trackerAccess.mealItemsPerDay}
                 </p>
-                <p className="text-amber-700" style={{ fontSize: "0.75rem" }}>món đã dùng hôm nay</p>
+                <p className="text-amber-700" style={{ fontSize: "0.75rem" }}>{t("món đã dùng hôm nay")}</p>
               </div>
             </div>
           </div>
@@ -508,7 +513,7 @@ export function MealTracker() {
                 <ChevronLeft className="h-4 w-4 text-gray-600" />
               </button>
               <div className="rounded-xl border border-green-100 bg-green-50 px-5 py-2">
-                <p className="text-green-700" style={{ fontSize: "0.9rem", fontWeight: 700 }}>{formatDate(currentDate)}</p>
+                <p className="text-green-700" style={{ fontSize: "0.9rem", fontWeight: 700 }}>{formatDate(currentDate, locale)}</p>
               </div>
               <button onClick={() => changeDate(1)} className="rounded-xl bg-gray-100 p-2 transition-colors hover:bg-gray-200">
                 <ChevronRight className="h-4 w-4 text-gray-600" />
@@ -516,9 +521,9 @@ export function MealTracker() {
             </div>
             <div className="grid w-full grid-cols-1 gap-3 sm:w-auto sm:grid-cols-3 sm:gap-6">
               {[
-                { label: "Tiêu thụ", value: `${totals.calories} kcal`, color: "text-green-600" },
-                { label: "Mục tiêu", value: `${targets.calories} kcal`, color: "text-gray-700" },
-                { label: "Còn lại", value: `${targets.calories - totals.calories} kcal`, color: "text-blue-600" },
+                { label: t("Tiêu thụ"), value: `${totals.calories.toLocaleString(locale)} kcal`, color: "text-green-600" },
+                { label: t("Mục tiêu"), value: `${targets.calories.toLocaleString(locale)} kcal`, color: "text-gray-700" },
+                { label: t("Còn lại"), value: `${(targets.calories - totals.calories).toLocaleString(locale)} kcal`, color: "text-blue-600" },
               ].map((stat) => (
                 <div key={stat.label} className="text-center">
                   <p className={stat.color} style={{ fontSize: "1.1rem", fontWeight: 800 }}>{stat.value}</p>
@@ -528,7 +533,7 @@ export function MealTracker() {
             </div>
           </div>
           <div className="mb-2 flex justify-between">
-            <span className="text-gray-600" style={{ fontSize: "0.85rem", fontWeight: 600 }}>Tiến trình calo hôm nay</span>
+            <span className="text-gray-600" style={{ fontSize: "0.85rem", fontWeight: 600 }}>{t("Tiến trình calo hôm nay")}</span>
             <span className="text-green-600" style={{ fontSize: "0.85rem", fontWeight: 700 }}>{caloriePct}%</span>
           </div>
           <div className="h-3 w-full overflow-hidden rounded-full bg-gray-100">
@@ -549,8 +554,8 @@ export function MealTracker() {
                         <span className={style.color} style={{ fontSize: "0.95rem", fontWeight: 800 }}>{style.icon}</span>
                       </div>
                       <div className="text-left">
-                        <p className={style.color} style={{ fontSize: "1rem", fontWeight: 700 }}>{meal.name}</p>
-                        <p className="text-gray-500" style={{ fontSize: "0.78rem" }}>{meal.items.length} món · {meal.totalCalories} / {meal.targetKcal} kcal</p>
+                        <p className={style.color} style={{ fontSize: "1rem", fontWeight: 700 }}>{t(meal.name)}</p>
+                        <p className="text-gray-500" style={{ fontSize: "0.78rem" }}>{t("{count} món · {total} / {target} kcal", { count: meal.items.length, total: meal.totalCalories, target: meal.targetKcal })}</p>
                       </div>
                     </div>
                     <div className="flex items-center gap-3">
@@ -566,7 +571,7 @@ export function MealTracker() {
                     <div className="p-4">
                       {meal.items.length === 0 ? (
                         <div className="py-8 text-center text-gray-400">
-                          <p style={{ fontSize: "0.9rem" }}>Chưa có món ăn nào</p>
+                          <p style={{ fontSize: "0.9rem" }}>{t("Chưa có món ăn nào")}</p>
                         </div>
                       ) : (
                         <div className="mb-3 space-y-2">
@@ -607,7 +612,7 @@ export function MealTracker() {
                         style={{ fontSize: "0.875rem", fontWeight: 600 }}
                       >
                         <Plus className="h-4 w-4" />
-                        Thêm món ăn
+                        {t("Thêm món ăn")}
                       </button>
                     </div>
                   )}
@@ -622,13 +627,13 @@ export function MealTracker() {
                 <div>
                   <div className="mb-3 inline-flex items-center gap-2 rounded-full border border-green-100 bg-green-50 px-3 py-1 text-green-700" style={{ fontSize: "0.75rem", fontWeight: 800 }}>
                     <Sparkles className="h-3.5 w-3.5" />
-                    {isSvipAiPhotoMode ? "SVIP Full AI" : "AI nhận diện ảnh"}
+                    {isSvipAiPhotoMode ? "SVIP Full AI" : t("AI nhận diện ảnh")}
                   </div>
-                  <h3 className="text-gray-900" style={{ fontSize: "1rem", fontWeight: 800 }}>Chụp món ăn dự đoán calo</h3>
+                  <h3 className="text-gray-900" style={{ fontSize: "1rem", fontWeight: 800 }}>{t("Chụp món ăn dự đoán calo")}</h3>
                   <p className="mt-1 text-gray-500" style={{ fontSize: "0.8rem", lineHeight: 1.5 }}>
                     {isSvipAiPhotoMode
-                      ? "SVIP dùng AI Vision và AI Coach hiệu chỉnh theo hồ sơ để dự đoán calo tốt nhất."
-                      : "Chụp rõ toàn bộ phần ăn, đủ sáng và thêm ghi chú khẩu phần để AI ước lượng chính xác hơn."}
+                      ? t("SVIP dùng AI Vision và AI Coach hiệu chỉnh theo hồ sơ để dự đoán calo tốt nhất.")
+                      : t("Chụp rõ toàn bộ phần ăn, đủ sáng và thêm ghi chú khẩu phần để AI ước lượng chính xác hơn.")}
                   </p>
                 </div>
                 <Camera className="h-5 w-5 flex-shrink-0 text-green-600" />
@@ -636,17 +641,17 @@ export function MealTracker() {
 
               <label className="flex cursor-pointer flex-col items-center justify-center rounded-2xl border-2 border-dashed border-green-200 bg-green-50/60 px-4 py-5 text-center transition-colors hover:bg-green-50">
                 {photoPreview ? (
-                  <img src={photoPreview} alt="Ảnh món ăn cần ước lượng calo" className="mb-3 h-40 w-full rounded-xl object-cover" />
+                  <img src={photoPreview} alt={t("Ảnh món ăn cần ước lượng calo")} className="mb-3 h-40 w-full rounded-xl object-cover" />
                 ) : (
                   <div className="mb-3 flex h-14 w-14 items-center justify-center rounded-2xl bg-white text-green-600 shadow-sm">
                     <Upload className="h-6 w-6" />
                   </div>
                 )}
                 <span className="text-green-700" style={{ fontSize: "0.86rem", fontWeight: 800 }}>
-                  {photoPreview ? "Đổi ảnh món ăn" : "Chụp hoặc tải ảnh món ăn"}
+                  {photoPreview ? t("Đổi ảnh món ăn") : t("Chụp hoặc tải ảnh món ăn")}
                 </span>
                 <span className="mt-1 line-clamp-1 text-gray-400" style={{ fontSize: "0.74rem" }}>
-                  {photoFileName || "JPEG, PNG, WEBP dưới 5MB"}
+                  {photoFileName || t("JPEG, PNG, WEBP dưới 5MB")}
                 </span>
                 <input
                   type="file"
@@ -661,7 +666,7 @@ export function MealTracker() {
                 value={photoNotes}
                 onChange={(event) => setPhotoNotes(event.target.value)}
                 rows={2}
-                placeholder="Ghi chú thêm: tô lớn/nhỏ, có sốt, ít cơm, ước lượng gram..."
+                placeholder={t("Ghi chú thêm: tô lớn/nhỏ, có sốt, ít cơm, ước lượng gram...")}
                 className="mt-3 w-full resize-none rounded-xl border border-gray-200 bg-gray-50 px-3 py-2 text-gray-700 outline-none focus:border-green-500 focus:bg-white"
                 style={{ fontSize: "0.82rem", lineHeight: 1.5 }}
               />
@@ -680,7 +685,7 @@ export function MealTracker() {
                 style={{ fontSize: "0.88rem", fontWeight: 800 }}
               >
                 <Sparkles className="h-4 w-4" />
-                {photoLoading ? "Đang phân tích ảnh..." : "Dự đoán calo từ ảnh"}
+                {photoLoading ? t("Đang phân tích ảnh...") : t("Dự đoán calo từ ảnh")}
               </button>
 
               {photoEstimate && (
@@ -689,7 +694,7 @@ export function MealTracker() {
                     <div>
                       <div className="mb-2 inline-flex items-center gap-1 rounded-full border border-green-100 bg-white px-2 py-0.5 text-green-700" style={{ fontSize: "0.7rem", fontWeight: 800 }}>
                         <Sparkles className="h-3 w-3" />
-                        {photoEstimate.analysisMode === "svip_full_ai" ? "SVIP đã xử lý đa AI" : photoEstimate.analysisMode === "svip_vision_only" ? "SVIP AI Vision" : "AI Vision"}
+                        {photoEstimate.analysisMode === "svip_full_ai" ? t("SVIP đã xử lý đa AI") : photoEstimate.analysisMode === "svip_vision_only" ? "SVIP AI Vision" : "AI Vision"}
                       </div>
                       <p className="text-gray-900" style={{ fontSize: "0.95rem", fontWeight: 800 }}>{photoEstimate.dishName}</p>
                       <p className="text-gray-500" style={{ fontSize: "0.78rem" }}>{photoEstimate.portion}</p>
@@ -700,7 +705,7 @@ export function MealTracker() {
                   </div>
                   <div className="mt-3 grid grid-cols-4 gap-2 text-center">
                     {[
-                      { label: "Tin cậy", value: `${photoEstimate.confidence}%` },
+                      { label: t("Tin cậy"), value: `${photoEstimate.confidence}%` },
                       { label: "P", value: `${photoEstimate.protein}g` },
                       { label: "C", value: `${photoEstimate.carbs}g` },
                       { label: "F", value: `${photoEstimate.fat}g` },
@@ -723,7 +728,7 @@ export function MealTracker() {
                   )}
                   {photoEstimate.refinedBy && photoEstimate.refinedBy.length > 0 && (
                     <p className="mt-3 text-green-700" style={{ fontSize: "0.72rem", lineHeight: 1.45 }}>
-                      AI đã dùng: {photoEstimate.refinedBy.join(", ")}
+                      {t("AI đã dùng")}: {photoEstimate.refinedBy.join(", ")}
                     </p>
                   )}
                   <p className="mt-3 text-gray-500" style={{ fontSize: "0.74rem", lineHeight: 1.45 }}>{photoEstimate.disclaimer}</p>
@@ -735,7 +740,7 @@ export function MealTracker() {
                       style={{ fontSize: "0.82rem", fontWeight: 700 }}
                     >
                       {mealLog.meals.map((meal) => (
-                        <option key={meal.id} value={meal.id}>{meal.name}</option>
+                        <option key={meal.id} value={meal.id}>{t(meal.name)}</option>
                       ))}
                     </select>
                     <button
@@ -745,7 +750,7 @@ export function MealTracker() {
                       className="rounded-xl bg-green-600 px-3 py-2 text-white hover:bg-green-700 disabled:cursor-not-allowed disabled:bg-gray-300"
                       style={{ fontSize: "0.82rem", fontWeight: 800 }}
                     >
-                      Thêm
+                      {t("Thêm")}
                     </button>
                   </div>
                 </div>
@@ -753,7 +758,7 @@ export function MealTracker() {
             </div>
 
             <div className="rounded-2xl border border-gray-100 bg-white p-6 shadow-sm">
-              <h3 className="mb-4 text-gray-900" style={{ fontSize: "1rem", fontWeight: 700 }}>Tỉ lệ dinh dưỡng</h3>
+              <h3 className="mb-4 text-gray-900" style={{ fontSize: "1rem", fontWeight: 700 }}>{t("Tỉ lệ dinh dưỡng")}</h3>
               {totals.calories > 0 ? (
                 <>
                   <ResponsiveContainer width="100%" height={160}>
@@ -768,7 +773,7 @@ export function MealTracker() {
                     {[
                       { name: "Protein", grams: Math.round(totals.protein), color: MACRO_COLORS[0] },
                       { name: "Carbs", grams: Math.round(totals.carbs), color: MACRO_COLORS[1] },
-                      { name: "Chất béo", grams: Math.round(totals.fat), color: MACRO_COLORS[2] },
+                      { name: t("Chất béo"), grams: Math.round(totals.fat), color: MACRO_COLORS[2] },
                     ].map((macro) => (
                       <div key={macro.name} className="flex items-center justify-between">
                         <div className="flex items-center gap-2">
@@ -781,22 +786,22 @@ export function MealTracker() {
                   </div>
                 </>
               ) : (
-                <div className="py-8 text-center text-gray-400" style={{ fontSize: "0.875rem" }}>Chưa có dữ liệu</div>
+                <div className="py-8 text-center text-gray-400" style={{ fontSize: "0.875rem" }}>{t("Chưa có dữ liệu")}</div>
               )}
             </div>
 
             <div className="rounded-2xl border border-gray-100 bg-white p-6 shadow-sm">
               <div className="mb-4 flex items-center justify-between">
-                <h3 className="text-gray-900" style={{ fontSize: "1rem", fontWeight: 700 }}>Nước uống</h3>
+                <h3 className="text-gray-900" style={{ fontSize: "1rem", fontWeight: 700 }}>{t("Nước uống")}</h3>
                 <Droplets className="h-5 w-5 text-blue-500" />
               </div>
               <div className="rounded-xl border border-blue-100 bg-blue-50 p-3 text-center">
                 <div className="mb-3 h-2 overflow-hidden rounded-full bg-white">
                   <div className="h-full rounded-full bg-blue-500 transition-all" style={{ width: `${waterProgressPct}%` }} />
                 </div>
-                <p className="text-blue-700" style={{ fontSize: "1.2rem", fontWeight: 800 }}>{currentWaterMl.toLocaleString("vi-VN")}ml</p>
+                <p className="text-blue-700" style={{ fontSize: "1.2rem", fontWeight: 800 }}>{currentWaterMl.toLocaleString(locale)}ml</p>
                 <p className="text-blue-500" style={{ fontSize: "0.78rem" }}>
-                  Mục tiêu {waterTargetMl.toLocaleString("vi-VN")}ml · còn {waterRemainingMl.toLocaleString("vi-VN")}ml
+                  {t("Mục tiêu {target}ml · còn {remaining}ml", { target: waterTargetMl.toLocaleString(locale), remaining: waterRemainingMl.toLocaleString(locale) })}
                 </p>
               </div>
               <div className="mt-4 grid grid-cols-4 gap-2">
@@ -817,19 +822,19 @@ export function MealTracker() {
                   style={{ fontSize: "0.85rem" }}
                 />
                 <button onClick={() => void handleAddWater()} className="rounded-xl bg-blue-600 px-4 py-2 text-white transition hover:bg-blue-700" style={{ fontSize: "0.85rem", fontWeight: 800 }}>
-                  Ghi
+                  {t("Ghi")}
                 </button>
               </div>
             </div>
 
             <div className="rounded-2xl bg-gradient-to-br from-green-600 to-emerald-600 p-5 text-white">
-              <h3 className="mb-4" style={{ fontSize: "1rem", fontWeight: 700 }}>Tổng kết ngày</h3>
+              <h3 className="mb-4" style={{ fontSize: "1rem", fontWeight: 700 }}>{t("Tổng kết ngày")}</h3>
               <div className="space-y-3">
                 {[
-                  { label: "Calo tiêu thụ", value: `${totals.calories} kcal`, sub: `${targets.calories - totals.calories} kcal còn lại` },
-                  { label: "Protein", value: `${Math.round(totals.protein)}g`, sub: `Mục tiêu: ${targets.protein}g` },
-                  { label: "Carbohydrate", value: `${Math.round(totals.carbs)}g`, sub: `Mục tiêu: ${targets.carbs}g` },
-                  { label: "Chất béo", value: `${Math.round(totals.fat)}g`, sub: `Mục tiêu: ${targets.fat}g` },
+                  { label: t("Calo tiêu thụ"), value: `${totals.calories} kcal`, sub: t("{value} kcal còn lại", { value: targets.calories - totals.calories }) },
+                  { label: "Protein", value: `${Math.round(totals.protein)}g`, sub: t("Mục tiêu: {value}g", { value: targets.protein }) },
+                  { label: "Carbohydrate", value: `${Math.round(totals.carbs)}g`, sub: t("Mục tiêu: {value}g", { value: targets.carbs }) },
+                  { label: t("Chất béo"), value: `${Math.round(totals.fat)}g`, sub: t("Mục tiêu: {value}g", { value: targets.fat }) },
                 ].map((stat) => (
                   <div key={stat.label} className="flex items-center justify-between border-b border-white/10 py-2 last:border-0">
                     <div>
@@ -852,10 +857,10 @@ export function MealTracker() {
               <div className="mb-4 flex items-center justify-between">
                 <div>
                   <h3 className="text-gray-900" style={{ fontSize: "1.1rem", fontWeight: 700 }}>
-                    Thêm món ăn - {mealLog.meals.find((meal) => meal.id === activeMealId)?.name}
+                    {t("Thêm món ăn - {meal}", { meal: t(mealLog.meals.find((meal) => meal.id === activeMealId)?.name || "") })}
                   </h3>
                   <p className="mt-1 text-gray-500" style={{ fontSize: "0.8rem" }}>
-                    Chọn món có sẵn, nhập món tự nấu hoặc thêm công thức AI đã lưu vào nhật ký.
+                    {t("Chọn món có sẵn, nhập món tự nấu hoặc thêm công thức AI đã lưu vào nhật ký.")}
                   </p>
                 </div>
                 <button onClick={() => setShowFoodSearch(false)} className="rounded-xl p-2 transition-colors hover:bg-gray-100">
@@ -865,9 +870,9 @@ export function MealTracker() {
 
               <div className="mb-4 grid grid-cols-1 gap-2 rounded-2xl bg-gray-100 p-1 sm:grid-cols-3">
                 {[
-                  { id: "foods", label: "Kho món" },
-                  { id: "custom", label: "Món tự nấu" },
-                  { id: "aiRecipes", label: "Công thức AI" },
+                  { id: "foods", label: t("Kho món") },
+                  { id: "custom", label: t("Món tự nấu") },
+                  { id: "aiRecipes", label: t("Công thức AI") },
                 ].map((tab) => (
                   <button
                     key={tab.id}
@@ -887,7 +892,7 @@ export function MealTracker() {
                   <input
                     autoFocus
                     type="text"
-                    placeholder="Tìm kiếm thực phẩm..."
+                    placeholder={t("Tìm kiếm thực phẩm...")}
                     value={searchQuery}
                     onChange={(e) => setSearchQuery(e.target.value)}
                     className="flex-1 bg-transparent text-gray-700 outline-none placeholder-gray-400"
@@ -902,13 +907,13 @@ export function MealTracker() {
                 foods.length === 0 ? (
                   <div className="py-12 text-center text-gray-400">
                     <Search className="mx-auto mb-3 h-8 w-8 opacity-50" />
-                    <p style={{ fontSize: "0.9rem" }}>Không tìm thấy thực phẩm</p>
+                    <p style={{ fontSize: "0.9rem" }}>{t("Không tìm thấy thực phẩm")}</p>
                   </div>
                 ) : (
                   foods.map((food) => (
                     <button key={food.id} onClick={() => handleAddFood(food)} className="flex w-full items-center justify-between border-b border-gray-50 p-4 transition-colors last:border-0 hover:bg-green-50">
                       <div className="text-left">
-                        <p className="text-gray-900" style={{ fontSize: "0.9rem", fontWeight: 600 }}>{food.name}</p>
+                        <p className="text-gray-900" style={{ fontSize: "0.9rem", fontWeight: 600 }}>{t(food.name)}</p>
                         <p className="text-gray-400" style={{ fontSize: "0.78rem" }}>{food.portion} · P:{food.protein}g C:{food.carbs}g F:{food.fat}g</p>
                       </div>
                       <div className="flex items-center gap-3">
@@ -925,7 +930,7 @@ export function MealTracker() {
               {addMode === "custom" && (
                 <div className="space-y-4 p-5">
                   <div>
-                    <label className="mb-2 block text-gray-700" style={{ fontSize: "0.84rem", fontWeight: 700 }}>Tên món ăn</label>
+                    <label className="mb-2 block text-gray-700" style={{ fontSize: "0.84rem", fontWeight: 700 }}>{t("Tên món ăn")}</label>
                     <input
                       value={customFood.name}
                       onChange={(event) => {
@@ -933,7 +938,7 @@ export function MealTracker() {
                         setCustomEstimate(null);
                         setCustomEstimateStatus("idle");
                       }}
-                      placeholder="Ví dụ: Cơm gà áp chảo"
+                      placeholder={t("Ví dụ: Cơm gà áp chảo")}
                       className="w-full rounded-xl border border-gray-200 bg-gray-50 px-3 py-2.5 text-gray-800 outline-none focus:border-green-500 focus:bg-white"
                       style={{ fontSize: "0.9rem" }}
                     />
@@ -941,7 +946,7 @@ export function MealTracker() {
 
                   <div className="grid gap-3 md:grid-cols-[160px_1fr]">
                     <div>
-                      <label className="mb-2 block text-gray-700" style={{ fontSize: "0.84rem", fontWeight: 700 }}>Số phần ăn</label>
+                      <label className="mb-2 block text-gray-700" style={{ fontSize: "0.84rem", fontWeight: 700 }}>{t("Số phần ăn")}</label>
                       <input
                         type="number"
                         min={1}
@@ -957,7 +962,7 @@ export function MealTracker() {
                       />
                     </div>
                     <div>
-                      <label className="mb-2 block text-gray-700" style={{ fontSize: "0.84rem", fontWeight: 700 }}>Cách nấu nếu có</label>
+                      <label className="mb-2 block text-gray-700" style={{ fontSize: "0.84rem", fontWeight: 700 }}>{t("Cách nấu nếu có")}</label>
                       <input
                         value={customCookingMethod}
                         onChange={(event) => {
@@ -965,7 +970,7 @@ export function MealTracker() {
                           setCustomEstimate(null);
                           setCustomEstimateStatus("idle");
                         }}
-                        placeholder="Ví dụ: áp chảo ít dầu, luộc, kho, xào..."
+                        placeholder={t("Ví dụ: áp chảo ít dầu, luộc, kho, xào...")}
                         className="w-full rounded-xl border border-gray-200 bg-gray-50 px-3 py-2.5 text-gray-800 outline-none focus:border-green-500 focus:bg-white"
                         style={{ fontSize: "0.9rem" }}
                       />
@@ -974,7 +979,7 @@ export function MealTracker() {
 
                   <div className="rounded-2xl border border-gray-100 bg-white p-4 shadow-sm">
                     <div className="mb-3 flex items-center justify-between gap-3">
-                      <p className="text-gray-900" style={{ fontSize: "0.9rem", fontWeight: 900 }}>Nguyên liệu</p>
+                      <p className="text-gray-900" style={{ fontSize: "0.9rem", fontWeight: 900 }}>{t("Nguyên liệu")}</p>
                       <button
                         type="button"
                         onClick={handleAddCustomIngredientRow}
@@ -982,7 +987,7 @@ export function MealTracker() {
                         style={{ fontSize: "0.78rem", fontWeight: 800 }}
                       >
                         <Plus className="h-3.5 w-3.5" />
-                        Thêm nguyên liệu
+                        {t("Thêm nguyên liệu")}
                       </button>
                     </div>
                     <datalist id="custom-ingredient-options">
@@ -997,7 +1002,7 @@ export function MealTracker() {
                             list="custom-ingredient-options"
                             value={item.name}
                             onChange={(event) => updateCustomIngredientDraft(item.id, { name: event.target.value })}
-                            placeholder={index === 0 ? "Ví dụ: cơm trắng" : "Nguyên liệu"}
+                            placeholder={index === 0 ? t("Ví dụ: cơm trắng") : t("Nguyên liệu")}
                             className="min-w-0 rounded-xl border border-gray-200 bg-white px-3 py-2 text-gray-800 outline-none focus:border-green-500"
                             style={{ fontSize: "0.82rem" }}
                           />
@@ -1009,7 +1014,7 @@ export function MealTracker() {
                             onChange={(event) => updateCustomIngredientDraft(item.id, { quantity: Number(event.target.value) || 0 })}
                             className="min-w-0 rounded-xl border border-gray-200 bg-white px-3 py-2 text-center text-gray-800 outline-none focus:border-green-500"
                             style={{ fontSize: "0.82rem", fontWeight: 800 }}
-                            aria-label={"Số lượng nguyên liệu " + (index + 1)}
+                            aria-label={t("Số lượng nguyên liệu {index}", { index: index + 1 })}
                           />
                           <select
                             value={item.unit}
@@ -1018,13 +1023,13 @@ export function MealTracker() {
                             style={{ fontSize: "0.82rem", fontWeight: 700 }}
                           >
                             {customUnits.map((unit) => (
-                              <option key={unit.id} value={unit.id}>{unit.label}</option>
+                              <option key={unit.id} value={unit.id}>{t(unit.label)}</option>
                             ))}
                           </select>
                           <input
                             value={item.note || ""}
                             onChange={(event) => updateCustomIngredientDraft(item.id, { note: event.target.value })}
-                            placeholder="Ghi chú: bỏ da, ít dầu..."
+                            placeholder={t("Ghi chú: bỏ da, ít dầu...")}
                             className="min-w-0 rounded-xl border border-gray-200 bg-white px-3 py-2 text-gray-800 outline-none focus:border-green-500"
                             style={{ fontSize: "0.82rem" }}
                           />
@@ -1032,7 +1037,7 @@ export function MealTracker() {
                             type="button"
                             onClick={() => handleRemoveCustomIngredientRow(item.id)}
                             className="flex h-9 w-9 items-center justify-center rounded-xl text-gray-400 hover:bg-red-50 hover:text-red-600"
-                            aria-label={"Xóa nguyên liệu " + (index + 1)}
+                            aria-label={t("Xóa nguyên liệu {index}", { index: index + 1 })}
                           >
                             <X className="h-4 w-4" />
                           </button>
@@ -1040,13 +1045,13 @@ export function MealTracker() {
                       ))}
                     </div>
                     <p className="mt-3 text-gray-500" style={{ fontSize: "0.76rem", lineHeight: 1.5 }}>
-                      Có thể nhập đơn vị đời thường như 1 chén cơm, 1 muỗng cà phê dầu ăn, 1 quả trứng, 1 miếng ức gà hoặc nhập gram để độ tin cậy cao hơn.
+                      {t("Có thể nhập đơn vị đời thường như 1 chén cơm, 1 muỗng cà phê dầu ăn, 1 quả trứng, 1 miếng ức gà hoặc nhập gram để độ tin cậy cao hơn.")}
                     </p>
                   </div>
 
                   {savedCustomFoods.length > 0 && (
                     <div className="rounded-2xl border border-amber-100 bg-amber-50 p-4 dark:border-amber-400/30 dark:bg-slate-800">
-                      <p className="mb-3 text-amber-900 dark:text-amber-100" style={{ fontSize: "0.86rem", fontWeight: 900 }}>Món cá nhân đã lưu</p>
+                      <p className="mb-3 text-amber-900 dark:text-amber-100" style={{ fontSize: "0.86rem", fontWeight: 900 }}>{t("Món cá nhân đã lưu")}</p>
                       <div className="max-h-56 space-y-2 overflow-y-auto pr-1">
                         {savedCustomFoods.map((food) => (
                           <div
@@ -1067,13 +1072,13 @@ export function MealTracker() {
                                 className="rounded-lg bg-green-50 px-2.5 py-1 text-green-700 hover:bg-green-100 dark:bg-green-400/15 dark:text-green-100 dark:hover:bg-green-400/25"
                                 style={{ fontSize: "0.76rem", fontWeight: 900 }}
                               >
-                                Thêm
+                                {t("Thêm")}
                               </button>
                               <button
                                 type="button"
                                 onClick={() => void handleDeleteSavedCustomFood(food)}
                                 disabled={customDeleteId === food.id}
-                                aria-label={"Xóa món cá nhân " + food.name}
+                                aria-label={t("Xóa món cá nhân {name}", { name: food.name })}
                                 className="rounded-lg p-1.5 text-gray-400 hover:bg-red-50 hover:text-red-600 disabled:opacity-50 dark:text-slate-400 dark:hover:bg-red-500/15 dark:hover:text-red-200"
                               >
                                 <X className="h-4 w-4" />
@@ -1092,14 +1097,19 @@ export function MealTracker() {
                           <p className="text-orange-900" style={{ fontSize: "0.9rem", fontWeight: 900 }}>{customEstimate.question}</p>
                           {customEstimate.quickEstimate && (
                             <div className="rounded-xl bg-white px-3 py-3 text-orange-800 shadow-sm" style={{ fontSize: "0.8rem", lineHeight: 1.5 }}>
-                              Ước tính nhanh: {customEstimate.quickEstimate.dishName} thường khoảng {customEstimate.quickEstimate.caloriesRange[0]}-{customEstimate.quickEstimate.caloriesRange[1]} kcal/phần. Độ tin cậy: {customEstimate.quickEstimate.confidence}.
+                              {t("Ước tính nhanh: {dish} thường khoảng {min}-{max} kcal/phần. Độ tin cậy: {confidence}.", {
+                                dish: customEstimate.quickEstimate.dishName,
+                                min: customEstimate.quickEstimate.caloriesRange[0],
+                                max: customEstimate.quickEstimate.caloriesRange[1],
+                                confidence: t(customEstimate.quickEstimate.confidence),
+                              })}
                             </div>
                           )}
                           {customEstimate.unresolved && customEstimate.unresolved.length > 0 && (
                             <div className="space-y-1">
                               {customEstimate.unresolved.map((item, index) => (
                                 <p key={item.inputName + "-" + index} className="text-orange-700" style={{ fontSize: "0.78rem" }}>
-                                  {item.inputName || "Nguyên liệu trống"}: {item.reason}
+                                  {item.inputName || t("Nguyên liệu trống")}: {t(item.reason)}
                                 </p>
                               ))}
                             </div>
@@ -1116,11 +1126,11 @@ export function MealTracker() {
                                 {customEstimate.estimate.dishName}
                               </p>
                               <p className="text-green-700" style={{ fontSize: "0.78rem" }}>
-                                Độ tin cậy: {customEstimate.estimate.confidence.label} · {customEstimate.estimate.confidence.reason}
+                                {t("Độ tin cậy")}: {t(customEstimate.estimate.confidence.label)} · {t(customEstimate.estimate.confidence.reason)}
                               </p>
                             </div>
                             <span className="rounded-xl bg-white px-3 py-1.5 text-green-700 shadow-sm" style={{ fontSize: "0.84rem", fontWeight: 900 }}>
-                              ~{customEstimate.estimate.perServing.calories} kcal/phần
+                              ~{customEstimate.estimate.perServing.calories} {t("kcal/phần")}
                             </span>
                           </div>
                           <div className="space-y-2">
@@ -1131,7 +1141,7 @@ export function MealTracker() {
                                   <p className="text-gray-700" style={{ fontSize: "0.8rem", fontWeight: 800 }}>{item.calories} kcal</p>
                                 </div>
                                 <p className="mt-0.5 text-gray-500" style={{ fontSize: "0.72rem" }}>
-                                  {item.quantity} {item.unitLabel} ≈ {item.grams}g · P:{item.protein}g C:{item.carbs}g F:{item.fat}g
+                                  {item.quantity} {t(item.unitLabel)} ≈ {item.grams}g · P:{item.protein}g C:{item.carbs}g F:{item.fat}g
                                 </p>
                               </div>
                             ))}
@@ -1161,7 +1171,7 @@ export function MealTracker() {
                               className="rounded-xl border border-green-200 bg-white px-4 py-3 text-green-700 hover:bg-green-50 disabled:cursor-not-allowed disabled:opacity-60"
                               style={{ fontSize: "0.84rem", fontWeight: 900 }}
                             >
-                              {customSaveStatus === "saved" ? "Đã lưu món này" : customSaveStatus === "saving" ? "Đang lưu..." : "Lưu món này"}
+                              {customSaveStatus === "saved" ? t("Đã lưu món này") : customSaveStatus === "saving" ? t("Đang lưu...") : t("Lưu món này")}
                             </button>
                             <button
                               type="button"
@@ -1169,7 +1179,7 @@ export function MealTracker() {
                               className="rounded-xl border border-gray-200 bg-white px-4 py-3 text-gray-700 hover:bg-gray-50"
                               style={{ fontSize: "0.84rem", fontWeight: 900 }}
                             >
-                              Chỉnh sửa nguyên liệu
+                              {t("Chỉnh sửa nguyên liệu")}
                             </button>
                             <button
                               type="button"
@@ -1177,7 +1187,7 @@ export function MealTracker() {
                               className="rounded-xl bg-green-600 px-4 py-3 text-white hover:bg-green-700"
                               style={{ fontSize: "0.84rem", fontWeight: 900 }}
                             >
-                              Thêm vào bữa
+                              {t("Thêm vào bữa")}
                             </button>
                           </div>
                         </div>
@@ -1186,7 +1196,7 @@ export function MealTracker() {
                   )}
 
                   <div className="rounded-xl border border-blue-100 bg-blue-50 px-4 py-3 text-blue-700" style={{ fontSize: "0.8rem", lineHeight: 1.5 }}>
-                    Logic: app quy đổi đơn vị đời thường sang gram, sau đó tính Calories = gram × kcal/100g / 100. Kết quả luôn là ước tính và có thể dao động theo cách nấu thực tế.
+                    {t("Logic: app quy đổi đơn vị đời thường sang gram, sau đó tính Calories = gram × kcal/100g / 100. Kết quả luôn là ước tính và có thể dao động theo cách nấu thực tế.")}
                   </div>
                   <button
                     type="button"
@@ -1196,7 +1206,7 @@ export function MealTracker() {
                     style={{ fontSize: "0.9rem", fontWeight: 800 }}
                   >
                     <Plus className="h-4 w-4" />
-                    {customEstimateStatus === "estimating" ? "Đang tính..." : "Tính calo món tự nấu"}
+                    {customEstimateStatus === "estimating" ? t("Đang tính...") : t("Tính calo món tự nấu")}
                   </button>
                 </div>
               )}
@@ -1205,8 +1215,8 @@ export function MealTracker() {
                 savedAiRecipes.length === 0 ? (
                   <div className="py-12 text-center text-gray-400">
                     <Sparkles className="mx-auto mb-3 h-8 w-8 opacity-50" />
-                    <p style={{ fontSize: "0.9rem", fontWeight: 700 }}>Chưa có công thức AI đã lưu</p>
-                    <p className="mt-1" style={{ fontSize: "0.78rem" }}>Tạo công thức ở trang Công Thức, sau đó quay lại đây để thêm vào nhật ký.</p>
+                    <p style={{ fontSize: "0.9rem", fontWeight: 700 }}>{t("Chưa có công thức AI đã lưu")}</p>
+                    <p className="mt-1" style={{ fontSize: "0.78rem" }}>{t("Tạo công thức ở trang Công Thức, sau đó quay lại đây để thêm vào nhật ký.")}</p>
                   </div>
                 ) : (
                   savedAiRecipes.map((recipe) => (
@@ -1218,7 +1228,7 @@ export function MealTracker() {
                         </div>
                         <p className="line-clamp-2 text-gray-900" style={{ fontSize: "0.9rem", fontWeight: 800 }}>{recipe.name}</p>
                         <p className="mt-1 text-gray-500" style={{ fontSize: "0.76rem" }}>
-                          {recipe.timeMinutes} phút · {recipe.mealTime} · P:{recipe.nutrition.protein}g C:{recipe.nutrition.carbs}g F:{recipe.nutrition.fat}g
+                          {recipe.timeMinutes} {t("phút")} · {t(recipe.mealTime)} · P:{recipe.nutrition.protein}g C:{recipe.nutrition.carbs}g F:{recipe.nutrition.fat}g
                         </p>
                       </div>
                       <div className="flex flex-shrink-0 items-center gap-3">

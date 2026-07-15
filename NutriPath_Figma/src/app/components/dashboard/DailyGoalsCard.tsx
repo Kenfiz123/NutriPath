@@ -1,16 +1,18 @@
 import { Check, Target } from "lucide-react";
 import type { MealLog } from "../../api";
+import { useLanguage } from "../../language";
 
 interface DailyGoalsCardProps {
   goals: MealLog["goals"];
 }
 
 export function DailyGoalsCard({ goals }: DailyGoalsCardProps) {
+  const { t } = useLanguage();
   return (
     <section className="rounded-2xl bg-gradient-to-br from-green-600 to-emerald-600 p-6 text-white">
       <div className="mb-3 flex items-center gap-2">
         <Target className="h-5 w-5 text-green-200" />
-        <h2 className="text-sm font-bold">Mục tiêu hôm nay</h2>
+        <h2 className="text-sm font-bold">{t("Mục tiêu hôm nay")}</h2>
       </div>
       <div className="space-y-2.5">
         {goals.map((goal) => (
@@ -23,7 +25,7 @@ export function DailyGoalsCard({ goals }: DailyGoalsCardProps) {
             <span
               className={`text-sm ${goal.done ? "text-white" : "text-green-100"}`}
             >
-              {goal.label}
+              {t(goal.label)}
             </span>
           </div>
         ))}

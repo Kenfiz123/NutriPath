@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   apiFetch,
   clearStoredSession,
@@ -25,8 +25,14 @@ function jsonResponse(payload: unknown, status = 200) {
 
 describe("cookie-backed API session", () => {
   beforeEach(() => {
+    vi.stubEnv("VITE_API_BASE_URL", "");
     clearStoredSession();
+    window.localStorage.removeItem("nutripath_language");
     vi.stubGlobal("fetch", vi.fn());
+  });
+
+  afterEach(() => {
+    vi.unstubAllEnvs();
   });
 
   it("keeps only member state in memory and removes any legacy localStorage token", () => {
@@ -50,10 +56,34 @@ describe("cookie-backed API session", () => {
       headers: expect.objectContaining({
         "Content-Type": "application/json",
         "X-Requested-With": "XMLHttpRequest",
+        "Accept-Language": "vi-VN",
       }),
     }));
     const requestOptions = vi.mocked(fetch).mock.calls[0][1] as RequestInit;
     expect(requestOptions.headers).not.toHaveProperty("Authorization");
+  });
+
+  it("sends the selected English locale to the backend", async () => {
+    vi.mocked(window.localStorage.getItem).mockReturnValue("en");
+    vi.mocked(fetch).mockResolvedValue(jsonResponse({ ok: true }));
+
+    await apiFetch<{ ok: boolean }>("/api/chat/quick-replies");
+
+    expect(fetch).toHaveBeenCalledWith("/api/chat/quick-replies", expect.objectContaining({
+      headers: expect.objectContaining({ "Accept-Language": "en-US" }),
+    }));
+  });
+
+  it("builds a production API URL without duplicate slashes", async () => {
+    vi.stubEnv("VITE_API_BASE_URL", "https://nutripath-l4rk.onrender.com/");
+    vi.mocked(fetch).mockResolvedValue(jsonResponse({ ok: true }));
+
+    await apiFetch<{ ok: boolean }>("api/payments/payos/create");
+
+    expect(fetch).toHaveBeenCalledWith(
+      "https://nutripath-l4rk.onrender.com/api/payments/payos/create",
+      expect.objectContaining({ credentials: "include" }),
+    );
   });
 
   it("clears in-memory state on 401 but not on a legitimate 403 authorization denial", async () => {

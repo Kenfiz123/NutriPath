@@ -3,6 +3,7 @@ import { Link } from "react-router";
 import { Search, X, Clock, Flame, Star, Filter, BookOpen, Users, Crown, Sparkles } from "lucide-react";
 import { generatePersonalizedRecipe, getPersonalizedRecipes, getRecipes, type PersonalizedRecipe, type PersonalizedRecipeQuestion, type Recipe } from "../api";
 import { useAuth } from "../auth";
+import { useLanguage } from "../language";
 
 type DisplayRecipe = Recipe | PersonalizedRecipe;
 
@@ -32,6 +33,7 @@ function formatCookingStep(step: string, index: number) {
 }
 
 export function Recipes() {
+  const { t } = useLanguage();
   const { session } = useAuth();
   const [search, setSearch] = useState("");
   const [activeTag, setActiveTag] = useState("Tất cả");
@@ -58,9 +60,9 @@ export function Recipes() {
         setTags(["Tất cả", ...data.tags]);
         setError(null);
       })
-      .catch((err) => setError(err instanceof Error ? err.message : "Không tải được công thức"))
+      .catch((err) => setError(err instanceof Error ? t(err.message) : t("Không tải được công thức")))
       .finally(() => setLoading(false));
-  }, [search, activeTag]);
+  }, [activeTag, search, t]);
 
   useEffect(() => {
     if (!session?.member) {
@@ -89,7 +91,7 @@ export function Recipes() {
         setSelectedRecipe(data.recipe);
       }
     } catch (err) {
-      setAiError(err instanceof Error ? err.message : "Không tạo được công thức cá nhân hóa");
+      setAiError(err instanceof Error ? t(err.message) : t("Không tạo được công thức cá nhân hóa"));
     } finally {
       setAiLoading(false);
     }
@@ -98,8 +100,8 @@ export function Recipes() {
     <div className="bg-gray-50 min-h-screen">
       <div className="max-w-[1440px] mx-auto px-8 py-8">
         <div className="mb-8">
-          <h1 className="text-gray-900 mb-1" style={{ fontSize: "1.6rem", fontWeight: 800 }}>Kho Công Thức Healthy</h1>
-          <p className="text-gray-500" style={{ fontSize: "0.9rem" }}>Công thức được tải trực tiếp từ backend</p>
+          <h1 className="text-gray-900 mb-1" style={{ fontSize: "1.6rem", fontWeight: 800 }}>{t("Kho Công Thức Healthy")}</h1>
+          <p className="text-gray-500" style={{ fontSize: "0.9rem" }}>{t("Công thức được tải trực tiếp từ backend")}</p>
         </div>
 
         <div className="bg-white rounded-2xl p-5 shadow-sm border border-gray-100 mb-8">
@@ -108,7 +110,7 @@ export function Recipes() {
               <Search className="w-4 h-4 text-gray-400 flex-shrink-0" />
               <input
                 type="text"
-                placeholder="Tìm công thức, nguyên liệu..."
+                placeholder={t("Tìm công thức, nguyên liệu...")}
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
                 className="flex-1 bg-transparent outline-none text-gray-700 placeholder-gray-400"
@@ -132,7 +134,7 @@ export function Recipes() {
                   }`}
                   style={{ fontSize: "0.85rem", fontWeight: 600 }}
                 >
-                  {tag}
+                  {t(tag)}
                 </button>
               ))}
             </div>
@@ -140,7 +142,7 @@ export function Recipes() {
           <div className="mt-3 flex items-center gap-2">
             <Filter className="w-4 h-4 text-gray-400" />
             <span className="text-gray-500" style={{ fontSize: "0.85rem" }}>
-              {loading ? "Đang tải..." : <>Tìm thấy <strong className="text-gray-900">{recipes.length}</strong> công thức</>}
+              {loading ? t("Đang tải...") : <>{t("Tìm thấy")} <strong className="text-gray-900">{recipes.length}</strong> {t("công thức")}</>}
             </span>
           </div>
         </div>
@@ -153,15 +155,15 @@ export function Recipes() {
                   <Crown className="h-4 w-4" />
                   SVIP AI Recipe
                 </div>
-                <h2 className="text-gray-900" style={{ fontSize: "1.15rem", fontWeight: 800 }}>Công Thức Cá Nhân Hóa Do AI Tạo Ra</h2>
+                <h2 className="text-gray-900" style={{ fontSize: "1.15rem", fontWeight: 800 }}>{t("Công Thức Cá Nhân Hóa Do AI Tạo Ra")}</h2>
                 <p className="mt-1 max-w-2xl text-gray-600" style={{ fontSize: "0.9rem", lineHeight: 1.6 }}>
-                  AI tạo công thức riêng cho mục tiêu, thời điểm ăn, nguyên liệu sẵn có, khối lượng từng món, macro và lưu ý an toàn.
+                  {t("AI tạo công thức riêng cho mục tiêu, thời điểm ăn, nguyên liệu sẵn có, khối lượng từng món, macro và lưu ý an toàn.")}
                 </p>
               </div>
               {!aiRecipeUnlocked && (
                 <Link to="/checkout?plan=svip&billing=monthly" className="inline-flex items-center justify-center gap-2 rounded-xl bg-amber-500 px-4 py-2.5 text-white hover:bg-amber-600" style={{ fontSize: "0.86rem", fontWeight: 800 }}>
                   <Sparkles className="h-4 w-4" />
-                  Mở khóa SVIP
+                  {t("Mở khóa SVIP")}
                 </Link>
               )}
             </div>
@@ -174,7 +176,7 @@ export function Recipes() {
                 onChange={(e) => setAiPrompt(e.target.value)}
                 rows={3}
                 className="w-full resize-none rounded-2xl border border-gray-200 bg-gray-50 p-4 text-gray-800 outline-none focus:border-green-500 focus:bg-white"
-                placeholder="Ví dụ: Tôi muốn bữa trưa giảm mỡ, nhiều protein, có ức gà và khoai lang, nấu trong 25 phút..."
+                placeholder={t("Ví dụ: Tôi muốn bữa trưa giảm mỡ, nhiều protein, có ức gà và khoai lang, nấu trong 25 phút...")}
                 style={{ fontSize: "0.92rem", lineHeight: 1.6 }}
               />
 
@@ -182,8 +184,8 @@ export function Recipes() {
                 <div className="mt-4 grid gap-3 md:grid-cols-2">
                   {aiQuestions.map((question) => (
                     <label key={question.id} className="block rounded-2xl border border-green-100 bg-green-50 p-4">
-                      <span className="block text-green-800" style={{ fontSize: "0.82rem", fontWeight: 800 }}>{question.label}</span>
-                      <span className="mt-1 block text-gray-600" style={{ fontSize: "0.8rem", lineHeight: 1.5 }}>{question.question}</span>
+                      <span className="block text-green-800" style={{ fontSize: "0.82rem", fontWeight: 800 }}>{t(question.label)}</span>
+                      <span className="mt-1 block text-gray-600" style={{ fontSize: "0.8rem", lineHeight: 1.5 }}>{t(question.question)}</span>
                       <input
                         value={aiAnswers[question.id] ?? ""}
                         onChange={(e) => setAiAnswers((current) => ({ ...current, [question.id]: e.target.value }))}
@@ -197,13 +199,13 @@ export function Recipes() {
 
               {aiError && (
                 <div className="mt-4 rounded-xl border border-red-100 bg-red-50 px-4 py-3 text-red-600" style={{ fontSize: "0.86rem", fontWeight: 600 }}>
-                  {aiError}
+                  {t(aiError)}
                 </div>
               )}
 
               <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                 <p className="text-gray-500" style={{ fontSize: "0.8rem", lineHeight: 1.5 }}>
-                  Nếu thông tin chưa đủ, AI sẽ hỏi thêm vài câu trước khi tạo công thức.
+                  {t("Nếu thông tin chưa đủ, AI sẽ hỏi thêm vài câu trước khi tạo công thức.")}
                 </p>
                 <button
                   type="button"
@@ -213,14 +215,14 @@ export function Recipes() {
                   style={{ fontSize: "0.9rem", fontWeight: 800 }}
                 >
                   <Sparkles className="h-4 w-4" />
-                  {aiLoading ? "Đang tạo..." : aiQuestions.length ? "Tạo công thức từ câu trả lời" : "Tạo công thức AI"}
+                  {t(aiLoading ? "Đang tạo..." : aiQuestions.length ? "Tạo công thức từ câu trả lời" : "Tạo công thức AI")}
                 </button>
               </div>
             </div>
           ) : (
             <div className="border-t border-amber-100 p-5">
               <p className="text-gray-600" style={{ fontSize: "0.9rem", lineHeight: 1.6 }}>
-                Tính năng này chỉ dành cho SVIP vì AI cần dùng hồ sơ dinh dưỡng nâng cao và lịch sử ăn uống để cá nhân hóa rõ hơn.
+                {t("Tính năng này chỉ dành cho SVIP vì AI cần dùng hồ sơ dinh dưỡng nâng cao và lịch sử ăn uống để cá nhân hóa rõ hơn.")}
               </p>
             </div>
           )}
@@ -228,24 +230,24 @@ export function Recipes() {
 
         {error && (
           <div className="bg-red-50 text-red-600 border border-red-100 rounded-2xl p-5 mb-8">
-            {error}
+            {t(error)}
           </div>
         )}
 
         {recipeAccess?.upgradeRequired && (
           <div className="mb-8 rounded-2xl border border-amber-200 bg-amber-50 p-5">
             <p className="text-amber-800" style={{ fontSize: "0.95rem", fontWeight: 700 }}>
-              Gói Free chỉ xem {recipeAccess.recipeLimit} công thức đầu tiên.
+              {t("Gói Free chỉ xem {limit} công thức đầu tiên.", { limit: recipeAccess.recipeLimit ?? 0 })}
             </p>
             <p className="mt-1 text-amber-700" style={{ fontSize: "0.86rem", lineHeight: 1.6 }}>
-              Hiện có {recipeAccess.totalAvailable} công thức phù hợp với bộ lọc. Nâng cấp VIP hoặc SVIP để mở toàn bộ kho công thức.
+              {t("Hiện có {count} công thức phù hợp với bộ lọc. Nâng cấp VIP hoặc SVIP để mở toàn bộ kho công thức.", { count: recipeAccess.totalAvailable })}
             </p>
             <div className="mt-4 flex gap-3">
               <Link to="/pricing" className="rounded-xl bg-amber-500 px-4 py-2.5 text-white hover:bg-amber-600" style={{ fontSize: "0.85rem", fontWeight: 700 }}>
-                Xem gói thành viên
+                {t("Xem gói thành viên")}
               </Link>
               <Link to="/checkout?plan=vip&billing=monthly" className="rounded-xl border border-amber-300 px-4 py-2.5 text-amber-700 hover:bg-amber-100" style={{ fontSize: "0.85rem", fontWeight: 700 }}>
-                Mở khóa VIP
+                {t("Mở khóa VIP")}
               </Link>
             </div>
           </div>
@@ -255,11 +257,11 @@ export function Recipes() {
           <div className="mb-8">
             <div className="mb-4 flex items-center justify-between">
               <div>
-                <h2 className="text-gray-900" style={{ fontSize: "1.05rem", fontWeight: 800 }}>Công thức AI đã lưu</h2>
-                <p className="text-gray-500" style={{ fontSize: "0.85rem" }}>Những công thức SVIP AI đã tạo sẽ nằm ở đây để xem lại sau khi đăng nhập.</p>
+                <h2 className="text-gray-900" style={{ fontSize: "1.05rem", fontWeight: 800 }}>{t("Công thức AI đã lưu")}</h2>
+                <p className="text-gray-500" style={{ fontSize: "0.85rem" }}>{t("Những công thức SVIP AI đã tạo sẽ nằm ở đây để xem lại sau khi đăng nhập.")}</p>
               </div>
               <span className="rounded-full bg-amber-50 px-3 py-1 text-amber-700 border border-amber-100" style={{ fontSize: "0.8rem", fontWeight: 800 }}>
-                {savedAiRecipes.length} món
+                {t("{count} món", { count: savedAiRecipes.length })}
               </span>
             </div>
             <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
@@ -277,11 +279,11 @@ export function Recipes() {
                         <Crown className="h-3.5 w-3.5" />
                         Saved SVIP
                       </div>
-                      <h3 className="line-clamp-2 text-gray-900" style={{ fontSize: "0.9rem", fontWeight: 800, lineHeight: 1.35 }}>{recipe.name}</h3>
+                      <h3 className="line-clamp-2 text-gray-900" style={{ fontSize: "0.9rem", fontWeight: 800, lineHeight: 1.35 }}>{t(recipe.name)}</h3>
                       <div className="mt-2 flex flex-wrap gap-2 text-gray-500" style={{ fontSize: "0.76rem" }}>
                         <span>{recipe.calories} kcal</span>
-                        <span>{recipe.timeMinutes} phút</span>
-                        <span>{recipe.mealTime}</span>
+                        <span>{recipe.timeMinutes} {t("phút")}</span>
+                        <span>{t(recipe.mealTime)}</span>
                       </div>
                     </div>
                   </div>
@@ -307,25 +309,25 @@ export function Recipes() {
                 <div className="absolute bottom-3 left-3 flex gap-1.5 flex-wrap">
                   {recipe.tags.slice(0, 2).map((tag) => (
                     <span key={tag} className="bg-green-600/90 text-white rounded-lg px-2 py-0.5" style={{ fontSize: "0.7rem", fontWeight: 600 }}>
-                      {tag}
+                      {t(tag)}
                     </span>
                   ))}
                 </div>
               </div>
               <div className="p-4">
-                <h3 className="text-gray-900 mb-3 line-clamp-2" style={{ fontSize: "0.9rem", fontWeight: 700, lineHeight: 1.4 }}>{recipe.name}</h3>
+                <h3 className="text-gray-900 mb-3 line-clamp-2" style={{ fontSize: "0.9rem", fontWeight: 700, lineHeight: 1.4 }}>{t(recipe.name)}</h3>
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-3">
                     <div className="flex items-center gap-1 text-gray-500">
                       <Clock className="w-3.5 h-3.5" />
-                      <span style={{ fontSize: "0.78rem" }}>{recipe.timeMinutes} phút</span>
+                      <span style={{ fontSize: "0.78rem" }}>{recipe.timeMinutes} {t("phút")}</span>
                     </div>
                     <div className="flex items-center gap-1 text-gray-500">
                       <Users className="w-3.5 h-3.5" />
-                      <span style={{ fontSize: "0.78rem" }}>{recipe.servings} người</span>
+                      <span style={{ fontSize: "0.78rem" }}>{recipe.servings} {t("người")}</span>
                     </div>
                   </div>
-                  <div className="flex gap-0.5" title={difficultyLabels[recipe.difficulty]}>
+                  <div className="flex gap-0.5" title={t(difficultyLabels[recipe.difficulty])}>
                     {[...Array(3)].map((_, i) => (
                       <Star key={i} className={`w-3.5 h-3.5 ${i < recipe.difficulty ? "text-yellow-400 fill-yellow-400" : "text-gray-200 fill-gray-200"}`} />
                     ))}
@@ -335,7 +337,7 @@ export function Recipes() {
                   <span>P: {recipe.nutrition.protein}g</span>
                   <span>C: {recipe.nutrition.carbs}g</span>
                   <span>F: {recipe.nutrition.fat}g</span>
-                  <span>Xơ: {recipe.nutrition.fiber}g</span>
+                  <span>{t("Xơ")}: {recipe.nutrition.fiber}g</span>
                 </div>
               </div>
             </button>
@@ -345,8 +347,8 @@ export function Recipes() {
         {!loading && recipes.length === 0 && (
           <div className="text-center py-20 text-gray-400">
             <BookOpen className="w-12 h-12 mx-auto mb-4 opacity-40" />
-            <p style={{ fontSize: "1rem", fontWeight: 600 }}>Không tìm thấy công thức phù hợp</p>
-            <p style={{ fontSize: "0.875rem" }}>Thử tìm kiếm với từ khóa khác</p>
+            <p style={{ fontSize: "1rem", fontWeight: 600 }}>{t("Không tìm thấy công thức phù hợp")}</p>
+            <p style={{ fontSize: "0.875rem" }}>{t("Thử tìm kiếm với từ khóa khác")}</p>
           </div>
         )}
       </div>
@@ -361,11 +363,11 @@ export function Recipes() {
                 <X className="w-5 h-5" />
               </button>
               <div className="absolute bottom-4 left-6 right-6">
-                <h2 className="text-white mb-2" style={{ fontSize: "1.4rem", fontWeight: 800, lineHeight: 1.3 }}>{selectedRecipe.name}</h2>
+                <h2 className="text-white mb-2" style={{ fontSize: "1.4rem", fontWeight: 800, lineHeight: 1.3 }}>{t(selectedRecipe.name)}</h2>
                 <div className="flex items-center gap-4">
-                  <div className="flex items-center gap-1.5 text-white/90"><Clock className="w-4 h-4" /><span style={{ fontSize: "0.85rem" }}>{selectedRecipe.timeMinutes} phút</span></div>
-                  <div className="flex items-center gap-1.5 text-white/90"><Flame className="w-4 h-4 text-orange-300" /><span style={{ fontSize: "0.85rem" }}>{selectedRecipe.calories} kcal/phần</span></div>
-                  <div className="flex items-center gap-1.5 text-white/90"><Users className="w-4 h-4" /><span style={{ fontSize: "0.85rem" }}>{selectedRecipe.servings} người ăn</span></div>
+                  <div className="flex items-center gap-1.5 text-white/90"><Clock className="w-4 h-4" /><span style={{ fontSize: "0.85rem" }}>{selectedRecipe.timeMinutes} {t("phút")}</span></div>
+                  <div className="flex items-center gap-1.5 text-white/90"><Flame className="w-4 h-4 text-orange-300" /><span style={{ fontSize: "0.85rem" }}>{selectedRecipe.calories} {t("kcal/phần")}</span></div>
+                  <div className="flex items-center gap-1.5 text-white/90"><Users className="w-4 h-4" /><span style={{ fontSize: "0.85rem" }}>{selectedRecipe.servings} {t("người ăn")}</span></div>
                 </div>
               </div>
             </div>
@@ -379,29 +381,29 @@ export function Recipes() {
                       SVIP AI
                     </span>
                     <span className="rounded-full bg-white px-3 py-1 text-gray-700" style={{ fontSize: "0.8rem", fontWeight: 700 }}>
-                      Thời gian ăn: {selectedRecipe.recommendedEatingTime}
+                      {t("Thời gian ăn")}: {t(selectedRecipe.recommendedEatingTime)}
                     </span>
                     <span className="rounded-full bg-white px-3 py-1 text-gray-700" style={{ fontSize: "0.8rem", fontWeight: 700 }}>
-                      Bữa: {selectedRecipe.mealTime}
+                      {t("Bữa")}: {t(selectedRecipe.mealTime)}
                     </span>
                   </div>
                   <p className="mt-3 text-gray-700" style={{ fontSize: "0.88rem", lineHeight: 1.6 }}>
-                    {selectedRecipe.personalizationSummary}
+                    {t(selectedRecipe.personalizationSummary)}
                   </p>
                 </div>
               )}
               <div className="grid grid-cols-2 gap-6 mb-6">
                 <div>
-                  <h3 className="text-gray-900 mb-4 flex items-center gap-2" style={{ fontSize: "1rem", fontWeight: 700 }}>🥗 Nguyên liệu</h3>
+                  <h3 className="text-gray-900 mb-4 flex items-center gap-2" style={{ fontSize: "1rem", fontWeight: 700 }}>🥗 {t("Nguyên liệu")}</h3>
                   <div className="space-y-2">
                     {selectedRecipe.ingredients.map((ingredient) => (
                       <div key={`${ingredient.name}-${ingredient.amount}`} className="py-1.5 border-b border-gray-50">
                         <div className="flex items-center justify-between gap-3">
-                          <span className="text-gray-700" style={{ fontSize: "0.875rem" }}>{ingredient.name}</span>
+                          <span className="text-gray-700" style={{ fontSize: "0.875rem" }}>{t(ingredient.name)}</span>
                           <span className="text-green-600 bg-green-50 px-2.5 py-0.5 rounded-lg" style={{ fontSize: "0.8rem", fontWeight: 600 }}>{ingredient.amount}</span>
                         </div>
                         {"note" in ingredient && ingredient.note && (
-                          <p className="mt-1 text-gray-400" style={{ fontSize: "0.74rem", lineHeight: 1.4 }}>{ingredient.note}</p>
+                          <p className="mt-1 text-gray-400" style={{ fontSize: "0.74rem", lineHeight: 1.4 }}>{t(ingredient.note)}</p>
                         )}
                       </div>
                     ))}
@@ -410,7 +412,7 @@ export function Recipes() {
 
                 <div>
                   <h3 className="text-gray-900 mb-4 flex items-center gap-2" style={{ fontSize: "1rem", fontWeight: 700 }}>
-                    <Flame className="w-4 h-4 text-orange-500" /> Thông tin dinh dưỡng
+                    <Flame className="w-4 h-4 text-orange-500" /> {t("Thông tin dinh dưỡng")}
                   </h3>
                   <div className="bg-gray-50 rounded-2xl p-4 space-y-3">
                     {[
@@ -421,7 +423,7 @@ export function Recipes() {
                       { label: "Chất xơ", value: `${selectedRecipe.nutrition.fiber}g`, color: "text-purple-600", bg: "bg-purple-50" },
                     ].map((item) => (
                       <div key={item.label} className="flex justify-between items-center">
-                        <span className="text-gray-600" style={{ fontSize: "0.875rem" }}>{item.label}</span>
+                        <span className="text-gray-600" style={{ fontSize: "0.875rem" }}>{t(item.label)}</span>
                         <span className={`${item.color} ${item.bg} px-3 py-0.5 rounded-lg`} style={{ fontSize: "0.875rem", fontWeight: 700 }}>{item.value}</span>
                       </div>
                     ))}
@@ -430,11 +432,11 @@ export function Recipes() {
               </div>
 
               <div className="mb-4 flex flex-col gap-1">
-                <h3 className="text-gray-900" style={{ fontSize: "1rem", fontWeight: 800 }}>Hướng dẫn nấu chi tiết</h3>
+                <h3 className="text-gray-900" style={{ fontSize: "1rem", fontWeight: 800 }}>{t("Hướng dẫn nấu chi tiết")}</h3>
                 <p className="text-gray-500" style={{ fontSize: "0.82rem", lineHeight: 1.5 }}>
-                  {isPersonalizedRecipe(selectedRecipe)
+                  {t(isPersonalizedRecipe(selectedRecipe)
                     ? "Công thức AI được trình bày theo từng thao tác, thời lượng, cách canh lửa và dấu hiệu món đã đạt."
-                    : "Làm theo thứ tự từng bước để giữ đúng hương vị, kết cấu và khẩu phần."}
+                    : "Làm theo thứ tự từng bước để giữ đúng hương vị, kết cấu và khẩu phần.")}
                 </p>
               </div>
               <div className="space-y-3">
@@ -446,8 +448,8 @@ export function Recipes() {
                         <span className="text-white" style={{ fontSize: "0.88rem", fontWeight: 800 }}>{i + 1}</span>
                       </div>
                       <div className="min-w-0 flex-1">
-                        <p className="mb-1 text-green-800" style={{ fontSize: "0.86rem", fontWeight: 800 }}>{stepContent.title}</p>
-                        <p className="whitespace-pre-line text-gray-700" style={{ fontSize: "0.9rem", lineHeight: 1.75 }}>{stepContent.detail}</p>
+                        <p className="mb-1 text-green-800" style={{ fontSize: "0.86rem", fontWeight: 800 }}>{t(stepContent.title)}</p>
+                        <p className="whitespace-pre-line text-gray-700" style={{ fontSize: "0.9rem", lineHeight: 1.75 }}>{t(stepContent.detail)}</p>
                       </div>
                     </div>
                   );
@@ -456,11 +458,11 @@ export function Recipes() {
 
               {isPersonalizedRecipe(selectedRecipe) && selectedRecipe.notes.length > 0 && (
                 <div className="mt-6 rounded-2xl border border-amber-100 bg-amber-50 p-4">
-                  <h3 className="text-amber-900 mb-3" style={{ fontSize: "0.95rem", fontWeight: 800 }}>Lưu ý riêng</h3>
+                  <h3 className="text-amber-900 mb-3" style={{ fontSize: "0.95rem", fontWeight: 800 }}>{t("Lưu ý riêng")}</h3>
                   <div className="space-y-2">
                     {selectedRecipe.notes.map((note) => (
                       <p key={note} className="text-amber-800" style={{ fontSize: "0.85rem", lineHeight: 1.55 }}>
-                        {note}
+                        {t(note)}
                       </p>
                     ))}
                   </div>
@@ -469,7 +471,7 @@ export function Recipes() {
 
               <div className="mt-5 pt-5 border-t border-gray-100 flex items-center gap-2">
                 {selectedRecipe.tags.map((tag) => (
-                  <span key={tag} className="bg-green-50 text-green-700 border border-green-100 rounded-full px-3 py-1" style={{ fontSize: "0.8rem", fontWeight: 600 }}>{tag}</span>
+                  <span key={tag} className="bg-green-50 text-green-700 border border-green-100 rounded-full px-3 py-1" style={{ fontSize: "0.8rem", fontWeight: 600 }}>{t(tag)}</span>
                 ))}
               </div>
             </div>

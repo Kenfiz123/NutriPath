@@ -11,10 +11,11 @@ interface MacroProgressProps {
 }
 
 export function MacroProgress({ items }: MacroProgressProps) {
+  const { t } = useLanguage();
   return (
     <section className="rounded-2xl border border-gray-100 bg-white p-6 shadow-sm dark:border-slate-700 dark:bg-slate-800">
       <h2 className="mb-4 text-base font-bold text-gray-900 dark:text-slate-50">
-        Dinh dưỡng đa lượng
+        {t("Dinh dưỡng đa lượng")}
       </h2>
       <div className="space-y-4">
         {items.map((item) => {
@@ -46,3 +47,4 @@ export function MacroProgress({ items }: MacroProgressProps) {
     </section>
   );
 }
+import { useLanguage } from "../../language";

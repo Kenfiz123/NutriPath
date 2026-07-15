@@ -10,6 +10,7 @@ import {
   type CalorieCalculationInput,
   type MemberPreferences,
 } from "../api";
+import { useLanguage } from "../language";
 
 type Gender = "male" | "female";
 type ActivityLevel = "sedentary" | "light" | "moderate" | "active" | "very_active";
@@ -95,11 +96,11 @@ function getFatMacro(calculation: CalorieCalculation | null) {
     || { name: "Chất béo", grams: 0, calories: 0, pct: 0 };
 }
 
-function formatSavedTime(value?: string) {
+function formatSavedTime(value: string | undefined, locale: "vi-VN" | "en-US") {
   if (!value) return "";
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return value;
-  return date.toLocaleString("vi-VN", {
+  return date.toLocaleString(locale, {
     hour: "2-digit",
     minute: "2-digit",
     day: "2-digit",
@@ -129,6 +130,7 @@ function getBodyModelMetrics(weightKg: number, heightCm: number, shape: BodyShap
 }
 
 export function CalorieCalculator() {
+  const { locale, t } = useLanguage();
   const initialInput = useMemo(() => buildInitialInput(), []);
   const [age, setAge] = useState(initialInput.age);
   const [weightKg, setWeightKg] = useState(initialInput.weightKg);
@@ -186,20 +188,20 @@ export function CalorieCalculator() {
         }
         window.dispatchEvent(new CustomEvent("nutripath:member-updated", { detail: { member: data.member } }));
 
-        setNotice(
+        setNotice(t(
           isSvip
             ? "Đã lưu hồ sơ mới nhất và chạy AI Coach SVIP để phân tích mục tiêu."
             : tier === "vip"
               ? "Đã lưu hồ sơ dinh dưỡng mới nhất. NutriBot VIP có thể dùng dữ liệu này để tư vấn sát hơn."
               : "Đã lưu hồ sơ dinh dưỡng mới nhất vào tài khoản của bạn.",
-        );
+        ));
       } else {
         const data = await requestCalorieCalculation(payload);
         setCalculation(data);
-        setNotice("Bạn đang tính nhanh ở chế độ khách. Đăng nhập để lưu vào dashboard và hồ sơ cá nhân.");
+        setNotice(t("Bạn đang tính nhanh ở chế độ khách. Đăng nhập để lưu vào dashboard và hồ sơ cá nhân."));
       }
     } catch (requestError) {
-      setError(requestError instanceof Error ? requestError.message : "Không thể tính toán lúc này.");
+      setError(requestError instanceof Error ? t(requestError.message) : t("Không thể tính toán lúc này."));
     } finally {
       setSubmitting(false);
     }
@@ -210,22 +212,22 @@ export function CalorieCalculator() {
       <div className="mx-auto max-w-[1440px] px-4 py-6 sm:px-6 lg:px-8">
         <div className="mb-6 flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
           <div>
-            <h1 className="text-gray-900" style={{ fontSize: "1.6rem", fontWeight: 800 }}>Máy Tính Calo & Dinh Dưỡng</h1>
+            <h1 className="text-gray-900" style={{ fontSize: "1.6rem", fontWeight: 800 }}>{t("Máy Tính Calo & Dinh Dưỡng")}</h1>
             <p className="mt-2 text-gray-500" style={{ fontSize: "0.95rem" }}>
-              Tính BMR, TDEE, macro bằng công thức Mifflin-St Jeor, có giới hạn an toàn và lưu snapshot mới nhất.
+              {t("Tính BMR, TDEE, macro bằng công thức Mifflin-St Jeor, có giới hạn an toàn và lưu snapshot mới nhất.")}
             </p>
             {lastSaved && (
               <p className="mt-2 text-green-700" style={{ fontSize: "0.82rem", fontWeight: 600 }}>
-                Lần lưu gần nhất: {formatSavedTime(lastSaved)}
+                {t("Lần lưu gần nhất")}: {formatSavedTime(lastSaved, locale)}
               </p>
             )}
           </div>
           <div className="max-w-xl rounded-2xl border border-green-100 bg-green-50 px-4 py-3 text-green-700" style={{ fontSize: "0.84rem", fontWeight: 600 }}>
-            {isLoggedIn
+            {t(isLoggedIn
               ? isSvip
                 ? "SVIP: sau khi tính, AI Coach sẽ phân tích mục tiêu calo, macro và bước hành động theo hồ sơ của bạn."
                 : "Dashboard sẽ cập nhật theo dữ liệu mới nhất sau mỗi lần tính."
-              : "Đăng nhập để lưu kết quả vào dashboard và cho AI dùng về sau."}
+              : "Đăng nhập để lưu kết quả vào dashboard và cho AI dùng về sau.")}
           </div>
         </div>
 
@@ -242,11 +244,11 @@ export function CalorieCalculator() {
                 <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-green-100">
                   <Calculator className="h-4 w-4 text-green-600" />
                 </span>
-                Thông tin cơ bản
+                 {t("Thông tin cơ bản")}
               </h2>
 
               <div className="mb-5">
-                <label className="mb-2 block text-gray-700" style={{ fontSize: "0.875rem", fontWeight: 600 }}>Giới tính</label>
+                <label className="mb-2 block text-gray-700" style={{ fontSize: "0.875rem", fontWeight: 600 }}>{t("Giới tính")}</label>
                 <div className="grid grid-cols-2 gap-3">
                   {([
                     { value: "male", label: "Nam" },
@@ -262,14 +264,14 @@ export function CalorieCalculator() {
                       }`}
                       style={{ fontSize: "0.9rem", fontWeight: 600 }}
                     >
-                      {item.label}
+                      {t(item.label)}
                     </button>
                   ))}
                 </div>
               </div>
 
               <div className="mb-5">
-                <label className="mb-2 block text-gray-700" style={{ fontSize: "0.875rem", fontWeight: 600 }}>Hình dáng cơ thể</label>
+                <label className="mb-2 block text-gray-700" style={{ fontSize: "0.875rem", fontWeight: 600 }}>{t("Hình dáng cơ thể")}</label>
                 <div className="grid grid-cols-2 gap-2 sm:grid-cols-5">
                   {bodyShapeOptions.map((item) => (
                     <button
@@ -283,7 +285,7 @@ export function CalorieCalculator() {
                       }`}
                       style={{ fontSize: "0.78rem", fontWeight: 700 }}
                     >
-                      {item.label}
+                      {t(item.label)}
                     </button>
                   ))}
                 </div>
@@ -301,9 +303,9 @@ export function CalorieCalculator() {
                     </div>
                   </div>
                   <div>
-                    <p className="text-gray-900" style={{ fontSize: "0.95rem", fontWeight: 800 }}>Mô phỏng theo dữ liệu nhập</p>
+                    <p className="text-gray-900" style={{ fontSize: "0.95rem", fontWeight: 800 }}>{t("Mô phỏng theo dữ liệu nhập")}</p>
                     <p className="mt-1 text-gray-600" style={{ fontSize: "0.82rem", lineHeight: 1.6 }}>
-                      {heightCm}cm • {weightKg}kg • BMI khoảng {bodyModel.bmi}. Hình này chỉ để trực quan hóa vóc dáng, không thay thế đo thành phần cơ thể.
+                      {heightCm}cm • {weightKg}kg • {t("BMI khoảng {bmi}. Hình này chỉ để trực quan hóa vóc dáng, không thay thế đo thành phần cơ thể.", { bmi: bodyModel.bmi })}
                     </p>
                   </div>
                 </div>
@@ -316,7 +318,7 @@ export function CalorieCalculator() {
                   { label: "Chiều cao", value: heightCm, setValue: setHeightCm, unit: "cm", min: 130, max: 230 },
                 ].map((field) => (
                   <div key={field.label}>
-                    <label className="mb-2 block text-gray-700" style={{ fontSize: "0.85rem", fontWeight: 600 }}>{field.label}</label>
+                    <label className="mb-2 block text-gray-700" style={{ fontSize: "0.85rem", fontWeight: 600 }}>{t(field.label)}</label>
                     <div className="relative">
                       <input
                         type="number"
@@ -327,14 +329,14 @@ export function CalorieCalculator() {
                         className="w-full rounded-xl border border-gray-200 bg-gray-50 px-3 py-2.5 text-gray-900 transition-all focus:border-green-500 focus:outline-none focus:ring-2 focus:ring-green-100"
                         style={{ fontSize: "0.95rem", fontWeight: 600 }}
                       />
-                      <span className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400" style={{ fontSize: "0.75rem" }}>{field.unit}</span>
+                      <span className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400" style={{ fontSize: "0.75rem" }}>{t(field.unit)}</span>
                     </div>
                   </div>
                 ))}
               </div>
 
               <div>
-                <label className="mb-2 block text-gray-700" style={{ fontSize: "0.875rem", fontWeight: 600 }}>Mức độ hoạt động</label>
+                <label className="mb-2 block text-gray-700" style={{ fontSize: "0.875rem", fontWeight: 600 }}>{t("Mức độ hoạt động")}</label>
                 <div className="space-y-2">
                   {activityLevels.map((item) => (
                     <button
@@ -347,8 +349,8 @@ export function CalorieCalculator() {
                       }`}
                     >
                       <span>
-                        <span className={`block ${activityLevel === item.value ? "text-green-700" : "text-gray-800"}`} style={{ fontSize: "0.875rem", fontWeight: 600 }}>{item.label}</span>
-                        <span className="block text-gray-500" style={{ fontSize: "0.75rem" }}>{item.desc}</span>
+                        <span className={`block ${activityLevel === item.value ? "text-green-700" : "text-gray-800"}`} style={{ fontSize: "0.875rem", fontWeight: 600 }}>{t(item.label)}</span>
+                        <span className="block text-gray-500" style={{ fontSize: "0.75rem" }}>{t(item.desc)}</span>
                       </span>
                       <span className={activityLevel === item.value ? "text-green-600" : "text-gray-400"} style={{ fontSize: "0.8rem", fontWeight: 700 }}>
                         x{item.multiplier}
@@ -360,7 +362,7 @@ export function CalorieCalculator() {
             </div>
 
             <div className="rounded-2xl border border-gray-100 bg-white p-6 shadow-sm">
-              <h2 className="mb-4 text-gray-900" style={{ fontSize: "1.05rem", fontWeight: 700 }}>Mục tiêu</h2>
+              <h2 className="mb-4 text-gray-900" style={{ fontSize: "1.05rem", fontWeight: 700 }}>{t("Mục tiêu")}</h2>
               <div className="grid grid-cols-3 gap-3">
                 {([
                   { value: "lose", label: "Giảm cân", icon: TrendingDown, active: "border-blue-500 bg-blue-50 text-blue-600" },
@@ -375,7 +377,7 @@ export function CalorieCalculator() {
                     }`}
                   >
                     <Icon className="h-5 w-5" />
-                    <span style={{ fontSize: "0.85rem", fontWeight: 600 }}>{label}</span>
+                    <span style={{ fontSize: "0.85rem", fontWeight: 600 }}>{t(label)}</span>
                   </button>
                 ))}
               </div>
@@ -384,11 +386,11 @@ export function CalorieCalculator() {
             <div className="rounded-2xl border border-gray-100 bg-white p-6 shadow-sm">
               <h2 className="mb-4 flex items-center gap-2 text-gray-900" style={{ fontSize: "1.05rem", fontWeight: 700 }}>
                 <Dumbbell className="h-5 w-5 text-green-600" />
-                Bài tập tham chiếu
+                {t("Bài tập tham chiếu")}
               </h2>
               <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                 <div>
-                  <label className="mb-2 block text-gray-700" style={{ fontSize: "0.85rem", fontWeight: 600 }}>Loại bài tập</label>
+                  <label className="mb-2 block text-gray-700" style={{ fontSize: "0.85rem", fontWeight: 600 }}>{t("Loại bài tập")}</label>
                   <select
                     value={exerciseType}
                     onChange={(event) => setExerciseType(event.target.value)}
@@ -396,12 +398,12 @@ export function CalorieCalculator() {
                     style={{ fontSize: "0.875rem" }}
                   >
                     {exerciseTypes.map((item) => (
-                      <option key={item.value} value={item.value}>{item.label}</option>
+                      <option key={item.value} value={item.value}>{t(item.label)}</option>
                     ))}
                   </select>
                 </div>
                 <div>
-                  <label className="mb-2 block text-gray-700" style={{ fontSize: "0.85rem", fontWeight: 600 }}>Thời gian</label>
+                  <label className="mb-2 block text-gray-700" style={{ fontSize: "0.85rem", fontWeight: 600 }}>{t("Thời gian")}</label>
                   <div className="relative">
                     <input
                       type="number"
@@ -412,7 +414,7 @@ export function CalorieCalculator() {
                       className="w-full rounded-xl border border-gray-200 bg-gray-50 px-3 py-2.5 text-gray-800 transition-all focus:border-green-500 focus:outline-none"
                       style={{ fontSize: "0.875rem" }}
                     />
-                    <span className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400" style={{ fontSize: "0.75rem" }}>phút</span>
+                    <span className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400" style={{ fontSize: "0.75rem" }}>{t("phút")}</span>
                   </div>
                 </div>
               </div>
@@ -426,7 +428,7 @@ export function CalorieCalculator() {
             >
               <span className="flex items-center justify-center gap-2">
                 <Calculator className="h-5 w-5" />
-                {submitting ? "Đang tính và lưu..." : "Tính Toán Ngay"}
+                {t(submitting ? "Đang tính và lưu..." : "Tính Toán Ngay")}
               </span>
             </button>
           </div>
@@ -437,9 +439,9 @@ export function CalorieCalculator() {
                 <div className="mb-6 flex h-20 w-20 items-center justify-center rounded-full bg-green-50">
                   <Calculator className="h-10 w-10 text-green-400" />
                 </div>
-                <h3 className="mb-2 text-gray-700" style={{ fontSize: "1.1rem", fontWeight: 700 }}>Sẵn sàng tính toán?</h3>
+                <h3 className="mb-2 text-gray-700" style={{ fontSize: "1.1rem", fontWeight: 700 }}>{t("Sẵn sàng tính toán?")}</h3>
                 <p className="max-w-xs text-gray-400" style={{ fontSize: "0.9rem" }}>
-                  Điền thông tin bên trái để xem kết quả chi tiết và lưu hồ sơ mới nhất của bạn.
+                  {t("Điền thông tin bên trái để xem kết quả chi tiết và lưu hồ sơ mới nhất của bạn.")}
                 </p>
               </div>
             ) : (
@@ -465,15 +467,15 @@ export function CalorieCalculator() {
                       value: calculation.results.calorieGoal,
                       desc: calculation.results.goalDelta === 0
                         ? "Duy trì cân nặng"
-                        : `${calculation.results.goalDelta > 0 ? "+" : ""}${calculation.results.goalDelta} so với TDEE`,
+                        : t("{delta} so với TDEE", { delta: `${calculation.results.goalDelta > 0 ? "+" : ""}${calculation.results.goalDelta}` }),
                       color: "bg-green-50 border-green-100",
                       valueColor: "text-green-600",
                     },
                   ].map((item) => (
                     <div key={item.label} className={`rounded-2xl border p-5 text-center ${item.color}`}>
-                      <p className={item.valueColor} style={{ fontSize: "1.8rem", fontWeight: 800 }}>{item.value.toLocaleString("vi-VN")}</p>
-                      <p className="mt-1 text-gray-900" style={{ fontSize: "0.9rem", fontWeight: 700 }}>{item.label}</p>
-                      <p className="mt-1 text-gray-500" style={{ fontSize: "0.75rem" }}>{item.desc}</p>
+                      <p className={item.valueColor} style={{ fontSize: "1.8rem", fontWeight: 800 }}>{item.value.toLocaleString(locale)}</p>
+                      <p className="mt-1 text-gray-900" style={{ fontSize: "0.9rem", fontWeight: 700 }}>{t(item.label)}</p>
+                      <p className="mt-1 text-gray-500" style={{ fontSize: "0.75rem" }}>{t(item.desc)}</p>
                     </div>
                   ))}
                 </div>
@@ -481,17 +483,17 @@ export function CalorieCalculator() {
                 <div className="rounded-2xl border border-emerald-100 bg-white p-6 shadow-sm">
                   <h3 className="mb-3 flex items-center gap-2 text-gray-900" style={{ fontSize: "1rem", fontWeight: 700 }}>
                     <ShieldCheck className="h-5 w-5 text-emerald-600" />
-                    Độ tin cậy & giới hạn an toàn
+                    {t("Độ tin cậy & giới hạn an toàn")}
                   </h3>
                   <p className="text-gray-600" style={{ fontSize: "0.86rem", lineHeight: 1.6 }}>
-                    Công thức: {calculation.results.formula ?? "Mifflin-St Jeor"}. {calculation.results.accuracy?.note ?? "Kết quả là ước lượng và có thể thay đổi theo cơ địa, vận động và sức khỏe."}
+                    {t("Công thức")}: {calculation.results.formula ?? "Mifflin-St Jeor"}. {t(calculation.results.accuracy?.note ?? "Kết quả là ước lượng và có thể thay đổi theo cơ địa, vận động và sức khỏe.")}
                   </p>
                   {!!calculation.results.warnings?.length && (
                     <div className="mt-4 space-y-2">
                       {calculation.results.warnings.map((warning) => (
                         <div key={warning} className="flex gap-2 rounded-xl bg-amber-50 px-3 py-2 text-amber-800">
                           <AlertTriangle className="mt-0.5 h-4 w-4 flex-shrink-0" />
-                          <span style={{ fontSize: "0.8rem", lineHeight: 1.45 }}>{warning}</span>
+                          <span style={{ fontSize: "0.8rem", lineHeight: 1.45 }}>{t(warning)}</span>
                         </div>
                       ))}
                     </div>
@@ -499,7 +501,7 @@ export function CalorieCalculator() {
                 </div>
 
                 <div className="rounded-2xl border border-gray-100 bg-white p-6 shadow-sm">
-                  <h3 className="mb-5 text-gray-900" style={{ fontSize: "1rem", fontWeight: 700 }}>Phân chia dinh dưỡng đa lượng</h3>
+                  <h3 className="mb-5 text-gray-900" style={{ fontSize: "1rem", fontWeight: 700 }}>{t("Phân chia dinh dưỡng đa lượng")}</h3>
                   <div className="grid grid-cols-1 items-center gap-6 md:grid-cols-2">
                     <ResponsiveContainer width="100%" height={220}>
                       <PieChart>
@@ -508,7 +510,7 @@ export function CalorieCalculator() {
                             <Cell key={index} fill={MACRO_COLORS[index]} />
                           ))}
                         </Pie>
-                        <Tooltip formatter={(value: number) => [`${value} kcal`, "Năng lượng"]} />
+                        <Tooltip formatter={(value: number) => [`${value} kcal`, t("Năng lượng")]} />
                       </PieChart>
                     </ResponsiveContainer>
                     <div className="space-y-4">
@@ -517,7 +519,7 @@ export function CalorieCalculator() {
                           <div className="h-3 w-3 flex-shrink-0 rounded-full" style={{ backgroundColor: MACRO_COLORS[index] }} />
                           <div className="flex-1">
                             <div className="mb-1 flex justify-between">
-                              <span className="text-gray-700" style={{ fontSize: "0.875rem", fontWeight: 600 }}>{item.name}</span>
+                              <span className="text-gray-700" style={{ fontSize: "0.875rem", fontWeight: 600 }}>{t(item.name)}</span>
                               <span className="text-gray-900" style={{ fontSize: "0.875rem", fontWeight: 700 }}>{item.grams}g</span>
                             </div>
                             <div className="h-2 w-full rounded-full bg-gray-100">
@@ -539,7 +541,7 @@ export function CalorieCalculator() {
                     </h3>
                     {calculation.aiInsight ? (
                       <div className="space-y-4">
-                        <p className="text-slate-100" style={{ fontSize: "0.92rem", lineHeight: 1.65 }}>{calculation.aiInsight.summary}</p>
+                        <p className="text-slate-100" style={{ fontSize: "0.92rem", lineHeight: 1.65 }}>{t(calculation.aiInsight.summary)}</p>
                         <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
                           {[
                             { label: "Calo", value: calculation.aiInsight.calorieStrategy },
@@ -547,23 +549,23 @@ export function CalorieCalculator() {
                             { label: "Thời điểm ăn", value: calculation.aiInsight.mealTiming },
                           ].map((item) => (
                             <div key={item.label} className="rounded-xl bg-white/10 p-3">
-                              <p className="text-amber-200" style={{ fontSize: "0.76rem", fontWeight: 800 }}>{item.label}</p>
-                              <p className="mt-1 text-slate-100" style={{ fontSize: "0.8rem", lineHeight: 1.45 }}>{item.value}</p>
+                              <p className="text-amber-200" style={{ fontSize: "0.76rem", fontWeight: 800 }}>{t(item.label)}</p>
+                              <p className="mt-1 text-slate-100" style={{ fontSize: "0.8rem", lineHeight: 1.45 }}>{t(item.value)}</p>
                             </div>
                           ))}
                         </div>
                         <div>
-                          <p className="mb-2 text-amber-200" style={{ fontSize: "0.8rem", fontWeight: 800 }}>Bước hành động</p>
+                          <p className="mb-2 text-amber-200" style={{ fontSize: "0.8rem", fontWeight: 800 }}>{t("Bước hành động")}</p>
                           <ul className="space-y-2">
                             {calculation.aiInsight.actionSteps.map((step) => (
-                              <li key={step} className="rounded-xl bg-white/10 px-3 py-2 text-slate-100" style={{ fontSize: "0.82rem" }}>{step}</li>
+                              <li key={step} className="rounded-xl bg-white/10 px-3 py-2 text-slate-100" style={{ fontSize: "0.82rem" }}>{t(step)}</li>
                             ))}
                           </ul>
                         </div>
                       </div>
                     ) : (
                       <p className="text-slate-300" style={{ fontSize: "0.88rem" }}>
-                        Bấm tính để AI Coach SVIP phân tích kết quả theo hồ sơ, mục tiêu và nhật ký bữa ăn mới nhất.
+                        {t("Bấm tính để AI Coach SVIP phân tích kết quả theo hồ sơ, mục tiêu và nhật ký bữa ăn mới nhất.")}
                       </p>
                     )}
                   </div>
@@ -574,38 +576,38 @@ export function CalorieCalculator() {
                       AI Coach SVIP
                     </h3>
                     <p className="text-gray-500" style={{ fontSize: "0.86rem", lineHeight: 1.6 }}>
-                      Nâng lên SVIP để AI phân tích mục tiêu calo, macro, thời điểm ăn và bước hành động cá nhân hóa sau mỗi lần tính.
+                      {t("Nâng lên SVIP để AI phân tích mục tiêu calo, macro, thời điểm ăn và bước hành động cá nhân hóa sau mỗi lần tính.")}
                     </p>
                   </div>
                 )}
 
                 <div className="rounded-2xl border border-gray-100 bg-white p-6 shadow-sm">
-                  <h3 className="mb-4 text-gray-900" style={{ fontSize: "1rem", fontWeight: 700 }}>Chỉ số BMI</h3>
+                  <h3 className="mb-4 text-gray-900" style={{ fontSize: "1rem", fontWeight: 700 }}>{t("Chỉ số BMI")}</h3>
                   <div className="flex items-end gap-3">
                     <span className="text-green-600" style={{ fontSize: "2.5rem", fontWeight: 800 }}>{calculation.results.bmi.value}</span>
-                    <span className="mb-1 text-green-600" style={{ fontSize: "1rem", fontWeight: 600 }}>{calculation.results.bmi.label}</span>
+                    <span className="mb-1 text-green-600" style={{ fontSize: "1rem", fontWeight: 600 }}>{t(calculation.results.bmi.label)}</span>
                   </div>
                   <p className="mt-3 text-gray-500" style={{ fontSize: "0.82rem", lineHeight: 1.6 }}>
-                    BMI chỉ là chỉ số tham khảo nhanh từ chiều cao và cân nặng, không phản ánh đầy đủ tỷ lệ cơ, mỡ hay tình trạng sức khỏe.
+                    {t("BMI chỉ là chỉ số tham khảo nhanh từ chiều cao và cân nặng, không phản ánh đầy đủ tỷ lệ cơ, mỡ hay tình trạng sức khỏe.")}
                   </p>
                 </div>
 
                 <div className="rounded-2xl border border-gray-100 bg-white p-6 shadow-sm">
                   <h3 className="mb-4 flex items-center gap-2 text-gray-900" style={{ fontSize: "1rem", fontWeight: 700 }}>
                     <Flame className="h-5 w-5 text-orange-500" />
-                    Calo đốt khi tập
+                    {t("Calo đốt khi tập")}
                   </h3>
                   <div className="flex items-center gap-4 rounded-2xl border border-orange-100 bg-orange-50 p-5">
                     <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-orange-100">
                       <Flame className="h-8 w-8 text-orange-500" />
                     </div>
                     <div>
-                      <p className="mb-1 text-gray-600" style={{ fontSize: "0.85rem" }}>{exerciseLabel} trong {durationMinutes} phút</p>
+                      <p className="mb-1 text-gray-600" style={{ fontSize: "0.85rem" }}>{t("{exercise} trong {minutes} phút", { exercise: t(exerciseLabel), minutes: durationMinutes })}</p>
                       <p className="text-orange-600" style={{ fontSize: "1.8rem", fontWeight: 800 }}>
                         {calculation.results.exercise.burnedCalories} <span className="text-gray-500" style={{ fontSize: "1rem", fontWeight: 500 }}>kcal</span>
                       </p>
                       <p className="text-gray-500" style={{ fontSize: "0.8rem" }}>
-                        Tương đương khoảng {calculation.results.exercise.fatEquivalentGrams}g chất béo đốt cháy.
+                        {t("Tương đương khoảng {grams}g chất béo đốt cháy.", { grams: calculation.results.exercise.fatEquivalentGrams })}
                       </p>
                     </div>
                   </div>

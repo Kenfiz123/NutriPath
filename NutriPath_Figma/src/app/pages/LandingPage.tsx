@@ -4,10 +4,16 @@ import {
   CheckCircle, Zap, TrendingUp, ChevronRight, Play, Check,
   Crown, Star, Sparkles, Shield, Bot, Unlock, Gift, Users
 } from "lucide-react";
+import { useLanguage } from "../language";
 
 const heroImg = "https://images.unsplash.com/photo-1719677775416-1dd6a93f1a73?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3Nzg4Nzd8MHwxfHNlYXJjaHwxfHxoZWFsdGh5JTIwZm9vZCUyMGNvbG9yZnVsJTIwYm93bHMlMjBudXRyaXRpb258ZW58MXx8fHwxNzczNDA4NTU3fDA&ixlib=rb-4.1.0&q=80&w=1080";
 const smoothieImg = "https://images.unsplash.com/photo-1594916107106-4837e3ed0e6e?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3Nzg4Nzd8MHwxfHNlYXJjaHwxfHxncmVlbiUyMHNtb290aGllJTIwYm93bCUyMGJyZWFrZmFzdCUyMGhlYWx0aHl8ZW58MXx8fHwxNzczNDA4NTU3fDA&ixlib=rb-4.1.0&q=80&w=400";
 const chickenImg = "https://images.unsplash.com/photo-1760888549075-0b9727e07735?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3Nzg4Nzd8MHwxfHNlYXJjaHwxfHxncmlsbGVkJTIwY2hpY2tlbiUyMHNhbGFkJTIwcHJvdGVpbiUyMG1lYWx8ZW58MXx8fHwxNzczNDA4NTU3fDA&ixlib=rb-4.1.0&q=80&w=400";
+
+function LocalizedText({ text }: { text: string }) {
+  const { t } = useLanguage();
+  return <>{t(text)}</>;
+}
 
 const features = [
   {
@@ -20,7 +26,7 @@ const features = [
     preview: (
       <div className="mt-3 bg-white rounded-xl p-3 border border-blue-100">
         <div className="flex justify-between items-center mb-2">
-          <span className="text-gray-500" style={{ fontSize: "0.75rem" }}>TDEE hôm nay</span>
+          <span className="text-gray-500" style={{ fontSize: "0.75rem" }}><LocalizedText text="TDEE hôm nay" /></span>
           <span className="text-blue-600" style={{ fontSize: "0.75rem", fontWeight: 600 }}>2,150 kcal</span>
         </div>
         <div className="w-full bg-gray-100 rounded-full h-2 mb-2">
@@ -51,10 +57,10 @@ const features = [
     preview: (
       <div className="mt-3 space-y-2">
         <div className="bg-white rounded-2xl rounded-tl-sm px-3 py-2 border border-gray-100 text-gray-700 w-fit" style={{ fontSize: "0.78rem" }}>
-          Tôi muốn ăn gì tốt cho sức khỏe? 🥗
+          <LocalizedText text="Tôi muốn ăn gì tốt cho sức khỏe? 🥗" />
         </div>
         <div className="bg-green-600 rounded-2xl rounded-tr-sm px-3 py-2 text-white ml-auto w-fit" style={{ fontSize: "0.78rem" }}>
-          Gợi ý: Cháo gà + rau muống xào... ✨
+          <LocalizedText text="Gợi ý: Cháo gà + rau muống xào... ✨" />
         </div>
         <div className="flex gap-1">
           <span className="w-1.5 h-1.5 bg-green-400 rounded-full animate-bounce"></span>
@@ -77,14 +83,14 @@ const features = [
         <div className="rounded-xl overflow-hidden">
           <img src={smoothieImg} alt="recipe" className="w-full h-16 object-cover" />
           <div className="bg-white px-2 py-1 border border-orange-100">
-            <p className="text-gray-700 truncate" style={{ fontSize: "0.7rem", fontWeight: 500 }}>Cháo Gà Gừng</p>
+            <p className="text-gray-700 truncate" style={{ fontSize: "0.7rem", fontWeight: 500 }}><LocalizedText text="Cháo Gà Gừng" /></p>
             <p className="text-orange-500" style={{ fontSize: "0.65rem" }}>280 kcal</p>
           </div>
         </div>
         <div className="rounded-xl overflow-hidden">
           <img src={chickenImg} alt="recipe" className="w-full h-16 object-cover" />
           <div className="bg-white px-2 py-1 border border-orange-100">
-            <p className="text-gray-700 truncate" style={{ fontSize: "0.7rem", fontWeight: 500 }}>Cơm Tấm Sườn Nướng</p>
+            <p className="text-gray-700 truncate" style={{ fontSize: "0.7rem", fontWeight: 500 }}><LocalizedText text="Cơm Tấm Sườn Nướng" /></p>
             <p className="text-orange-500" style={{ fontSize: "0.65rem" }}>450 kcal</p>
           </div>
         </div>
@@ -107,7 +113,7 @@ const features = [
           { meal: "Bữa tối", kcal: 0, color: "bg-gray-200", pct: 0 },
         ].map((item) => (
           <div key={item.meal} className="flex items-center gap-2">
-            <span className="text-gray-600 w-20" style={{ fontSize: "0.72rem" }}>{item.meal}</span>
+            <span className="text-gray-600 w-20" style={{ fontSize: "0.72rem" }}><LocalizedText text={item.meal} /></span>
             <div className="flex-1 bg-gray-100 rounded-full h-1.5">
               <div className={`${item.color} h-1.5 rounded-full transition-all`} style={{ width: `${item.pct}%` }}></div>
             </div>
@@ -226,6 +232,8 @@ const membershipTiers = [
 ];
 
 export function LandingPage() {
+  const { t } = useLanguage();
+
   return (
     <div className="min-h-screen bg-white">
       {/* HERO SECTION */}
@@ -247,17 +255,17 @@ export function LandingPage() {
             <div className="text-white">
               <div className="inline-flex items-center gap-2 bg-white/10 border border-white/20 rounded-full px-4 py-1.5 mb-6">
                 <Leaf className="w-4 h-4 text-green-300" />
-                <span style={{ fontSize: "0.85rem", fontWeight: 500 }}>Trợ lý dinh dưỡng AI #1 Việt Nam</span>
+                <span style={{ fontSize: "0.85rem", fontWeight: 500 }}>{t("Trợ lý dinh dưỡng AI #1 Việt Nam")}</span>
               </div>
               <h1
                 className="text-white mb-4"
                 style={{ fontSize: "clamp(2.5rem, 4vw, 4rem)", fontWeight: 800, lineHeight: 1.15 }}
               >
-                Ăn Healthy —<br />
-                <span className="text-green-200">Sống Khỏe</span> Mỗi Ngày
+                {t("Ăn Healthy —")}<br />
+                <span className="text-green-200">{t("Sống Khỏe")}</span> {t("Mỗi Ngày")}
               </h1>
               <p className="text-green-100 mb-8 max-w-lg" style={{ fontSize: "1.1rem", lineHeight: 1.7 }}>
-                NutriPath là trợ lý dinh dưỡng thông minh giúp bạn tính toán calo, lên kế hoạch bữa ăn và đạt mục tiêu sức khỏe với sự hỗ trợ của trí tuệ nhân tạo.
+                {t("NutriPath là trợ lý dinh dưỡng thông minh giúp bạn tính toán calo, lên kế hoạch bữa ăn và đạt mục tiêu sức khỏe với sự hỗ trợ của trí tuệ nhân tạo.")}
               </p>
               <div className="flex flex-wrap gap-4 mb-10">
                 <Link
@@ -265,19 +273,19 @@ export function LandingPage() {
                   className="flex items-center gap-2 bg-white text-green-700 px-8 py-3.5 rounded-2xl hover:bg-green-50 transition-all shadow-xl"
                   style={{ fontSize: "1rem", fontWeight: 700 }}
                 >
-                  Bắt Đầu Miễn Phí
+                  {t("Bắt Đầu Miễn Phí")}
                   <ArrowRight className="w-5 h-5" />
                 </Link>
                 <a href="#features" className="flex items-center gap-2 bg-white/10 border border-white/30 text-white px-6 py-3.5 rounded-2xl hover:bg-white/20 transition-all">
                   <Play className="w-5 h-5" />
-                  <span style={{ fontSize: "1rem", fontWeight: 500 }}>Xem Demo</span>
+                  <span style={{ fontSize: "1rem", fontWeight: 500 }}>{t("Xem Demo")}</span>
                 </a>
               </div>
               <div className="flex flex-wrap gap-x-6 gap-y-2">
                 {["Dùng thử 14 ngày miễn phí", "Không cần thẻ tín dụng", "Hủy bất cứ lúc nào"].map((item) => (
                   <div key={item} className="flex items-center gap-1.5 text-green-200">
                     <CheckCircle className="w-4 h-4 text-green-300" />
-                    <span style={{ fontSize: "0.875rem" }}>{item}</span>
+                    <span style={{ fontSize: "0.875rem" }}>{t(item)}</span>
                   </div>
                 ))}
               </div>
@@ -293,12 +301,12 @@ export function LandingPage() {
                     <TrendingUp className="w-5 h-5 text-green-600" />
                   </div>
                   <div>
-                    <p className="text-gray-500" style={{ fontSize: "0.72rem" }}>Tiến trình tuần này</p>
+                    <p className="text-gray-500" style={{ fontSize: "0.72rem" }}>{t("Tiến trình tuần này")}</p>
                     <p className="text-gray-900" style={{ fontSize: "1rem", fontWeight: 700 }}>-0.8 kg 🎉</p>
                   </div>
                 </div>
                 <div className="absolute -right-6 bottom-12 bg-white rounded-2xl shadow-xl p-4">
-                  <p className="text-gray-500 mb-1" style={{ fontSize: "0.72rem" }}>Hôm nay</p>
+                  <p className="text-gray-500 mb-1" style={{ fontSize: "0.72rem" }}>{t("Hôm nay")}</p>
                   <div className="flex items-end gap-1">
                     <span className="text-green-600" style={{ fontSize: "1.4rem", fontWeight: 800 }}>1,340</span>
                     <span className="text-gray-400 mb-0.5" style={{ fontSize: "0.8rem" }}>/ 1,800 kcal</span>
@@ -324,10 +332,10 @@ export function LandingPage() {
       <section id="features" className="bg-gray-50 py-20">
         <div className="max-w-[1440px] mx-auto px-8">
           <div className="text-center mb-12">
-            <span className="inline-block bg-green-100 text-green-700 rounded-full px-4 py-1.5 mb-4" style={{ fontSize: "0.875rem", fontWeight: 600 }}>Tính năng nổi bật</span>
-            <h2 className="text-gray-900 mb-4" style={{ fontSize: "2.2rem", fontWeight: 800 }}>Mọi thứ bạn cần để<br /><span className="text-green-600">sống khỏe hơn</span></h2>
+            <span className="inline-block bg-green-100 text-green-700 rounded-full px-4 py-1.5 mb-4" style={{ fontSize: "0.875rem", fontWeight: 600 }}>{t("Tính năng nổi bật")}</span>
+            <h2 className="text-gray-900 mb-4" style={{ fontSize: "2.2rem", fontWeight: 800 }}>{t("Mọi thứ bạn cần để")}<br /><span className="text-green-600">{t("sống khỏe hơn")}</span></h2>
             <p className="text-gray-500 max-w-xl mx-auto" style={{ fontSize: "1rem", lineHeight: 1.7 }}>
-              Từ tính toán dinh dưỡng đến gợi ý công thức — NutriPath là người bạn đồng hành hoàn hảo trên hành trình sức khỏe.
+              {t("Từ tính toán dinh dưỡng đến gợi ý công thức — NutriPath là người bạn đồng hành hoàn hảo trên hành trình sức khỏe.")}
             </p>
           </div>
           <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-6">
@@ -340,11 +348,11 @@ export function LandingPage() {
                 <div className={`w-12 h-12 ${iconBg} rounded-2xl flex items-center justify-center mb-4`}>
                   <Icon className={`w-6 h-6 ${iconColor}`} />
                 </div>
-                <h3 className="text-gray-900 mb-2" style={{ fontSize: "1.05rem", fontWeight: 700 }}>{title}</h3>
-                <p className="text-gray-500" style={{ fontSize: "0.875rem", lineHeight: 1.6 }}>{desc}</p>
+                <h3 className="text-gray-900 mb-2" style={{ fontSize: "1.05rem", fontWeight: 700 }}>{t(title)}</h3>
+                <p className="text-gray-500" style={{ fontSize: "0.875rem", lineHeight: 1.6 }}>{t(desc)}</p>
                 {preview}
                 <div className={`mt-4 flex items-center gap-1 ${iconColor} group-hover:gap-2 transition-all`} style={{ fontSize: "0.875rem", fontWeight: 600 }}>
-                  Khám phá ngay <ChevronRight className="w-4 h-4" />
+                  {t("Khám phá ngay")} <ChevronRight className="w-4 h-4" />
                 </div>
               </Link>
             ))}
@@ -356,8 +364,8 @@ export function LandingPage() {
       <section className="bg-white py-20">
         <div className="max-w-[1440px] mx-auto px-8">
           <div className="text-center mb-12">
-            <span className="inline-block bg-green-100 text-green-700 rounded-full px-4 py-1.5 mb-4" style={{ fontSize: "0.875rem", fontWeight: 600 }}>Cách thức hoạt động</span>
-            <h2 className="text-gray-900" style={{ fontSize: "2.2rem", fontWeight: 800 }}>Bắt đầu chỉ trong <span className="text-green-600">3 bước đơn giản</span></h2>
+            <span className="inline-block bg-green-100 text-green-700 rounded-full px-4 py-1.5 mb-4" style={{ fontSize: "0.875rem", fontWeight: 600 }}>{t("Cách thức hoạt động")}</span>
+            <h2 className="text-gray-900" style={{ fontSize: "2.2rem", fontWeight: 800 }}>{t("Bắt đầu chỉ trong")} <span className="text-green-600">{t("3 bước đơn giản")}</span></h2>
           </div>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
             {steps.map((step, i) => (
@@ -368,8 +376,8 @@ export function LandingPage() {
                 <div className={`relative z-10 w-16 h-16 ${step.color} rounded-2xl flex items-center justify-center mx-auto mb-5 shadow-lg`}>
                   <span className="text-white" style={{ fontSize: "1.3rem", fontWeight: 800 }}>{step.number}</span>
                 </div>
-                <h3 className="text-gray-900 mb-3" style={{ fontSize: "1.1rem", fontWeight: 700 }}>{step.title}</h3>
-                <p className="text-gray-500 mx-auto max-w-xs" style={{ fontSize: "0.9rem", lineHeight: 1.7 }}>{step.desc}</p>
+                <h3 className="text-gray-900 mb-3" style={{ fontSize: "1.1rem", fontWeight: 700 }}>{t(step.title)}</h3>
+                <p className="text-gray-500 mx-auto max-w-xs" style={{ fontSize: "0.9rem", lineHeight: 1.7 }}>{t(step.desc)}</p>
               </div>
             ))}
           </div>
@@ -387,13 +395,13 @@ export function LandingPage() {
           <div className="text-center mb-14">
             <span className="inline-flex items-center gap-2 bg-green-100 text-green-700 rounded-full px-4 py-1.5 mb-4" style={{ fontSize: "0.875rem", fontWeight: 600 }}>
               <Users className="w-4 h-4" />
-              Hệ thống thành viên
+              {t("Hệ thống thành viên")}
             </span>
             <h2 className="text-gray-900 mb-4" style={{ fontSize: "2.2rem", fontWeight: 800 }}>
-              Chọn hành trình <span className="text-green-600">phù hợp</span> với bạn
+              {t("Chọn hành trình")} <span className="text-green-600">{t("phù hợp")}</span> {t("với bạn")}
             </h2>
             <p className="text-gray-500 max-w-2xl mx-auto" style={{ fontSize: "1rem", lineHeight: 1.7 }}>
-              Từ người mới bắt đầu đến chuyên gia sức khỏe — NutriPath có gói thành viên dành riêng cho mọi mục tiêu và lối sống.
+              {t("Từ người mới bắt đầu đến chuyên gia sức khỏe — NutriPath có gói thành viên dành riêng cho mọi mục tiêu và lối sống.")}
             </p>
           </div>
 
@@ -409,7 +417,7 @@ export function LandingPage() {
                 {tier.ribbon && (
                   <div className="absolute top-4 right-4 z-10">
                     <span className={`${tier.badgeBg} ${tier.badgeText} px-3 py-1 rounded-full`} style={{ fontSize: "0.7rem", fontWeight: 700 }}>
-                      {tier.ribbon}
+                      {t(tier.ribbon)}
                     </span>
                   </div>
                 )}
@@ -421,7 +429,7 @@ export function LandingPage() {
                   </div>
                   <div className="mb-1">
                     <span className={`inline-block ${tier.id === "vip" ? "bg-white/20 text-white" : tier.id === "svip" ? "bg-yellow-500/20 text-yellow-300" : "bg-green-100 text-green-600"} px-2.5 py-0.5 rounded-full`} style={{ fontSize: "0.72rem", fontWeight: 600 }}>
-                      {tier.badge}
+                      {t(tier.badge)}
                     </span>
                   </div>
                   <h3
@@ -434,7 +442,7 @@ export function LandingPage() {
                     className={tier.id === "vip" ? "text-green-100" : tier.id === "svip" ? "text-slate-400" : "text-gray-500"}
                     style={{ fontSize: "0.85rem", marginTop: "4px" }}
                   >
-                    {tier.tagline}
+                    {t(tier.tagline)}
                   </p>
 
                   {/* Price */}
@@ -450,7 +458,7 @@ export function LandingPage() {
                         className={tier.id === "vip" ? "text-green-200" : tier.id === "svip" ? "text-slate-400" : "text-gray-400"}
                         style={{ fontSize: "0.85rem", marginBottom: "3px" }}
                       >
-                        {tier.period}
+                        {t(tier.period)}
                       </span>
                     )}
                   </div>
@@ -462,7 +470,7 @@ export function LandingPage() {
                     className={tier.id === "svip" ? "text-slate-400" : "text-gray-400"}
                     style={{ fontSize: "0.72rem", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: "14px" }}
                   >
-                    Tính năng nổi bật
+                    {t("Tính năng nổi bật")}
                   </p>
                   <ul className="space-y-3 mb-7">
                     {tier.highlights.map((h, i) => (
@@ -477,7 +485,7 @@ export function LandingPage() {
                           className={tier.id === "svip" ? "text-slate-300" : "text-gray-700"}
                           style={{ fontSize: "0.875rem" }}
                         >
-                          {h.text}
+                          {t(h.text)}
                         </span>
                       </li>
                     ))}
@@ -490,9 +498,9 @@ export function LandingPage() {
                   >
                     <Gift className="w-4 h-4 flex-shrink-0" style={{ color: tier.accentColor }} />
                     <span style={{ fontSize: "0.8rem", color: tier.accentColor, fontWeight: 600 }}>
-                      {tier.id === "free" && "Và nhiều tính năng miễn phí khác"}
-                      {tier.id === "vip" && "15+ tính năng nâng cao độc quyền"}
-                      {tier.id === "svip" && "Toàn bộ tính năng + ưu tiên tuyệt đối"}
+                      {tier.id === "free" && t("Và nhiều tính năng miễn phí khác")}
+                      {tier.id === "vip" && t("15+ tính năng nâng cao độc quyền")}
+                      {tier.id === "svip" && t("Toàn bộ tính năng + ưu tiên tuyệt đối")}
                     </span>
                   </div>
 
@@ -501,7 +509,7 @@ export function LandingPage() {
                     className={`w-full flex items-center justify-center gap-2 ${tier.ctaStyle} px-6 py-3.5 rounded-2xl transition-all`}
                     style={{ fontSize: "0.95rem", fontWeight: 700 }}
                   >
-                    {tier.cta}
+                    {t(tier.cta)}
                     <ArrowRight className="w-4 h-4 group-hover:translate-x-0.5 transition-transform" />
                   </Link>
                 </div>
@@ -516,8 +524,8 @@ export function LandingPage() {
                 <Star className="w-6 h-6 text-white" />
               </div>
               <div>
-                <p className="text-gray-900" style={{ fontSize: "1.05rem", fontWeight: 700 }}>Chưa chắc chắn gói nào phù hợp?</p>
-                <p className="text-gray-500" style={{ fontSize: "0.875rem" }}>So sánh đầy đủ tính năng và lợi ích của từng gói thành viên</p>
+                <p className="text-gray-900" style={{ fontSize: "1.05rem", fontWeight: 700 }}>{t("Chưa chắc chắn gói nào phù hợp?")}</p>
+                <p className="text-gray-500" style={{ fontSize: "0.875rem" }}>{t("So sánh đầy đủ tính năng và lợi ích của từng gói thành viên")}</p>
               </div>
             </div>
             <Link
@@ -525,7 +533,7 @@ export function LandingPage() {
               className="flex-shrink-0 flex items-center gap-2 bg-green-600 text-white px-8 py-3.5 rounded-2xl hover:bg-green-700 transition-all shadow-lg shadow-green-200"
               style={{ fontSize: "0.95rem", fontWeight: 700 }}
             >
-              So sánh tất cả gói
+              {t("So sánh tất cả gói")}
               <ChevronRight className="w-5 h-5" />
             </Link>
           </div>
@@ -540,20 +548,20 @@ export function LandingPage() {
               <Leaf className="w-8 h-8 text-white" />
             </div>
             <h2 className="text-white mb-4" style={{ fontSize: "2.2rem", fontWeight: 800, lineHeight: 1.2 }}>
-              Bắt đầu hành trình<br />sống khỏe ngay hôm nay!
+              {t("Bắt đầu hành trình")}<br />{t("sống khỏe ngay hôm nay!")}
             </h2>
             <p className="text-green-100 mb-8" style={{ fontSize: "1rem", lineHeight: 1.7 }}>
-              Tham gia NutriPath ngay hôm nay và trải nghiệm 14 ngày miễn phí!
+              {t("Tham gia NutriPath ngay hôm nay và trải nghiệm 14 ngày miễn phí!")}
             </p>
             <Link
               to="/dashboard"
               className="inline-flex items-center gap-2 bg-white text-green-700 px-10 py-4 rounded-2xl hover:bg-green-50 transition-all shadow-xl"
               style={{ fontSize: "1.05rem", fontWeight: 700 }}
             >
-              Dùng Thử Miễn Phí
+              {t("Dùng Thử Miễn Phí")}
               <ArrowRight className="w-5 h-5" />
             </Link>
-            <p className="text-green-200 mt-4" style={{ fontSize: "0.85rem" }}>Dùng thử 14 ngày • Không cần thẻ tín dụng</p>
+            <p className="text-green-200 mt-4" style={{ fontSize: "0.85rem" }}>{t("Dùng thử 14 ngày • Không cần thẻ tín dụng")}</p>
           </div>
         </div>
       </section>
@@ -568,10 +576,10 @@ export function LandingPage() {
               </div>
               <span className="text-white" style={{ fontSize: "1.1rem", fontWeight: 700 }}>NutriPath</span>
             </div>
-            <p style={{ fontSize: "0.875rem" }}>© 2026 NutriPath. Tất cả quyền được bảo lưu.</p>
+            <p style={{ fontSize: "0.875rem" }}>© 2026 NutriPath. {t("Tất cả quyền được bảo lưu.")}</p>
             <div className="flex gap-6">
               {["Điều khoản", "Bảo mật", "Liên hệ"].map((item) => (
-                <a key={item} href={item.includes("Li") ? "mailto:support@nutripath.local" : item.includes("B") ? "/member" : "/pricing"} className="hover:text-white transition-colors" style={{ fontSize: "0.875rem" }}>{item}</a>
+                <a key={item} href={item.includes("Li") ? "mailto:support@nutripath.local" : item.includes("B") ? "/member" : "/pricing"} className="hover:text-white transition-colors" style={{ fontSize: "0.875rem" }}>{t(item)}</a>
               ))}
             </div>
           </div>

@@ -4,6 +4,7 @@ import type { DashboardData, MealLog, WorkoutEntry } from "../../api";
 import { useWorkouts } from "../../hooks/useWorkouts";
 import { WorkoutForm } from "./WorkoutForm";
 import { WorkoutList } from "./WorkoutList";
+import { useLanguage } from "../../language";
 
 interface WorkoutSectionProps {
   date: string;
@@ -18,6 +19,7 @@ export function WorkoutSection({
   workouts,
   setDashboard,
 }: WorkoutSectionProps) {
+  const { locale, t } = useLanguage();
   const {
     workoutForm,
     workoutSaving,
@@ -32,21 +34,21 @@ export function WorkoutSection({
   const stats = [
     {
       label: "Đi bộ",
-      value: activity.steps.toLocaleString("vi-VN"),
+      value: activity.steps.toLocaleString(locale),
       unit: "bước",
       icon: "🚶",
       color: "text-green-700",
     },
     {
       label: "Đốt cháy",
-      value: activity.burnedCalories.toLocaleString("vi-VN"),
+      value: activity.burnedCalories.toLocaleString(locale),
       unit: "kcal",
       icon: "🔥",
       color: "text-orange-700",
     },
     {
       label: "Thời gian",
-      value: activity.activeMinutes.toLocaleString("vi-VN"),
+      value: activity.activeMinutes.toLocaleString(locale),
       unit: "phút",
       icon: "⏱️",
       color: "text-blue-700",
@@ -58,10 +60,10 @@ export function WorkoutSection({
       <div className="mb-5 flex items-center justify-between">
         <div>
           <h2 className="text-base font-bold text-gray-900 dark:text-slate-50">
-            Hoạt động thể chất
+            {t("Hoạt động thể chất")}
           </h2>
           <p className="mt-1 text-xs text-gray-500 dark:text-slate-300">
-            Nhập bài tập để hệ thống ước tính calo đã dùng.
+            {t("Nhập bài tập để hệ thống ước tính calo đã dùng.")}
           </p>
         </div>
         <Activity className="h-5 w-5 text-green-600" />
@@ -79,10 +81,10 @@ export function WorkoutSection({
               {stat.value}
             </p>
             <p className="text-xs text-gray-500 dark:text-slate-400">
-              {stat.unit}
+              {t(stat.unit)}
             </p>
             <p className="mt-0.5 text-xs text-gray-600 dark:text-slate-300">
-              {stat.label}
+              {t(stat.label)}
             </p>
           </div>
         ))}

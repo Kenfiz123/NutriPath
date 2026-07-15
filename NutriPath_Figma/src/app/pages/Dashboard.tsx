@@ -14,6 +14,7 @@ import { WeeklyProgressCard } from "../components/dashboard/WeeklyProgressCard";
 import { WeightTracking } from "../components/dashboard/WeightTracking";
 import { WorkoutSection } from "../components/dashboard/WorkoutSection";
 import { useDashboard } from "../hooks/useDashboard";
+import { useLanguage } from "../language";
 
 const quickActions = [
   {
@@ -46,6 +47,7 @@ const quickActions = [
 ];
 
 export function Dashboard() {
+  const { language, t } = useLanguage();
   const {
     dashboard,
     setDashboard,
@@ -69,14 +71,14 @@ export function Dashboard() {
   if (loading) {
     return (
       <div className="min-h-screen bg-gray-50 p-8 text-gray-500 dark:bg-slate-950 dark:text-slate-300">
-        Đang tải dữ liệu dashboard...
+        {t("Đang tải dữ liệu dashboard...")}
       </div>
     );
   }
   if (error || !dashboard) {
     return (
       <div className="min-h-screen bg-gray-50 p-8 text-red-600 dark:bg-slate-950 dark:text-red-300">
-        {error ?? "Không có dữ liệu dashboard"}
+        {error ? t(error) : t("Không có dữ liệu dashboard")}
       </div>
     );
   }
@@ -97,21 +99,21 @@ export function Dashboard() {
     weightTracking?.latestWeightKg ?? dashboard.member.weightKg ?? 65;
   const macros = [
     {
-      name: "Protein",
+      name: t("Protein"),
       current: nutrition.totals.protein,
       target: nutrition.targets.protein,
       color: "#16a34a",
       unit: "g",
     },
     {
-      name: "Carbs",
+      name: t("Carbs"),
       current: nutrition.totals.carbs,
       target: nutrition.targets.carbs,
       color: "#3b82f6",
       unit: "g",
     },
     {
-      name: "Chất béo",
+      name: t("Chất béo"),
       current: nutrition.totals.fat,
       target: nutrition.targets.fat,
       color: "#f59e0b",
@@ -125,10 +127,12 @@ export function Dashboard() {
         <header className="mb-8 flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
           <div className="min-w-0">
             <h1 className="text-[1.6rem] font-extrabold text-gray-900 dark:text-slate-50">
-              {dashboard.greeting} 👋
+              {language === "en"
+                ? `Hello, ${dashboard.member.name}`
+                : dashboard.greeting} 👋
             </h1>
             <p className="mt-1 text-sm text-gray-500 dark:text-slate-300">
-              {dashboard.date} • Dữ liệu được tải từ backend
+              {dashboard.date} • {t("Dữ liệu được tải từ backend")}
             </p>
           </div>
           <div className="grid w-full grid-cols-1 gap-3 sm:grid-cols-2 lg:w-auto xl:grid-cols-4">
@@ -139,7 +143,7 @@ export function Dashboard() {
                 className={`flex items-center justify-center gap-2 rounded-xl px-4 py-2.5 text-sm font-semibold transition-all ${color}`}
               >
                 <Icon className="h-4 w-4" />
-                {label}
+                {t(label)}
               </Link>
             ))}
           </div>

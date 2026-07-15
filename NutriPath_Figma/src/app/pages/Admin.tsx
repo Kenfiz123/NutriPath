@@ -40,6 +40,7 @@ import {
   type CreateFoodPayload,
 } from "../api";
 import { useAuth } from "../auth";
+import { useLanguage } from "../language";
 
 type AdminTab = "overview" | "users" | "payments" | "content" | "analytics" | "ai" | "security";
 
@@ -53,18 +54,18 @@ const tabOptions: Array<{ id: AdminTab; label: string; icon: typeof LayoutDashbo
   { id: "security", label: "Bảo mật", icon: Shield },
 ];
 
-function formatDate(value: string) {
+function formatDate(value: string, locale: string) {
   if (!value) return "--";
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return value;
-  return date.toLocaleDateString("vi-VN");
+  return date.toLocaleDateString(locale);
 }
 
-function formatDateTime(value: string) {
+function formatDateTime(value: string, locale: string) {
   if (!value) return "--";
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return value;
-  return date.toLocaleString("vi-VN");
+  return date.toLocaleString(locale);
 }
 
 function statusLabel(status: string) {
@@ -163,6 +164,7 @@ function SectionCard({
 
 export function Admin() {
   const { session, logout } = useAuth();
+  const { locale, t } = useLanguage();
   const [activeTab, setActiveTab] = useState<AdminTab>("overview");
   const [error, setError] = useState<string | null>(null);
 
@@ -225,7 +227,7 @@ export function Admin() {
       setOverview(data);
       setError(null);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Không tải được tổng quan admin.");
+      setError(err instanceof Error ? err.message : t("Không tải được tổng quan admin."));
     } finally {
       setLoadingOverview(false);
     }
@@ -242,7 +244,7 @@ export function Admin() {
       setUsers(data._embedded.users);
       setError(null);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Không tải được danh sách người dùng.");
+      setError(err instanceof Error ? err.message : t("Không tải được danh sách người dùng."));
     } finally {
       setLoadingUsers(false);
     }
@@ -261,7 +263,7 @@ export function Admin() {
       setPayments(data);
       setError(null);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Không tải được dữ liệu thanh toán.");
+      setError(err instanceof Error ? err.message : t("Không tải được dữ liệu thanh toán."));
     } finally {
       setLoadingPayments(false);
     }
@@ -273,7 +275,7 @@ export function Admin() {
       setContent(await getAdminContent());
       setError(null);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Không tải được nội dung hệ thống.");
+      setError(err instanceof Error ? err.message : t("Không tải được nội dung hệ thống."));
     } finally {
       setLoadingContent(false);
     }
@@ -307,7 +309,7 @@ export function Admin() {
       await loadContent();
       setError(null);
     } catch (err) {
-      setError(err instanceof Error ? err.message : editingFoodId ? "Không cập nhật được món ăn." : "Không thêm được món ăn mới.");
+      setError(err instanceof Error ? err.message : editingFoodId ? t("Không cập nhật được món ăn.") : t("Không thêm được món ăn mới."));
     } finally {
       setSavingFood(false);
     }
@@ -397,21 +399,21 @@ export function Admin() {
       await Promise.all([loadUsers(), loadOverview()]);
       setError(null);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Không lưu được người dùng.");
+      setError(err instanceof Error ? err.message : t("Không lưu được người dùng."));
     } finally {
       setSavingUser(false);
     }
   }
 
   async function handleDeleteFood(foodId: string) {
-    if (!window.confirm("Xóa món ăn này khỏi hệ thống?")) return;
+    if (!window.confirm(t("Xóa món ăn này khỏi hệ thống?"))) return;
     try {
       await deleteFood(foodId);
       if (editingFoodId === foodId) resetFoodForm();
       await loadContent();
       setError(null);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Không xóa được món ăn.");
+      setError(err instanceof Error ? err.message : t("Không xóa được món ăn."));
     }
   }
 
@@ -421,7 +423,7 @@ export function Admin() {
       setAnalytics(await getAdminAnalytics());
       setError(null);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Không tải được analytics.");
+      setError(err instanceof Error ? err.message : t("Không tải được analytics."));
     } finally {
       setLoadingAnalytics(false);
     }
@@ -434,7 +436,7 @@ export function Admin() {
       setAiSettings(response.settings);
       setError(null);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Không tải được cài đặt AI.");
+      setError(err instanceof Error ? err.message : t("Không tải được cài đặt AI."));
     } finally {
       setLoadingAi(false);
     }
@@ -448,7 +450,7 @@ export function Admin() {
       setSafetyLogs(logsResponse.logs);
       setError(null);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Không tải được bảo mật hệ thống.");
+      setError(err instanceof Error ? err.message : t("Không tải được bảo mật hệ thống."));
     } finally {
       setLoadingSecurity(false);
     }
@@ -526,7 +528,7 @@ export function Admin() {
       setAiSettings(response.settings);
       setError(null);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Không lưu được cài đặt AI.");
+      setError(err instanceof Error ? err.message : t("Không lưu được cài đặt AI."));
     } finally {
       setSavingAi(false);
     }
@@ -540,7 +542,7 @@ export function Admin() {
       setSecurity(response.security);
       setError(null);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Không lưu được cấu hình bảo mật.");
+      setError(err instanceof Error ? err.message : t("Không lưu được cấu hình bảo mật."));
     } finally {
       setSavingSecurity(false);
     }
@@ -553,11 +555,11 @@ export function Admin() {
           <div>
             <div className="inline-flex items-center gap-2 rounded-full bg-emerald-50 px-3 py-1 text-sm font-medium text-emerald-700">
               <Shield className="h-4 w-4" />
-              Admin Dashboard
+              {t("Admin Dashboard")}
             </div>
-            <h1 className="mt-4 text-3xl font-bold text-slate-900">Quản trị hệ thống NutriPath</h1>
+            <h1 className="mt-4 text-3xl font-bold text-slate-900">{t("Quản trị hệ thống NutriPath")}</h1>
             <p className="mt-2 text-sm text-slate-500">
-              Dữ liệu thật cho người dùng, thanh toán, nội dung, analytics, AI và bảo mật.
+              {t("Dữ liệu thật cho người dùng, thanh toán, nội dung, analytics, AI và bảo mật.")}
             </p>
           </div>
 
@@ -566,21 +568,21 @@ export function Admin() {
               to="/dashboard"
               className="rounded-xl border border-slate-200 bg-white px-4 py-2 text-center text-sm font-semibold text-slate-700 transition hover:bg-slate-100"
             >
-              Về dashboard
+              {t("Về dashboard")}
             </Link>
             <button
               onClick={() => void refreshCurrentTab()}
               className="inline-flex items-center justify-center gap-2 rounded-xl bg-emerald-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-emerald-700"
             >
               <RefreshCw className="h-4 w-4" />
-              Làm mới tab
+              {t("Làm mới tab")}
             </button>
             <button
               onClick={() => void logout()}
               className="inline-flex items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 transition hover:bg-slate-100"
             >
               <LogOut className="h-4 w-4" />
-              Đăng xuất
+              {t("Đăng xuất")}
             </button>
           </div>
         </div>
@@ -597,7 +599,7 @@ export function Admin() {
               }`}
             >
               <Icon className="h-4 w-4" />
-              {label}
+              {t(label)}
             </button>
           ))}
         </div>
@@ -609,26 +611,26 @@ export function Admin() {
         {activeTab === "overview" ? (
           loadingOverview ? (
             <div className="rounded-2xl border border-slate-200 bg-white px-5 py-10 text-center text-slate-500">
-              Đang tải dữ liệu tổng quan...
+              {t("Đang tải dữ liệu tổng quan...")}
             </div>
           ) : overview ? (
             <div className="space-y-6">
               <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
                 {overview.kpis.map((item) => (
-                  <MetricCard key={item.id} label={item.label} value={item.value} change={item.change} />
+                  <MetricCard key={item.id} label={t(item.label)} value={item.value} change={t(item.change)} />
                 ))}
               </div>
 
               <div className="grid gap-6 xl:grid-cols-[1.3fr_0.7fr]">
                 <SectionCard
-                  title="Người dùng mới nhất"
-                  subtitle="8 tài khoản gần đây từ dữ liệu member thật"
+                  title={t("Người dùng mới nhất")}
+                  subtitle={t("8 tài khoản gần đây từ dữ liệu member thật")}
                   action={(
                     <button
                       onClick={() => setActiveTab("users")}
                       className="text-sm font-semibold text-emerald-700 hover:text-emerald-800"
                     >
-                      Mở tab người dùng
+                      {t("Mở tab người dùng")}
                     </button>
                   )}
                 >
@@ -649,7 +651,7 @@ export function Admin() {
                         </div>
                         <div className="shrink-0 text-left sm:text-right">
                           <p className="text-sm font-semibold text-slate-700">{user.plan}</p>
-                          <p className="text-xs text-slate-500">Tham gia {formatDate(user.joined)}</p>
+                          <p className="text-xs text-slate-500">{t("Tham gia {date}", { date: formatDate(user.joined, locale) })}</p>
                         </div>
                       </div>
                     ))}
@@ -657,12 +659,12 @@ export function Admin() {
                 </SectionCard>
 
                 <div className="space-y-6">
-                  <SectionCard title="Phân bổ vai trò">
+                  <SectionCard title={t("Phân bổ vai trò")}>
                     <div className="space-y-3">
                       {roleSummary.map((item) => (
                         <div key={item.role}>
                           <div className="mb-1 flex items-center justify-between text-sm">
-                            <span className="text-slate-600">{item.role}</span>
+                            <span className="text-slate-600">{t(item.role)}</span>
                             <span className="font-semibold text-slate-900">{item.count}</span>
                           </div>
                           <div className="h-2 rounded-full bg-slate-100">
@@ -676,7 +678,7 @@ export function Admin() {
                     </div>
                   </SectionCard>
 
-                  <SectionCard title="Phân bổ gói">
+                  <SectionCard title={t("Phân bổ gói")}>
                     <div className="space-y-3">
                       {tierSummary.map((item) => (
                         <div key={item.tier} className="flex items-center justify-between rounded-xl bg-slate-50 px-3 py-2">
@@ -687,7 +689,7 @@ export function Admin() {
                     </div>
                   </SectionCard>
 
-                  <SectionCard title="Tình trạng dịch vụ">
+                  <SectionCard title={t("Tình trạng dịch vụ")}>
                     <div className="space-y-3">
                       {overview.systemServices.map((service) => (
                         <div key={service.name} className="flex items-center justify-between rounded-xl bg-slate-50 px-3 py-2">
@@ -696,7 +698,7 @@ export function Admin() {
                             <p className="text-xs text-slate-500">Uptime {service.uptime}</p>
                           </div>
                           <div className="text-right">
-                            <p className="text-sm font-semibold text-emerald-700">{service.status}</p>
+                            <p className="text-sm font-semibold text-emerald-700">{t(service.status)}</p>
                             <p className="text-xs text-slate-500">
                               {service.latency ?? (service.latencyMs !== undefined ? `${service.latencyMs}ms` : "--")}
                             </p>
@@ -713,9 +715,9 @@ export function Admin() {
 
         {activeTab === "users" ? (
           <SectionCard
-            title="Bảng người dùng"
-            subtitle="Lấy trực tiếp từ member thật trong hệ thống"
-            action={<div className="text-sm text-slate-500">Admin hiện tại: {session?.member?.email}</div>}
+            title={t("Bảng người dùng")}
+            subtitle={t("Lấy trực tiếp từ member thật trong hệ thống")}
+            action={<div className="text-sm text-slate-500">{t("Admin hiện tại: {email}", { email: session?.member?.email ?? "--" })}</div>}
           >
             <div className="mb-5 grid gap-3 lg:grid-cols-[1.5fr_0.8fr_0.8fr]">
               <label className="flex items-center gap-2 rounded-xl border border-slate-200 bg-slate-50 px-3 py-3">
@@ -724,7 +726,7 @@ export function Admin() {
                   value={search}
                   onChange={(event) => setSearch(event.target.value)}
                   className="w-full bg-transparent text-sm text-slate-700 outline-none"
-                  placeholder="Tìm theo tên hoặc email"
+                  placeholder={t("Tìm theo tên hoặc email")}
                 />
               </label>
 
@@ -734,7 +736,7 @@ export function Admin() {
                 className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-3 text-sm text-slate-700 outline-none"
               >
                 {["Tất cả", "User", "Moderator", "Admin"].map((option) => (
-                  <option key={option} value={option}>{option}</option>
+                  <option key={option} value={option}>{t(option)}</option>
                 ))}
               </select>
 
@@ -745,7 +747,7 @@ export function Admin() {
               >
                 {["Tất cả", "active", "inactive"].map((option) => (
                   <option key={option} value={option}>
-                    {option === "active" ? "Đang hoạt động" : option === "inactive" ? "Tạm ngưng" : option}
+                    {t(option === "active" ? "Đang hoạt động" : option === "inactive" ? "Tạm ngưng" : option)}
                   </option>
                 ))}
               </select>
@@ -755,16 +757,16 @@ export function Admin() {
               <form onSubmit={(event) => void handleSaveUser(event)} className="mb-5 rounded-2xl border border-emerald-200 bg-emerald-50 p-4">
                 <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
                   <div>
-                    <p className="font-semibold text-slate-900">Sửa người dùng: {editingUser.name}</p>
-                    <p className="text-sm text-slate-500">Cập nhật role, trạng thái, gói và mục tiêu calo bằng dữ liệu thật.</p>
+                    <p className="font-semibold text-slate-900">{t("Sửa người dùng: {name}", { name: editingUser.name })}</p>
+                    <p className="text-sm text-slate-500">{t("Cập nhật role, trạng thái, gói và mục tiêu calo bằng dữ liệu thật.")}</p>
                   </div>
                   <button type="button" onClick={resetUserForm} className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-600">
-                    Hủy
+                    {t("Hủy")}
                   </button>
                 </div>
                 <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
                   <label className="block">
-                    <span className="mb-1 block text-sm font-medium text-slate-700">Tên</span>
+                    <span className="mb-1 block text-sm font-medium text-slate-700">{t("Tên")}</span>
                     <input value={userForm.name} onChange={(event) => setUserForm({ ...userForm, name: event.target.value })} className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm outline-none" />
                   </label>
                   <label className="block">
@@ -780,14 +782,14 @@ export function Admin() {
                     </select>
                   </label>
                   <label className="block">
-                    <span className="mb-1 block text-sm font-medium text-slate-700">Trạng thái</span>
+                    <span className="mb-1 block text-sm font-medium text-slate-700">{t("Trạng thái")}</span>
                     <select value={userForm.status} onChange={(event) => setUserForm({ ...userForm, status: event.target.value })} className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm outline-none">
-                      <option value="active">Đang hoạt động</option>
-                      <option value="inactive">Tạm ngưng</option>
+                      <option value="active">{t("Đang hoạt động")}</option>
+                      <option value="inactive">{t("Tạm ngưng")}</option>
                     </select>
                   </label>
                   <label className="block">
-                    <span className="mb-1 block text-sm font-medium text-slate-700">Gói</span>
+                    <span className="mb-1 block text-sm font-medium text-slate-700">{t("Gói")}</span>
                     <select value={userForm.tier} onChange={(event) => setUserForm({ ...userForm, tier: event.target.value as typeof userForm.tier })} className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm outline-none">
                       <option value="free">Free</option>
                       <option value="vip">VIP</option>
@@ -795,20 +797,20 @@ export function Admin() {
                     </select>
                   </label>
                   <label className="block">
-                    <span className="mb-1 block text-sm font-medium text-slate-700">Chu kỳ</span>
+                    <span className="mb-1 block text-sm font-medium text-slate-700">{t("Chu kỳ")}</span>
                     <select value={userForm.billing} onChange={(event) => setUserForm({ ...userForm, billing: event.target.value as typeof userForm.billing })} className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm outline-none">
-                      <option value="monthly">Tháng</option>
-                      <option value="annual">Năm</option>
+                      <option value="monthly">{t("Tháng")}</option>
+                      <option value="annual">{t("Năm")}</option>
                     </select>
                   </label>
                   <label className="block">
-                    <span className="mb-1 block text-sm font-medium text-slate-700">Mục tiêu calo</span>
+                    <span className="mb-1 block text-sm font-medium text-slate-700">{t("Mục tiêu calo")}</span>
                     <input type="number" min={1200} max={5000} value={userForm.calorieTarget} onChange={(event) => setUserForm({ ...userForm, calorieTarget: Number(event.target.value) })} className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm outline-none" />
                   </label>
                   <div className="flex items-end">
                     <button disabled={savingUser} type="submit" className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-emerald-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-emerald-700 disabled:opacity-60">
                       <Save className="h-4 w-4" />
-                      {savingUser ? "Đang lưu..." : "Lưu user"}
+                      {t(savingUser ? "Đang lưu..." : "Lưu user")}
                     </button>
                   </div>
                 </div>
@@ -817,28 +819,28 @@ export function Admin() {
 
             {loadingUsers ? (
               <div className="rounded-2xl border border-dashed border-slate-200 px-5 py-10 text-center text-slate-500">
-                Đang tải bảng người dùng...
+                {t("Đang tải bảng người dùng...")}
               </div>
             ) : (
               <>
                 <div className="mb-4 flex items-center justify-between text-sm text-slate-500">
-                  <span>{users.length} người dùng khớp bộ lọc hiện tại</span>
-                  <span>Dữ liệu thật, không dùng mảng mock</span>
+                  <span>{t("{count} người dùng khớp bộ lọc hiện tại", { count: users.length })}</span>
+                  <span>{t("Dữ liệu thật, không dùng mảng mock")}</span>
                 </div>
 
                 <div className="overflow-x-auto">
                   <table className="min-w-full border-separate border-spacing-y-2">
                     <thead>
                       <tr className="text-left text-xs uppercase tracking-wide text-slate-500">
-                        <th className="px-3 py-2">Người dùng</th>
-                        <th className="px-3 py-2">Vai trò</th>
-                        <th className="px-3 py-2">Gói</th>
-                        <th className="px-3 py-2">Mục tiêu calo</th>
+                        <th className="px-3 py-2">{t("Người dùng")}</th>
+                        <th className="px-3 py-2">{t("Vai trò")}</th>
+                        <th className="px-3 py-2">{t("Gói")}</th>
+                        <th className="px-3 py-2">{t("Mục tiêu calo")}</th>
                         <th className="px-3 py-2">AI chats</th>
                         <th className="px-3 py-2">Tracked kcal</th>
-                        <th className="px-3 py-2">Trạng thái</th>
-                        <th className="px-3 py-2">Tham gia</th>
-                        <th className="px-3 py-2">Thao tác</th>
+                        <th className="px-3 py-2">{t("Trạng thái")}</th>
+                        <th className="px-3 py-2">{t("Tham gia")}</th>
+                        <th className="px-3 py-2">{t("Thao tác")}</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -869,14 +871,14 @@ export function Admin() {
                           <td className="px-3 py-3">{user.trackedCalories}</td>
                           <td className="px-3 py-3">
                             <span className={`inline-flex rounded-full px-2.5 py-1 text-xs font-semibold ${statusClass(user.status)}`}>
-                              {statusLabel(user.status)}
+                              {t(statusLabel(user.status))}
                             </span>
                           </td>
-                          <td className="px-3 py-3">{formatDate(user.joined)}</td>
+                          <td className="px-3 py-3">{formatDate(user.joined, locale)}</td>
                           <td className="rounded-r-2xl px-3 py-3">
                             <button onClick={() => startEditUser(user)} className="inline-flex items-center gap-1 rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-100">
                               <Edit3 className="h-3.5 w-3.5" />
-                              Sửa
+                              {t("Sửa")}
                             </button>
                           </td>
                         </tr>
@@ -892,36 +894,36 @@ export function Admin() {
         {activeTab === "payments" ? (
           loadingPayments && !payments ? (
             <div className="rounded-2xl border border-slate-200 bg-white px-5 py-10 text-center text-slate-500 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-400">
-              Đang tải dữ liệu thanh toán...
+              {t("Đang tải dữ liệu thanh toán...")}
             </div>
           ) : payments ? (
             <div className="space-y-6">
               <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
                 <MetricCard
-                  label="Doanh thu đã xác nhận"
+                  label={t("Doanh thu đã xác nhận")}
                   value={formatMoney(payments.summary.grossRevenue, payments.summary.currency)}
-                  change={`${payments.summary.paidTransactions} giao dịch đã thanh toán`}
+                  change={t("{count} giao dịch đã thanh toán", { count: payments.summary.paidTransactions })}
                 />
                 <MetricCard
-                  label="Tổng giao dịch"
+                  label={t("Tổng giao dịch")}
                   value={payments.summary.totalTransactions}
-                  change={`${payments.summary.trialTransactions} lượt dùng thử`}
+                  change={t("{count} lượt dùng thử", { count: payments.summary.trialTransactions })}
                 />
                 <MetricCard
-                  label="Đang chờ IPN"
+                  label={t("Đang chờ IPN")}
                   value={payments.summary.pendingTransactions}
-                  change="Chưa kích hoạt quyền thành viên"
+                  change={t("Chưa kích hoạt quyền thành viên")}
                 />
                 <MetricCard
-                  label="Giao dịch thất bại"
+                  label={t("Giao dịch thất bại")}
                   value={payments.summary.failedTransactions}
-                  change="Không được tính vào doanh thu"
+                  change={t("Không được tính vào doanh thu")}
                 />
               </div>
 
               <SectionCard
-                title="Lịch sử thanh toán"
-                subtitle="Dữ liệu thật từ payments; trạng thái trả phí chỉ do IPN VNPAY xác nhận"
+                title={t("Lịch sử thanh toán")}
+                subtitle={t("Dữ liệu thật từ payments; trạng thái trả phí chỉ do IPN VNPAY xác nhận")}
               >
                 <div className="mb-5 grid gap-3 lg:grid-cols-[1.5fr_0.8fr_0.8fr]">
                   <label className="flex items-center gap-2 rounded-xl border border-slate-200 bg-slate-50 px-3 py-3 dark:border-slate-700 dark:bg-slate-800">
@@ -933,7 +935,7 @@ export function Admin() {
                         setPaymentPage(1);
                       }}
                       className="w-full bg-transparent text-sm text-slate-700 outline-none dark:text-slate-100"
-                      placeholder="Tìm email, hóa đơn hoặc mã giao dịch"
+                      placeholder={t("Tìm email, hóa đơn hoặc mã giao dịch")}
                     />
                   </label>
 
@@ -945,11 +947,11 @@ export function Admin() {
                     }}
                     className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-3 text-sm text-slate-700 outline-none dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100"
                   >
-                    <option value="all">Mọi trạng thái</option>
-                    <option value="paid">Đã thanh toán</option>
-                    <option value="pending">Đang chờ</option>
-                    <option value="failed">Thất bại</option>
-                    <option value="trial">Dùng thử</option>
+                    <option value="all">{t("Mọi trạng thái")}</option>
+                    <option value="paid">{t("Đã thanh toán")}</option>
+                    <option value="pending">{t("Đang chờ")}</option>
+                    <option value="failed">{t("Thất bại")}</option>
+                    <option value="trial">{t("Dùng thử")}</option>
                   </select>
 
                   <select
@@ -960,7 +962,7 @@ export function Admin() {
                     }}
                     className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-3 text-sm text-slate-700 outline-none dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100"
                   >
-                    <option value="all">Mọi gói</option>
+                    <option value="all">{t("Mọi gói")}</option>
                     <option value="vip">VIP</option>
                     <option value="svip">SVIP</option>
                   </select>
@@ -968,7 +970,7 @@ export function Admin() {
 
                 {loadingPayments ? (
                   <div className="mb-4 rounded-xl border border-dashed border-slate-200 px-4 py-3 text-center text-sm text-slate-500 dark:border-slate-700 dark:text-slate-400">
-                    Đang cập nhật danh sách giao dịch...
+                    {t("Đang cập nhật danh sách giao dịch...")}
                   </div>
                 ) : null}
 
@@ -976,13 +978,13 @@ export function Admin() {
                   <table className="min-w-full border-separate border-spacing-y-2">
                     <thead>
                       <tr className="text-left text-xs uppercase tracking-wide text-slate-500 dark:text-slate-400">
-                        <th className="px-3 py-2">Giao dịch</th>
-                        <th className="px-3 py-2">Người mua</th>
-                        <th className="px-3 py-2">Gói</th>
-                        <th className="px-3 py-2">Số tiền</th>
-                        <th className="px-3 py-2">Trạng thái</th>
-                        <th className="px-3 py-2">Cổng</th>
-                        <th className="px-3 py-2">Thời gian</th>
+                        <th className="px-3 py-2">{t("Giao dịch")}</th>
+                        <th className="px-3 py-2">{t("Người mua")}</th>
+                        <th className="px-3 py-2">{t("Gói")}</th>
+                        <th className="px-3 py-2">{t("Số tiền")}</th>
+                        <th className="px-3 py-2">{t("Trạng thái")}</th>
+                        <th className="px-3 py-2">{t("Cổng")}</th>
+                        <th className="px-3 py-2">{t("Thời gian")}</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -991,23 +993,23 @@ export function Admin() {
                           <td className="rounded-l-2xl px-3 py-3">
                             <p className="font-semibold text-slate-900 dark:text-slate-50">{payment.invoice || payment.id}</p>
                             <p className="mt-1 max-w-52 break-all font-mono text-xs text-slate-500 dark:text-slate-400">
-                              {payment.transactionRef || "Không có mã VNPAY"}
+                              {payment.transactionRef || t("Không có mã VNPAY")}
                             </p>
                           </td>
                           <td className="px-3 py-3">
-                            <p className="font-semibold text-slate-900 dark:text-slate-50">{payment.member?.name || "Tài khoản không còn tồn tại"}</p>
+                            <p className="font-semibold text-slate-900 dark:text-slate-50">{payment.member?.name || t("Tài khoản không còn tồn tại")}</p>
                             <p className="text-xs text-slate-500 dark:text-slate-400">{payment.member?.email || payment.memberId}</p>
                           </td>
                           <td className="px-3 py-3">
                             <p className="font-semibold text-slate-900 dark:text-slate-50">{payment.planName}</p>
-                            <p className="text-xs text-slate-500 dark:text-slate-400">{payment.billing === "annual" ? "Hàng năm" : "Hàng tháng"}</p>
+                            <p className="text-xs text-slate-500 dark:text-slate-400">{t(payment.billing === "annual" ? "Hàng năm" : "Hàng tháng")}</p>
                           </td>
                           <td className="px-3 py-3 font-semibold text-slate-900 dark:text-slate-50">
                             {formatMoney(payment.amount, payment.currency)}
                           </td>
                           <td className="px-3 py-3">
                             <span className={`inline-flex rounded-full border px-2.5 py-1 text-xs font-semibold ${paymentStatusClass(payment.status)}`}>
-                              {paymentStatusLabel(payment.status)}
+                              {t(paymentStatusLabel(payment.status))}
                             </span>
                           </td>
                           <td className="px-3 py-3">
@@ -1017,14 +1019,14 @@ export function Admin() {
                             ) : null}
                           </td>
                           <td className="rounded-r-2xl px-3 py-3">
-                            <p>{formatDateTime(payment.paidAt || payment.createdAt || "")}</p>
-                            <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">{payment.paidAt ? "Đã xác nhận" : "Khởi tạo"}</p>
+                            <p>{formatDateTime(payment.paidAt || payment.createdAt || "", locale)}</p>
+                            <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">{t(payment.paidAt ? "Đã xác nhận" : "Khởi tạo")}</p>
                           </td>
                         </tr>
                       )) : (
                         <tr>
                           <td colSpan={7} className="rounded-2xl border border-dashed border-slate-200 px-4 py-10 text-center text-sm text-slate-500 dark:border-slate-700 dark:text-slate-400">
-                            Không có giao dịch phù hợp bộ lọc.
+                            {t("Không có giao dịch phù hợp bộ lọc.")}
                           </td>
                         </tr>
                       )}
@@ -1034,7 +1036,11 @@ export function Admin() {
 
                 <div className="mt-5 flex flex-wrap items-center justify-between gap-3 text-sm text-slate-500 dark:text-slate-400">
                   <span>
-                    {payments.pagination.total} giao dịch • Trang {payments.pagination.page}/{Math.max(payments.pagination.totalPages, 1)}
+                    {t("{count} giao dịch • Trang {page}/{totalPages}", {
+                      count: payments.pagination.total,
+                      page: payments.pagination.page,
+                      totalPages: Math.max(payments.pagination.totalPages, 1),
+                    })}
                   </span>
                   <div className="flex gap-2">
                     <button
@@ -1043,7 +1049,7 @@ export function Admin() {
                       onClick={() => setPaymentPage((page) => Math.max(1, page - 1))}
                       className="rounded-xl border border-slate-200 bg-white px-3 py-2 font-semibold text-slate-700 transition hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 dark:hover:bg-slate-800"
                     >
-                      Trang trước
+                      {t("Trang trước")}
                     </button>
                     <button
                       type="button"
@@ -1051,7 +1057,7 @@ export function Admin() {
                       onClick={() => setPaymentPage((page) => page + 1)}
                       className="rounded-xl border border-slate-200 bg-white px-3 py-2 font-semibold text-slate-700 transition hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 dark:hover:bg-slate-800"
                     >
-                      Trang sau
+                      {t("Trang sau")}
                     </button>
                   </div>
                 </div>
@@ -1064,34 +1070,34 @@ export function Admin() {
           <div className="space-y-6">
             {loadingContent ? (
               <div className="rounded-2xl border border-slate-200 bg-white px-5 py-10 text-center text-slate-500">
-                Đang tải nội dung...
+                {t("Đang tải nội dung...")}
               </div>
             ) : content ? (
               <>
                 <div className="grid gap-4 md:grid-cols-3">
-                  <MetricCard label="Foods" value={content.foods.length} change="Nguồn dữ liệu hiện có" />
-                  <MetricCard label="Recipes" value={content.recipes.length} change="Công thức đang publish" />
-                  <MetricCard label="Meal plans" value={content.mealPlans.length} change="Kế hoạch/quyền lợi gói" />
+                  <MetricCard label={t("Foods")} value={content.foods.length} change={t("Nguồn dữ liệu hiện có")} />
+                  <MetricCard label={t("Recipes")} value={content.recipes.length} change={t("Công thức đang publish")} />
+                  <MetricCard label={t("Meal plans")} value={content.mealPlans.length} change={t("Kế hoạch/quyền lợi gói")} />
                 </div>
 
                 <SectionCard
-                  title={editingFoodId ? "Sửa món ăn" : "Thêm món ăn"}
-                  subtitle={editingFoodId ? "Đang chỉnh sửa món đã chọn" : "Admin có thể tạo món ăn mới ngay trong dashboard"}
+                  title={t(editingFoodId ? "Sửa món ăn" : "Thêm món ăn")}
+                  subtitle={t(editingFoodId ? "Đang chỉnh sửa món đã chọn" : "Admin có thể tạo món ăn mới ngay trong dashboard")}
                 >
                   <form onSubmit={(event) => void handleCreateFood(event)} className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
                     <label className="block">
-                      <span className="mb-1 block text-sm font-medium text-slate-700">Tên món</span>
+                      <span className="mb-1 block text-sm font-medium text-slate-700">{t("Tên món")}</span>
                       <input
                         required
                         value={foodForm.name}
                         onChange={(event) => setFoodForm({ ...foodForm, name: event.target.value })}
                         className="w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm outline-none"
-                        placeholder="Ức gà áp chảo"
+                        placeholder={t("Ức gà áp chảo")}
                       />
                     </label>
 
                     <label className="block">
-                      <span className="mb-1 block text-sm font-medium text-slate-700">Danh mục</span>
+                      <span className="mb-1 block text-sm font-medium text-slate-700">{t("Danh mục")}</span>
                       <input
                         value={foodForm.category || ""}
                         onChange={(event) => setFoodForm({ ...foodForm, category: event.target.value })}
@@ -1101,13 +1107,13 @@ export function Admin() {
                     </label>
 
                     <label className="block">
-                      <span className="mb-1 block text-sm font-medium text-slate-700">Khẩu phần</span>
+                      <span className="mb-1 block text-sm font-medium text-slate-700">{t("Khẩu phần")}</span>
                       <input
                         required
                         value={foodForm.portion}
                         onChange={(event) => setFoodForm({ ...foodForm, portion: event.target.value })}
                         className="w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm outline-none"
-                        placeholder="100g / 1 bát / 1 ly"
+                        placeholder={t("100g / 1 bát / 1 ly")}
                       />
                     </label>
 
@@ -1171,7 +1177,7 @@ export function Admin() {
                           onClick={resetFoodForm}
                           className="rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 transition hover:bg-slate-100"
                         >
-                          Hủy sửa
+                          {t("Hủy sửa")}
                         </button>
                       ) : null}
                       <button
@@ -1179,20 +1185,20 @@ export function Admin() {
                         disabled={savingFood}
                         className="rounded-xl bg-emerald-600 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-emerald-700 disabled:opacity-60"
                       >
-                        {savingFood ? (editingFoodId ? "Đang lưu..." : "Đang thêm...") : (editingFoodId ? "Lưu món ăn" : "Thêm món ăn")}
+                        {t(savingFood ? (editingFoodId ? "Đang lưu..." : "Đang thêm...") : (editingFoodId ? "Lưu món ăn" : "Thêm món ăn"))}
                       </button>
                     </div>
                   </form>
                 </SectionCard>
 
                 <div className="grid gap-6 xl:grid-cols-2">
-                  <SectionCard title="Foods" subtitle="10 thực phẩm đầu tiên từ database">
+                  <SectionCard title={t("Foods")} subtitle={t("10 thực phẩm đầu tiên từ database")}>
                     <div className="space-y-3">
                       {[...content.foods].slice(-10).reverse().map((food) => (
                         <div key={food.id} className="flex items-center justify-between rounded-xl bg-slate-50 px-3 py-3">
                           <div>
                             <p className="font-semibold text-slate-900">{food.name}</p>
-                            <p className="text-xs text-slate-500">{food.category ?? "Khác"} • {food.portion}</p>
+                            <p className="text-xs text-slate-500">{t(food.category ?? "Khác")} • {food.portion}</p>
                           </div>
                           <div className="flex items-center gap-4">
                             <div className="text-right text-sm">
@@ -1205,14 +1211,14 @@ export function Admin() {
                                 onClick={() => startEditFood(food)}
                                 className="rounded-lg border border-blue-200 bg-blue-50 px-3 py-1.5 text-xs font-semibold text-blue-700 transition hover:bg-blue-100"
                               >
-                                Sửa
+                                {t("Sửa")}
                               </button>
                               <button
                                 type="button"
                                 onClick={() => void handleDeleteFood(food.id)}
                                 className="rounded-lg border border-red-200 bg-red-50 px-3 py-1.5 text-xs font-semibold text-red-700 transition hover:bg-red-100"
                               >
-                                Xóa
+                                {t("Xóa")}
                               </button>
                             </div>
                           </div>
@@ -1221,14 +1227,14 @@ export function Admin() {
                     </div>
                   </SectionCard>
 
-                  <SectionCard title="Recipes" subtitle="10 công thức đầu tiên từ hệ thống">
+                  <SectionCard title={t("Recipes")} subtitle={t("10 công thức đầu tiên từ hệ thống")}>
                     <div className="space-y-3">
                       {content.recipes.slice(0, 10).map((recipe) => (
                         <div key={recipe.id} className="rounded-xl bg-slate-50 px-3 py-3">
                           <div className="flex items-start justify-between gap-3">
                             <div>
                               <p className="font-semibold text-slate-900">{recipe.name}</p>
-                              <p className="text-xs text-slate-500">{recipe.timeMinutes} phút • {recipe.servings} khẩu phần</p>
+                              <p className="text-xs text-slate-500">{t("{minutes} phút • {servings} khẩu phần", { minutes: recipe.timeMinutes, servings: recipe.servings })}</p>
                             </div>
                             <span className="rounded-full bg-white px-2 py-1 text-xs text-slate-600">{recipe.calories} kcal</span>
                           </div>
@@ -1243,22 +1249,22 @@ export function Admin() {
                   </SectionCard>
                 </div>
 
-                <SectionCard title="Meal plans / quyền lợi gói" subtitle="Đang lấy từ plans thực tế của hệ thống">
+                <SectionCard title={t("Meal plans / quyền lợi gói")} subtitle={t("Đang lấy từ plans thực tế của hệ thống")}>
                   <div className="grid gap-4 md:grid-cols-3">
                     {content.mealPlans.map((plan) => (
                       <div key={plan.id} className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
                         <div className="flex items-center justify-between gap-2">
                           <h3 className="font-semibold text-slate-900">{plan.name}</h3>
-                          <span className="rounded-full bg-white px-2 py-1 text-xs text-slate-600">{plan.status}</span>
+                          <span className="rounded-full bg-white px-2 py-1 text-xs text-slate-600">{t(plan.status)}</span>
                         </div>
                         <p className="mt-2 text-sm text-slate-500">{plan.target}</p>
                         <div className="mt-4 grid grid-cols-2 gap-3 text-sm">
                           <div className="rounded-xl bg-white px-3 py-2">
-                            <p className="text-slate-500">Giá/tháng</p>
+                            <p className="text-slate-500">{t("Giá/tháng")}</p>
                             <p className="font-semibold text-slate-900">{plan.calories}</p>
                           </div>
                           <div className="rounded-xl bg-white px-3 py-2">
-                            <p className="text-slate-500">Tính năng</p>
+                            <p className="text-slate-500">{t("Tính năng")}</p>
                             <p className="font-semibold text-slate-900">{plan.meals}</p>
                           </div>
                         </div>
@@ -1274,11 +1280,11 @@ export function Admin() {
         {activeTab === "analytics" ? (
           loadingAnalytics ? (
             <div className="rounded-2xl border border-slate-200 bg-white px-5 py-10 text-center text-slate-500">
-              Đang tải analytics...
+              {t("Đang tải analytics...")}
             </div>
           ) : analytics ? (
             <div className="space-y-6">
-              <SectionCard title="Meal activity 7 ngày" subtitle="Tổng số món được ghi nhận mỗi ngày">
+              <SectionCard title={t("Meal activity 7 ngày")} subtitle={t("Tổng số món được ghi nhận mỗi ngày")}>
                 <div className="grid grid-cols-7 gap-3">
                   {analytics.dailyMeals.map((entry) => {
                     const max = Math.max(...analytics.dailyMeals.map((item) => item.meals), 1);
@@ -1289,7 +1295,7 @@ export function Admin() {
                           <div className="w-10 rounded-t-xl bg-emerald-500" style={{ height: `${pct}%` }} />
                         </div>
                         <p className="text-sm font-semibold text-slate-900">{entry.day}</p>
-                        <p className="text-xs text-slate-500">{entry.meals} món</p>
+                        <p className="text-xs text-slate-500">{t("{count} món", { count: entry.meals })}</p>
                       </div>
                     );
                   })}
@@ -1297,12 +1303,12 @@ export function Admin() {
               </SectionCard>
 
               <div className="grid gap-6 xl:grid-cols-[0.8fr_1.2fr]">
-                <SectionCard title="Tỷ lệ macro" subtitle="Tổng hợp từ meal log thực tế">
+                <SectionCard title={t("Tỷ lệ macro")} subtitle={t("Tổng hợp từ meal log thực tế")}>
                   <div className="space-y-4">
                     {analytics.nutritionShare.map((item) => (
                       <div key={item.name}>
                         <div className="mb-1 flex items-center justify-between text-sm">
-                          <span className="text-slate-600">{item.name}</span>
+                          <span className="text-slate-600">{t(item.name)}</span>
                           <span className="font-semibold text-slate-900">{item.value}%</span>
                         </div>
                         <div className="h-3 rounded-full bg-slate-100">
@@ -1313,17 +1319,17 @@ export function Admin() {
                   </div>
                 </SectionCard>
 
-                <SectionCard title="Top món được ghi nhận" subtitle="Sắp xếp theo số lần xuất hiện trong meal log">
+                <SectionCard title={t("Top món được ghi nhận")} subtitle={t("Sắp xếp theo số lần xuất hiện trong meal log")}>
                   <div className="space-y-3">
                     {analytics.topDishes.map((dish) => (
                       <div key={`${dish.rank}-${dish.dish}`} className="flex items-center justify-between rounded-xl bg-slate-50 px-4 py-3">
                         <div>
                           <p className="font-semibold text-slate-900">#{dish.rank} {dish.dish}</p>
-                          <p className="text-xs text-slate-500">{dish.category} • {dish.calories} kcal</p>
+                          <p className="text-xs text-slate-500">{t(dish.category)} • {dish.calories} kcal</p>
                         </div>
                         <div className="text-right">
                           <p className="text-sm font-semibold text-slate-900">{dish.searches}</p>
-                          <p className="text-xs text-slate-500">lần ghi nhận</p>
+                          <p className="text-xs text-slate-500">{t("lần ghi nhận")}</p>
                         </div>
                       </div>
                     ))}
@@ -1337,20 +1343,20 @@ export function Admin() {
         {activeTab === "ai" ? (
           loadingAi ? (
             <div className="rounded-2xl border border-slate-200 bg-white px-5 py-10 text-center text-slate-500">
-              Đang tải cài đặt AI...
+              {t("Đang tải cài đặt AI...")}
             </div>
           ) : aiSettings ? (
             <div className="space-y-6">
               <SectionCard
-                title="Cài đặt AI"
-                subtitle="Đang lưu vào backend settings hiện tại"
+                title={t("Cài đặt AI")}
+                subtitle={t("Đang lưu vào backend settings hiện tại")}
                 action={(
                   <button
                     onClick={() => void saveAiSettings()}
                     disabled={savingAi}
                     className="rounded-xl bg-emerald-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-emerald-700 disabled:opacity-60"
                   >
-                    {savingAi ? "Đang lưu..." : "Lưu cài đặt AI"}
+                    {t(savingAi ? "Đang lưu..." : "Lưu cài đặt AI")}
                   </button>
                 )}
               >
@@ -1395,7 +1401,7 @@ export function Admin() {
                         onChange={(next) => setAiSettings({ ...aiSettings, autoPortionRecommendation: next })}
                       />
                     </div>
-                    <p className="text-sm text-slate-500">Tự động gợi ý khẩu phần.</p>
+                    <p className="text-sm text-slate-500">{t("Tự động gợi ý khẩu phần.")}</p>
                   </div>
 
                   <div className="rounded-2xl border border-slate-200 p-4">
@@ -1406,7 +1412,7 @@ export function Admin() {
                         onChange={(next) => setAiSettings({ ...aiSettings, smartMealSuggestions: next })}
                       />
                     </div>
-                    <p className="text-sm text-slate-500">Bật gợi ý bữa ăn thông minh.</p>
+                    <p className="text-sm text-slate-500">{t("Bật gợi ý bữa ăn thông minh.")}</p>
                   </div>
 
                   <div className="rounded-2xl border border-slate-200 p-4">
@@ -1417,7 +1423,7 @@ export function Admin() {
                         onChange={(next) => setAiSettings({ ...aiSettings, nutritionValidation: next })}
                       />
                     </div>
-                    <p className="text-sm text-slate-500">Kiểm tra chéo logic dinh dưỡng.</p>
+                    <p className="text-sm text-slate-500">{t("Kiểm tra chéo logic dinh dưỡng.")}</p>
                   </div>
                 </div>
               </SectionCard>
@@ -1428,20 +1434,20 @@ export function Admin() {
         {activeTab === "security" ? (
           loadingSecurity ? (
             <div className="rounded-2xl border border-slate-200 bg-white px-5 py-10 text-center text-slate-500">
-              Đang tải cấu hình bảo mật...
+              {t("Đang tải cấu hình bảo mật...")}
             </div>
           ) : security ? (
             <div className="space-y-6">
               <SectionCard
-                title="Cài đặt bảo mật"
-                subtitle="Quản lý policy và theo dõi hoạt động đăng nhập"
+                title={t("Cài đặt bảo mật")}
+                subtitle={t("Quản lý policy và theo dõi hoạt động đăng nhập")}
                 action={(
                   <button
                     onClick={() => void saveSecurity()}
                     disabled={savingSecurity}
                     className="rounded-xl bg-emerald-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-emerald-700 disabled:opacity-60"
                   >
-                    {savingSecurity ? "Đang lưu..." : "Lưu bảo mật"}
+                    {t(savingSecurity ? "Đang lưu..." : "Lưu bảo mật")}
                   </button>
                 )}
               >
@@ -1454,14 +1460,14 @@ export function Admin() {
                         onChange={(next) => setSecurity({ ...security, twoFactorEnabled: next })}
                       />
                     </div>
-                    <p className="text-sm text-slate-500">Bật/tắt xác thực hai lớp cho admin flow.</p>
+                    <p className="text-sm text-slate-500">{t("Bật/tắt xác thực hai lớp cho admin flow.")}</p>
                   </div>
 
                   <div className="rounded-2xl border border-slate-200 p-4">
-                    <p className="mb-3 font-semibold text-slate-900">Password policy</p>
+                    <p className="mb-3 font-semibold text-slate-900">{t("Password policy")}</p>
                     <div className="space-y-3">
                       <label className="flex items-center justify-between gap-3 text-sm text-slate-700">
-                        Độ dài tối thiểu
+                        {t("Độ dài tối thiểu")}
                         <input
                           type="number"
                           min={6}
@@ -1477,7 +1483,7 @@ export function Admin() {
                         />
                       </label>
                       <label className="flex items-center justify-between gap-3 text-sm text-slate-700">
-                        Ký tự đặc biệt
+                        {t("Ký tự đặc biệt")}
                         <Toggle
                           checked={security.passwordPolicy.requireSpecialChar}
                           onChange={(next) => setSecurity({
@@ -1487,7 +1493,7 @@ export function Admin() {
                         />
                       </label>
                       <label className="flex items-center justify-between gap-3 text-sm text-slate-700">
-                        Chữ hoa
+                        {t("Chữ hoa")}
                         <Toggle
                           checked={security.passwordPolicy.requireUppercase}
                           onChange={(next) => setSecurity({
@@ -1497,7 +1503,7 @@ export function Admin() {
                         />
                       </label>
                       <label className="flex items-center justify-between gap-3 text-sm text-slate-700">
-                        Chữ số
+                        {t("Chữ số")}
                         <Toggle
                           checked={security.passwordPolicy.requireNumber}
                           onChange={(next) => setSecurity({
@@ -1512,7 +1518,7 @@ export function Admin() {
               </SectionCard>
 
               <div className="grid gap-6 xl:grid-cols-2">
-                <SectionCard title="Login activity" subtitle="Lấy từ security settings hiện tại">
+                <SectionCard title={t("Login activity")} subtitle={t("Lấy từ security settings hiện tại")}>
                   <div className="space-y-3">
                     {security.loginActivity.map((item, index) => (
                       <div key={`${item.ip}-${index}`} className="flex items-start justify-between rounded-xl bg-slate-50 px-4 py-3">
@@ -1522,31 +1528,31 @@ export function Admin() {
                         </div>
                         <div className="text-right">
                           <p className={`text-sm font-semibold ${item.status === "success" ? "text-emerald-700" : "text-red-600"}`}>
-                            {item.status}
+                            {t(item.status)}
                           </p>
-                          <p className="text-xs text-slate-500">{formatDateTime(item.time)}</p>
+                          <p className="text-xs text-slate-500">{formatDateTime(item.time, locale)}</p>
                         </div>
                       </div>
                     ))}
                   </div>
                 </SectionCard>
 
-                <SectionCard title="AI safety logs" subtitle="Nhật ký prompt nguy hiểm để admin kiểm tra">
+                <SectionCard title={t("AI safety logs")} subtitle={t("Nhật ký prompt nguy hiểm để admin kiểm tra")}>
                   <div className="space-y-3">
                     {safetyLogs.length ? safetyLogs.map((log) => (
                       <div key={log.id} className="rounded-xl bg-slate-50 px-4 py-3">
                         <div className="flex items-center justify-between gap-3">
-                          <p className="font-semibold text-slate-900">{log.reason || "Blocked prompt"}</p>
-                          <span className="text-xs text-slate-500">{formatDateTime(log.time)}</span>
+                          <p className="font-semibold text-slate-900">{t(log.reason || "Blocked prompt")}</p>
+                          <span className="text-xs text-slate-500">{formatDateTime(log.time, locale)}</span>
                         </div>
-                        <p className="mt-2 text-sm text-slate-600">{log.prompt || "Không có prompt."}</p>
+                        <p className="mt-2 text-sm text-slate-600">{log.prompt || t("Không có prompt.")}</p>
                         <p className="mt-1 text-xs text-slate-500">
                           member: {log.memberId || "--"} • ip: {log.ip || "--"}
                         </p>
                       </div>
                     )) : (
                       <div className="rounded-xl border border-dashed border-slate-200 px-4 py-8 text-center text-sm text-slate-500">
-                        Chưa có safety log nào.
+                        {t("Chưa có safety log nào.")}
                       </div>
                     )}
                   </div>

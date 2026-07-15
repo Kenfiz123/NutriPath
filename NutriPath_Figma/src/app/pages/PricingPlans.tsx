@@ -3,6 +3,7 @@ import { Link } from "react-router";
 import { Check, X, Crown, Star, Zap, Leaf, ArrowRight, Shield, Sparkles } from "lucide-react";
 import { getFaqs, getPlans, getStoredSession, type Plan } from "../api";
 import { UpgradeModal } from "../components/UpgradeModal";
+import { useLanguage } from "../language";
 
 const planUi = {
   free: {
@@ -37,6 +38,7 @@ const planUi = {
 };
 
 export function PricingPlans() {
+  const { locale, t } = useLanguage();
   const [billing, setBilling] = useState<"monthly" | "annual">("monthly");
   const [plans, setPlans] = useState<Plan[]>([]);
   const [faqs, setFaqs] = useState<Array<{ id: string; question: string; answer: string }>>([]);
@@ -52,7 +54,7 @@ export function PricingPlans() {
         setFaqs(faqData._embedded.faqs);
         setError(null);
       })
-      .catch((err) => setError(err instanceof Error ? err.message : "Không tải được dữ liệu gói"));
+      .catch((err) => setError(err instanceof Error ? err.message : t("Không tải được dữ liệu gói")));
   }, [billing]);
 
   return (
@@ -61,20 +63,20 @@ export function PricingPlans() {
         <div className="max-w-[1440px] mx-auto px-8 text-center">
           <div className="inline-flex items-center gap-2 bg-green-100 text-green-700 rounded-full px-4 py-1.5 mb-5">
             <Sparkles className="w-4 h-4" />
-            <span style={{ fontSize: "0.875rem", fontWeight: 600 }}>Chọn gói phù hợp</span>
+            <span style={{ fontSize: "0.875rem", fontWeight: 600 }}>{t("Chọn gói phù hợp")}</span>
           </div>
           <h1 className="text-gray-900 mb-4" style={{ fontSize: "3rem", fontWeight: 800, lineHeight: 1.15 }}>
-            Đầu tư cho <span className="text-green-600">sức khỏe</span> của bạn
+            {t("Đầu tư cho")} <span className="text-green-600">{t("sức khỏe")}</span> {t("của bạn")}
           </h1>
           <p className="text-gray-500 max-w-xl mx-auto mb-8" style={{ fontSize: "1.1rem", lineHeight: 1.7 }}>
-            Giá và quyền lợi được tải từ backend, không còn hard-code trong UI.
+            {t("Giá và quyền lợi được tải từ backend, không còn hard-code trong UI.")}
           </p>
           <div className="inline-flex items-center bg-gray-100 rounded-full p-1 gap-1">
             <button onClick={() => setBilling("monthly")} className={`px-5 py-2 rounded-full transition-all ${billing === "monthly" ? "bg-white text-gray-900 shadow-sm" : "text-gray-500"}`} style={{ fontSize: "0.9rem", fontWeight: 600 }}>
-              Theo tháng
+              {t("Theo tháng")}
             </button>
             <button onClick={() => setBilling("annual")} className={`px-5 py-2 rounded-full transition-all flex items-center gap-2 ${billing === "annual" ? "bg-white text-gray-900 shadow-sm" : "text-gray-500"}`} style={{ fontSize: "0.9rem", fontWeight: 600 }}>
-              Theo năm <span className="bg-green-500 text-white text-xs px-2 py-0.5 rounded-full">-20%</span>
+              {t("Theo năm")} <span className="bg-green-500 text-white text-xs px-2 py-0.5 rounded-full">-20%</span>
             </button>
           </div>
         </div>
@@ -95,7 +97,7 @@ export function PricingPlans() {
                 <div key={plan.id} className={`relative rounded-3xl p-8 transition-all hover:-translate-y-2 hover:shadow-2xl duration-300 ${ui.cardClass}`}>
                   {"badge" in ui && ui.badge && (
                     <div className={`absolute -top-4 left-1/2 -translate-x-1/2 px-4 py-1.5 rounded-full text-xs font-bold shadow-md ${ui.badgeBg}`}>
-                      {isSvip ? "👑 " : "🔥 "}{ui.badge}
+                      {isSvip ? "👑 " : "🔥 "}{t(ui.badge)}
                     </div>
                   )}
 
@@ -106,11 +108,11 @@ export function PricingPlans() {
                     <h3 className={`mb-1 ${ui.nameClass}`} style={{ fontSize: "0.9rem", fontWeight: 700, letterSpacing: "0.1em", textTransform: "uppercase" }}>{plan.name}</h3>
                     <div className="flex items-end gap-1 mb-2">
                       <span className={ui.priceClass} style={{ fontSize: "2.5rem", fontWeight: 800, lineHeight: 1 }}>
-                        {previewPrice === 0 ? "0₫" : `${previewPrice.toLocaleString("vi-VN")}₫`}
+                        {previewPrice === 0 ? "0₫" : `${previewPrice.toLocaleString(locale)}₫`}
                       </span>
-                      {previewPrice > 0 && <span className={`mb-1 ${isVip ? "text-green-200" : isSvip ? "text-amber-200" : "text-gray-400"}`} style={{ fontSize: "0.9rem" }}>/{billing === "annual" ? "tháng" : plan.period}</span>}
+                      {previewPrice > 0 && <span className={`mb-1 ${isVip ? "text-green-200" : isSvip ? "text-amber-200" : "text-gray-400"}`} style={{ fontSize: "0.9rem" }}>/{t(billing === "annual" ? "tháng" : plan.period)}</span>}
                     </div>
-                    <p className={`${isVip ? "text-green-100" : isSvip ? "text-amber-100" : "text-gray-500"}`} style={{ fontSize: "0.85rem" }}>{plan.description}</p>
+                    <p className={`${isVip ? "text-green-100" : isSvip ? "text-amber-100" : "text-gray-500"}`} style={{ fontSize: "0.85rem" }}>{t(plan.description)}</p>
                   </div>
 
                   <button
@@ -125,7 +127,7 @@ export function PricingPlans() {
                     className={`w-full py-3.5 rounded-2xl mb-6 transition-all ${ui.btnClass}`}
                     style={{ fontSize: "0.95rem", fontWeight: 700 }}
                   >
-                    {ui.btnLabel}
+                    {t(ui.btnLabel)}
                   </button>
 
                   <div className="space-y-2.5">
@@ -141,7 +143,7 @@ export function PricingPlans() {
                           </div>
                         )}
                         <span className={`${feature.included ? (isVip || isSvip ? "text-white" : "text-gray-700") : (isVip ? "text-white/40" : "text-gray-300")}`} style={{ fontSize: "0.875rem", lineHeight: 1.5 }}>
-                          {feature.label}
+                          {t(feature.label)}
                         </span>
                       </div>
                     ))}
@@ -159,7 +161,7 @@ export function PricingPlans() {
             ].map(({ icon: Icon, text }) => (
               <div key={text} className="flex items-center gap-2 text-gray-500">
                 <Icon className="w-4 h-4 text-green-500" />
-                <span style={{ fontSize: "0.875rem" }}>{text}</span>
+                <span style={{ fontSize: "0.875rem" }}>{t(text)}</span>
               </div>
             ))}
           </div>
@@ -168,16 +170,16 @@ export function PricingPlans() {
 
       <section className="bg-gray-50 py-16">
         <div className="max-w-3xl mx-auto px-8">
-          <h2 className="text-gray-900 text-center mb-10" style={{ fontSize: "2rem", fontWeight: 800 }}>Câu hỏi thường gặp</h2>
+          <h2 className="text-gray-900 text-center mb-10" style={{ fontSize: "2rem", fontWeight: 800 }}>{t("Câu hỏi thường gặp")}</h2>
           <div className="space-y-3">
             {faqs.map((faq) => (
               <div key={faq.id} className="bg-white rounded-2xl overflow-hidden border border-gray-100">
                 <button className="w-full text-left px-6 py-4 flex justify-between items-center" onClick={() => setOpenFaq(openFaq === faq.id ? null : faq.id)}>
-                  <span className="text-gray-900" style={{ fontSize: "0.95rem", fontWeight: 600 }}>{faq.question}</span>
+                  <span className="text-gray-900" style={{ fontSize: "0.95rem", fontWeight: 600 }}>{t(faq.question)}</span>
                   <span className={`text-green-600 transition-transform ${openFaq === faq.id ? "rotate-45" : ""}`} style={{ fontSize: "1.5rem", lineHeight: 1 }}>+</span>
                 </button>
                 {openFaq === faq.id && (
-                  <div className="px-6 pb-4 text-gray-500" style={{ fontSize: "0.9rem", lineHeight: 1.7 }}>{faq.answer}</div>
+                  <div className="px-6 pb-4 text-gray-500" style={{ fontSize: "0.9rem", lineHeight: 1.7 }}>{t(faq.answer)}</div>
                 )}
               </div>
             ))}
@@ -187,14 +189,14 @@ export function PricingPlans() {
 
       <section className="py-16" style={{ background: "linear-gradient(135deg, #15803d 0%, #059669 100%)" }}>
         <div className="text-center px-8">
-          <h2 className="text-white mb-4" style={{ fontSize: "2rem", fontWeight: 800 }}>Bắt đầu ngay hôm nay</h2>
-          <p className="text-green-100 mb-8" style={{ fontSize: "1rem" }}>Dùng thử 14 ngày miễn phí, không cần thẻ tín dụng</p>
+          <h2 className="text-white mb-4" style={{ fontSize: "2rem", fontWeight: 800 }}>{t("Bắt đầu ngay hôm nay")}</h2>
+          <p className="text-green-100 mb-8" style={{ fontSize: "1rem" }}>{t("Dùng thử 14 ngày miễn phí, không cần thẻ tín dụng")}</p>
           <div className="flex flex-wrap justify-center gap-4">
             <button onClick={() => { setSelectedPlan("vip"); setShowModal(true); }} className="bg-white text-green-700 px-8 py-3.5 rounded-2xl hover:bg-green-50 transition-all shadow-xl" style={{ fontSize: "1rem", fontWeight: 700 }}>
-              Dùng thử VIP <ArrowRight className="inline w-4 h-4 ml-1" />
+              {t("Dùng thử VIP")} <ArrowRight className="inline w-4 h-4 ml-1" />
             </button>
             <Link to="/svip" className="bg-amber-500 text-white px-8 py-3.5 rounded-2xl hover:bg-amber-400 transition-all shadow-xl flex items-center gap-2" style={{ fontSize: "1rem", fontWeight: 700 }}>
-              <Crown className="w-5 h-5" /> Khám phá SVIP
+              <Crown className="w-5 h-5" /> {t("Khám phá SVIP")}
             </Link>
           </div>
         </div>

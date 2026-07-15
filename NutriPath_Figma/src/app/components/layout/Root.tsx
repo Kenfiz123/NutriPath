@@ -4,11 +4,13 @@ import { MessageCircle, X } from "lucide-react";
 import { Navbar } from "./Navbar";
 import { ChatBot } from "../ChatBot";
 import { useAuth } from "../../auth";
+import { useLanguage } from "../../language";
 
 export function Root() {
   const location = useLocation();
   const isLanding = location.pathname === "/";
   const { session } = useAuth();
+  const { t } = useLanguage();
   const memberId = session?.member.id;
   const [chatOpen, setChatOpen] = useState(false);
 
@@ -27,7 +29,7 @@ export function Root() {
           <button
             type="button"
             onClick={() => setChatOpen((current) => !current)}
-            aria-label={chatOpen ? "Đóng NutriBot" : "Mở NutriBot"}
+            aria-label={chatOpen ? t("Đóng NutriBot") : t("Mở NutriBot")}
             aria-controls="nutribot-dialog"
             aria-expanded={chatOpen}
             className={`fixed bottom-6 right-6 z-50 flex h-14 w-14 items-center justify-center rounded-full shadow-lg transition-all hover:scale-110 ${

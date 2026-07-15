@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { Link } from "react-router";
 import { X, Crown, Star, Check, Shield, Zap, Leaf, ArrowRight, Sparkles } from "lucide-react";
+import { useLanguage } from "../language";
 
 interface UpgradeModalProps {
   defaultPlan?: "vip" | "svip";
@@ -22,11 +23,14 @@ const svipBenefits = [
 ];
 
 export function UpgradeModal({ defaultPlan = "vip", onClose }: UpgradeModalProps) {
+  const { locale, t } = useLanguage();
   const [selected, setSelected] = useState<"vip" | "svip">(defaultPlan);
 
   const isVip = selected === "vip";
   const benefits = isVip ? vipBenefits : svipBenefits;
-  const price = isVip ? "25,000₫" : "50,000₫";
+  const price = new Intl.NumberFormat(locale, { style: "currency", currency: "VND", maximumFractionDigits: 0 }).format(isVip ? 25000 : 50000);
+  const vipPrice = new Intl.NumberFormat(locale, { style: "currency", currency: "VND", maximumFractionDigits: 0 }).format(25000);
+  const svipPrice = new Intl.NumberFormat(locale, { style: "currency", currency: "VND", maximumFractionDigits: 0 }).format(50000);
 
   return (
     <div
@@ -41,6 +45,7 @@ export function UpgradeModal({ defaultPlan = "vip", onClose }: UpgradeModalProps
         {/* Close button */}
         <button
           onClick={onClose}
+          aria-label={t("Đóng cửa sổ nâng cấp")}
           className="absolute top-4 right-4 z-10 w-9 h-9 bg-gray-100 hover:bg-gray-200 rounded-full flex items-center justify-center transition-colors"
         >
           <X className="w-4 h-4 text-gray-600" />
@@ -68,12 +73,12 @@ export function UpgradeModal({ defaultPlan = "vip", onClose }: UpgradeModalProps
               }
             </div>
             <h2 className="text-white mb-2" style={{ fontSize: "1.6rem", fontWeight: 800 }}>
-              Nâng cấp lên {isVip ? "VIP" : "SVIP"}
+              {t("Nâng cấp lên {plan}", { plan: isVip ? "VIP" : "SVIP" })}
             </h2>
             <p className="text-white/80" style={{ fontSize: "0.9rem", lineHeight: 1.6 }}>
               {isVip
-                ? "Mở khóa toàn bộ công thức, AI chat và trải nghiệm không quảng cáo"
-                : "Trải nghiệm đỉnh cao với AI Coach dinh dưỡng hoàn toàn cá nhân hóa"
+                ? t("Mở khóa toàn bộ công thức, AI chat và trải nghiệm không quảng cáo")
+                : t("Trải nghiệm đỉnh cao với AI Coach dinh dưỡng hoàn toàn cá nhân hóa")
               }
             </p>
           </div>
@@ -90,7 +95,7 @@ export function UpgradeModal({ defaultPlan = "vip", onClose }: UpgradeModalProps
               style={{ fontSize: "0.9rem", fontWeight: 700 }}
             >
               <Star className="w-4 h-4" />
-              VIP — 25,000₫/tháng
+              VIP — {vipPrice}/{t("tháng")}
             </button>
             <button
               onClick={() => setSelected("svip")}
@@ -100,7 +105,7 @@ export function UpgradeModal({ defaultPlan = "vip", onClose }: UpgradeModalProps
               style={{ fontSize: "0.9rem", fontWeight: 700 }}
             >
               <Crown className="w-4 h-4" />
-              SVIP — 50,000₫/tháng
+              SVIP — {svipPrice}/{t("tháng")}
             </button>
           </div>
 
@@ -113,7 +118,7 @@ export function UpgradeModal({ defaultPlan = "vip", onClose }: UpgradeModalProps
                   <div className={`w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0 ${b.color.split(" ")[1]}`}>
                     <Icon className={`w-4 h-4 ${b.color.split(" ")[0]}`} />
                   </div>
-                  <span className="text-gray-700" style={{ fontSize: "0.9rem" }}>{b.text}</span>
+                  <span className="text-gray-700" style={{ fontSize: "0.9rem" }}>{t(b.text)}</span>
                   <Check className="w-4 h-4 text-green-500 ml-auto flex-shrink-0" />
                 </div>
               );
@@ -123,12 +128,12 @@ export function UpgradeModal({ defaultPlan = "vip", onClose }: UpgradeModalProps
           {/* Price summary */}
           <div className={`rounded-2xl p-4 mb-6 border-2 ${isVip ? "bg-green-50 border-green-200" : "bg-amber-50 border-amber-200"}`}>
             <div className="flex justify-between items-center">
-              <span className="text-gray-600" style={{ fontSize: "0.9rem" }}>Gói {isVip ? "VIP" : "SVIP"}</span>
-              <span className={`${isVip ? "text-green-700" : "text-amber-700"}`} style={{ fontSize: "1.1rem", fontWeight: 800 }}>{price}/tháng</span>
+              <span className="text-gray-600" style={{ fontSize: "0.9rem" }}>{t("Gói")} {isVip ? "VIP" : "SVIP"}</span>
+              <span className={`${isVip ? "text-green-700" : "text-amber-700"}`} style={{ fontSize: "1.1rem", fontWeight: 800 }}>{price}/{t("tháng")}</span>
             </div>
             <div className="flex justify-between items-center mt-1">
-              <span className="text-gray-400" style={{ fontSize: "0.8rem" }}>Thanh toán hàng tháng</span>
-              <span className="text-green-600 bg-green-100 px-2 py-0.5 rounded-full" style={{ fontSize: "0.75rem", fontWeight: 600 }}>7 ngày dùng thử miễn phí</span>
+              <span className="text-gray-400" style={{ fontSize: "0.8rem" }}>{t("Thanh toán hàng tháng")}</span>
+              <span className="text-green-600 bg-green-100 px-2 py-0.5 rounded-full" style={{ fontSize: "0.75rem", fontWeight: 600 }}>{t("7 ngày dùng thử miễn phí")}</span>
             </div>
           </div>
 
@@ -143,7 +148,7 @@ export function UpgradeModal({ defaultPlan = "vip", onClose }: UpgradeModalProps
             style={{ fontSize: "1rem", fontWeight: 700 }}
             onClick={onClose}
           >
-            Nâng cấp ngay <ArrowRight className="w-5 h-5" />
+            {t("Nâng cấp ngay")} <ArrowRight className="w-5 h-5" />
           </Link>
           <div className="text-center pb-2">
             <Link
@@ -152,7 +157,7 @@ export function UpgradeModal({ defaultPlan = "vip", onClose }: UpgradeModalProps
               className="text-green-600 hover:text-green-700 underline"
               style={{ fontSize: "0.875rem" }}
             >
-              Dùng thử 7 ngày miễn phí
+              {t("Dùng thử 7 ngày miễn phí")}
             </Link>
           </div>
         </div>
@@ -166,7 +171,7 @@ export function UpgradeModal({ defaultPlan = "vip", onClose }: UpgradeModalProps
           ].map(({ icon: Icon, text }) => (
             <div key={text} className="flex items-center gap-1.5 text-gray-400">
               <Icon className="w-3.5 h-3.5 text-green-500" />
-              <span style={{ fontSize: "0.75rem" }}>{text}</span>
+              <span style={{ fontSize: "0.75rem" }}>{t(text)}</span>
             </div>
           ))}
         </div>

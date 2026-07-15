@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { Mic, MicOff } from "lucide-react";
+import { useLanguage } from "../language";
 
 type SpeechRecognitionConstructor = new () => SpeechRecognition;
 
@@ -33,15 +34,17 @@ function getSpeechRecognition(): SpeechRecognitionConstructor | null {
   return speechWindow.SpeechRecognition ?? speechWindow.webkitSpeechRecognition ?? null;
 }
 
-export function VoiceInputButton({ onTranscript, className = "", title = "Nhập bằng giọng nói" }: VoiceInputButtonProps) {
+export function VoiceInputButton({ onTranscript, className = "", title }: VoiceInputButtonProps) {
+  const { locale, t } = useLanguage();
   const [listening, setListening] = useState(false);
   const supported = Boolean(getSpeechRecognition());
+  const resolvedTitle = title ? t(title) : t("Nhập bằng giọng nói");
 
   const handleClick = () => {
     const Recognition = getSpeechRecognition();
     if (!Recognition || listening) return;
     const recognition = new Recognition();
-    recognition.lang = "vi-VN";
+    recognition.lang = locale;
     recognition.interimResults = false;
     recognition.continuous = false;
     recognition.onresult = (event) => {
@@ -62,13 +65,13 @@ export function VoiceInputButton({ onTranscript, className = "", title = "Nhập
       type="button"
       onClick={handleClick}
       disabled={!supported || listening}
-      title={supported ? title : "Trình duyệt chưa hỗ trợ nhập giọng nói"}
+      title={supported ? resolvedTitle : t("Trình duyệt chưa hỗ trợ nhập giọng nói")}
       className={`inline-flex items-center justify-center rounded-xl border px-3 py-2 transition disabled:cursor-not-allowed disabled:opacity-50 ${
         listening
           ? "border-emerald-300 bg-emerald-50 text-emerald-700 dark:border-emerald-400/30 dark:bg-emerald-500/15 dark:text-emerald-200"
           : "border-gray-200 bg-white text-gray-600 hover:border-emerald-300 hover:text-emerald-700 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-200 dark:hover:border-emerald-400"
       } ${className}`}
-      aria-label={title}
+      aria-label={resolvedTitle}
     >
       {listening ? <MicOff className="h-4 w-4" /> : <Mic className="h-4 w-4" />}
     </button>

@@ -12,6 +12,7 @@ import {
 } from "lucide-react";
 import { VoiceInputButton } from "../VoiceInputButton";
 import type { WorkoutFormState } from "../../hooks/useWorkouts";
+import { useLanguage } from "../../language";
 
 const workoutTypes = [
   {
@@ -87,6 +88,7 @@ export function WorkoutForm({
   onChange,
   onSubmit,
 }: WorkoutFormProps) {
+  const { locale, t } = useLanguage();
   const selectedType =
     workoutTypes.find((type) => type.id === form.type) ?? workoutTypes[0];
   const SelectedIcon = selectedType.icon;
@@ -109,15 +111,17 @@ export function WorkoutForm({
           </div>
           <div>
             <p className="text-sm font-extrabold text-gray-900 dark:text-slate-50">
-              Ghi bài tập chi tiết
+              {t("Ghi bài tập chi tiết")}
             </p>
             <p className="text-xs text-gray-500 dark:text-slate-300">
-              {selectedType.hint}
+              {t(selectedType.hint)}
             </p>
           </div>
         </div>
         <div className="rounded-full bg-white px-3 py-1 text-xs font-extrabold text-green-700 dark:bg-emerald-500/15 dark:text-emerald-200">
-          {Math.round(workoutCalories).toLocaleString("vi-VN")} kcal từ workout
+          {t("{calories} kcal từ workout", {
+            calories: Math.round(workoutCalories).toLocaleString(locale),
+          })}
         </div>
       </div>
 
@@ -136,7 +140,7 @@ export function WorkoutForm({
               }`}
             >
               <Icon className="h-4 w-4" />
-              <span className="text-xs font-extrabold">{label}</span>
+              <span className="text-xs font-extrabold">{t(label)}</span>
             </button>
           );
         })}
@@ -145,7 +149,7 @@ export function WorkoutForm({
       <div className="mt-4 grid grid-cols-1 gap-3 md:grid-cols-4">
         <label className="block">
           <span className="mb-1 block text-xs font-bold text-gray-600 dark:text-slate-200">
-            Thời lượng
+            {t("Thời lượng")}
           </span>
           <div className="flex h-[42px] items-center gap-2 rounded-xl border border-gray-200 bg-white px-3 dark:border-slate-600 dark:bg-slate-950">
             <Timer className="h-4 w-4 text-gray-400" />
@@ -159,13 +163,13 @@ export function WorkoutForm({
               }
               className="min-w-0 flex-1 bg-transparent text-sm font-bold outline-none dark:text-slate-50"
             />
-            <span className="text-xs text-gray-400">phút</span>
+            <span className="text-xs text-gray-400">{t("phút")}</span>
           </div>
         </label>
 
         <label className="block">
           <span className="mb-1 block text-xs font-bold text-gray-600 dark:text-slate-200">
-            Cường độ
+            {t("Cường độ")}
           </span>
           <select
             value={form.intensity}
@@ -179,7 +183,7 @@ export function WorkoutForm({
           >
             {intensityOptions.map((option) => (
               <option key={option.id} value={option.id}>
-                {option.label}
+                {t(option.label)}
               </option>
             ))}
           </select>
@@ -188,7 +192,7 @@ export function WorkoutForm({
         {showMovementInputs && (
           <label className="block">
             <span className="mb-1 block text-xs font-bold text-gray-600 dark:text-slate-200">
-              Quãng đường
+              {t("Quãng đường")}
             </span>
             <input
               type="number"
@@ -207,7 +211,7 @@ export function WorkoutForm({
         {showMovementInputs && (
           <label className="block">
             <span className="mb-1 block text-xs font-bold text-gray-600 dark:text-slate-200">
-              Tốc độ
+              {t("Tốc độ")}
             </span>
             <input
               type="number"
@@ -226,7 +230,7 @@ export function WorkoutForm({
         {showInclineInput && (
           <label className="block">
             <span className="mb-1 block text-xs font-bold text-gray-600 dark:text-slate-200">
-              Góc dốc máy
+              {t("Góc dốc máy")}
             </span>
             <input
               type="number"
@@ -245,7 +249,7 @@ export function WorkoutForm({
 
         <label className="block">
           <span className="mb-1 block text-xs font-bold text-gray-600 dark:text-slate-200">
-            Calo tự nhập
+            {t("Calo tự nhập")}
           </span>
           <input
             type="number"
@@ -268,7 +272,7 @@ export function WorkoutForm({
             value={form.notes}
             onChange={(event) => onChange("notes", event.target.value)}
             className="min-h-[78px] min-w-0 flex-1 rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm leading-6 outline-none focus:border-green-400 dark:border-slate-600 dark:bg-slate-950 dark:text-slate-50 dark:placeholder:text-slate-400"
-            placeholder="Ví dụ: tập gym lưng xô 45 phút, nghỉ 60 giây mỗi set; hoặc chạy máy 30 phút tốc độ 8km/h dốc 5%..."
+            placeholder={t("Ví dụ: tập gym lưng xô 45 phút, nghỉ 60 giây mỗi set; hoặc chạy máy 30 phút tốc độ 8km/h dốc 5%...")}
           />
           <VoiceInputButton
             className="h-[78px] w-12 flex-shrink-0"
@@ -284,18 +288,16 @@ export function WorkoutForm({
           className="flex items-center justify-center gap-2 rounded-xl bg-green-600 px-5 py-3 text-sm font-extrabold text-white transition hover:bg-green-700 disabled:cursor-not-allowed disabled:opacity-60 lg:min-w-[150px]"
         >
           <Plus className="h-4 w-4" />
-          {saving ? "Đang tính..." : "Tính & lưu"}
+          {saving ? t("Đang tính...") : t("Tính & lưu")}
         </button>
       </div>
 
       <p className="mt-2 text-xs leading-5 text-gray-500 dark:text-slate-300">
-        Công thức mặc định dùng MET theo cân nặng, thời lượng và cường độ. Nếu
-        nhập calo tự đo từ máy/đồng hồ, hệ thống sẽ dùng số đó; bài khác hoặc mô
-        tả phức tạp có thể dùng AI để ước tính bảo thủ hơn.
+        {t("Công thức mặc định dùng MET theo cân nặng, thời lượng và cường độ. Nếu nhập calo tự đo từ máy/đồng hồ, hệ thống sẽ dùng số đó; bài khác hoặc mô tả phức tạp có thể dùng AI để ước tính bảo thủ hơn.")}
       </p>
       {message && (
         <p className="mt-3 rounded-xl bg-white px-3 py-2 text-xs font-bold text-green-700 dark:border dark:border-emerald-400/20 dark:bg-slate-950 dark:text-emerald-200">
-          {message}
+          {t(message)}
         </p>
       )}
     </div>

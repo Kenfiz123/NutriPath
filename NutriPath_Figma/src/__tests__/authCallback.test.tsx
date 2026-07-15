@@ -18,15 +18,18 @@ vi.mock("../app/supabaseAuth", () => ({
 }));
 
 import { AuthCallback } from "../app/pages/AuthCallback";
+import { LanguageProvider } from "../app/language";
 
 function renderCallback() {
   return render(
-    <MemoryRouter initialEntries={["/auth/callback"]}>
-      <Routes>
-        <Route path="/auth/callback" element={<AuthCallback />} />
-        <Route path="/dashboard" element={<div>Dashboard</div>} />
-      </Routes>
-    </MemoryRouter>,
+    <LanguageProvider>
+      <MemoryRouter initialEntries={["/auth/callback"]}>
+        <Routes>
+          <Route path="/auth/callback" element={<AuthCallback />} />
+          <Route path="/dashboard" element={<div>Dashboard</div>} />
+        </Routes>
+      </MemoryRouter>
+    </LanguageProvider>,
   );
 }
 

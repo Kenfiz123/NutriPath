@@ -1,5 +1,6 @@
 import { Flame } from "lucide-react";
 import { RadialBar, RadialBarChart, ResponsiveContainer } from "recharts";
+import { useLanguage } from "../../language";
 
 interface CalorieRingProps {
   consumed: number;
@@ -14,6 +15,7 @@ export function CalorieRing({
   remaining,
   burned,
 }: CalorieRingProps) {
+  const { t } = useLanguage();
   const progress = target > 0 ? Math.round((consumed / target) * 100) : 0;
   const chartProgress = Math.min(100, Math.max(0, progress));
 
@@ -21,7 +23,7 @@ export function CalorieRing({
     <section className="rounded-2xl border border-gray-100 bg-white p-6 shadow-sm dark:border-slate-700 dark:bg-slate-800">
       <div className="mb-4 flex items-center justify-between">
         <h2 className="text-base font-bold text-gray-900 dark:text-slate-50">
-          Calo hôm nay
+          {t("Calo hôm nay")}
         </h2>
         <Flame className="h-5 w-5 text-orange-500" />
       </div>
@@ -49,7 +51,7 @@ export function CalorieRing({
           </span>
           <span className="text-xs text-gray-400">/ {target} kcal</span>
           <span className="mt-1 text-xs font-semibold text-green-600 dark:text-emerald-300">
-            {progress}% mục tiêu
+            {progress}% {t("mục tiêu")}
           </span>
         </div>
       </div>
@@ -59,7 +61,7 @@ export function CalorieRing({
             {remaining}
           </p>
           <p className="text-xs text-gray-500 dark:text-slate-300">
-            kcal còn lại
+            {t("kcal còn lại")}
           </p>
         </div>
         <div className="rounded-xl bg-orange-50 p-3 text-center dark:bg-orange-500/10">
@@ -67,7 +69,7 @@ export function CalorieRing({
             {burned}
           </p>
           <p className="text-xs text-gray-500 dark:text-slate-300">
-            kcal đã đốt
+            {t("kcal đã đốt")}
           </p>
         </div>
       </div>

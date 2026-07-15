@@ -26,6 +26,7 @@ import {
   type CheckoutQuote,
   type Plan,
 } from "../api";
+import { useLanguage } from "../language";
 
 type PlanId = "vip" | "svip";
 type PaymentMethod = "payos" | "vnpay" | "vnpayqr" | "bank" | "card";
@@ -62,11 +63,12 @@ const planColors: Record<PlanId, { icon: typeof Star; badge: string; accent: str
   },
 };
 
-function formatMoney(amount: number, currency = "VND") {
-  return `${amount.toLocaleString("vi-VN")}${currency === "VND" ? "đ" : ` ${currency}`}`;
+function formatMoney(amount: number, locale: "vi-VN" | "en-US", currency = "VND") {
+  return `${amount.toLocaleString(locale)}${currency === "VND" ? "đ" : ` ${currency}`}`;
 }
 
 export function Checkout() {
+  const { locale, t } = useLanguage();
   const [searchParams, setSearchParams] = useSearchParams();
   const initialPlan = searchParams.get("plan") === "svip" ? "svip" : "vip";
   const initialBilling = searchParams.get("billing") === "annual" ? "annual" : "monthly";
@@ -91,8 +93,8 @@ export function Checkout() {
   useEffect(() => {
     getPlans(billing)
       .then((data) => setPlans(data._embedded.plans.filter((plan) => plan.id !== "free")))
-      .catch((err) => setError(err instanceof Error ? err.message : "Không tải được dữ liệu gói."));
-  }, [billing]);
+      .catch((err) => setError(err instanceof Error ? t(err.message) : t("Không tải được dữ liệu gói.")));
+  }, [billing, t]);
 
   useEffect(() => {
     const params: Record<string, string> = { plan: selectedPlan, billing };
@@ -111,7 +113,7 @@ export function Checkout() {
       })
       .catch((err) => {
         if (!active) return;
-        setError(err instanceof Error ? err.message : "Không lấy được báo giá.");
+        setError(err instanceof Error ? t(err.message) : t("Không lấy được báo giá."));
       })
       .finally(() => {
         if (active) setLoadingQuote(false);
@@ -120,7 +122,7 @@ export function Checkout() {
     return () => {
       active = false;
     };
-  }, [selectedPlan, billing, appliedDiscountCode, trialDays]);
+  }, [selectedPlan, billing, appliedDiscountCode, trialDays, t]);
 
   const selectedPlanData = useMemo(
     () => plans.find((plan) => plan.id === selectedPlan) ?? null,
@@ -174,7 +176,7 @@ export function Checkout() {
         });
       window.location.assign(data.paymentUrl);
     } catch (checkoutError) {
-      setError(checkoutError instanceof Error ? checkoutError.message : "Thanh toán chưa hoàn tất.");
+      setError(checkoutError instanceof Error ? t(checkoutError.message) : t("Thanh toán chưa hoàn tất."));
     } finally {
       setSubmitting(false);
     }
@@ -187,20 +189,22 @@ export function Checkout() {
           <div className="mx-auto mb-6 flex h-20 w-20 items-center justify-center rounded-full bg-green-100">
             <CheckCircle className="h-10 w-10 text-green-600" />
           </div>
-          <h1 className="text-gray-900" style={{ fontSize: "1.8rem", fontWeight: 800 }}>Kích hoạt gói thành công</h1>
+          <h1 className="text-gray-900" style={{ fontSize: "1.8rem", fontWeight: 800 }}>{t("Kích hoạt gói thành công")}</h1>
           <p className="mt-3 text-gray-500" style={{ fontSize: "0.95rem", lineHeight: 1.7 }}>
-            Tài khoản của bạn đã được {completed.quote.trialDays ? `kích hoạt dùng thử ${completed.quote.trialDays} ngày` : "nâng cấp"} lên <strong>{completed.planName}</strong>. Quyền mới đã được bật ngay trên dashboard, hồ sơ thành viên và các tính năng liên quan.
+            {t("Tài khoản của bạn đã được")} {completed.quote.trialDays
+              ? t("kích hoạt dùng thử {days} ngày", { days: completed.quote.trialDays })
+              : t("nâng cấp")} {t("lên")} <strong>{completed.planName}</strong>. {t("Quyền mới đã được bật ngay trên dashboard, hồ sơ thành viên và các tính năng liên quan.")}
           </p>
           <div className="mt-6 rounded-2xl border border-green-100 bg-green-50 px-5 py-4 text-left">
-            <p className="text-green-700" style={{ fontSize: "0.82rem", fontWeight: 700 }}>{completed.quote.trialDays ? "Thanh toán hôm nay" : "Tổng thanh toán"}</p>
-            <p className="mt-1 text-gray-900" style={{ fontSize: "1.35rem", fontWeight: 800 }}>{formatMoney(completed.quote.total, completed.quote.currency)}</p>
+            <p className="text-green-700" style={{ fontSize: "0.82rem", fontWeight: 700 }}>{t(completed.quote.trialDays ? "Thanh toán hôm nay" : "Tổng thanh toán")}</p>
+            <p className="mt-1 text-gray-900" style={{ fontSize: "1.35rem", fontWeight: 800 }}>{formatMoney(completed.quote.total, locale, completed.quote.currency)}</p>
           </div>
           <div className="mt-8 space-y-3">
             <Link to="/member" className="flex w-full items-center justify-center gap-2 rounded-2xl bg-green-600 px-4 py-3.5 text-white hover:bg-green-700" style={{ fontWeight: 700 }}>
-              Xem hồ sơ thành viên <ArrowRight className="h-4 w-4" />
+              {t("Xem hồ sơ thành viên")} <ArrowRight className="h-4 w-4" />
             </Link>
             <Link to="/dashboard" className="block text-gray-500 hover:text-gray-700" style={{ fontSize: "0.88rem" }}>
-              Quay về dashboard
+              {t("Quay về dashboard")}
             </Link>
           </div>
         </div>
@@ -220,7 +224,7 @@ export function Checkout() {
           </Link>
           <div className="flex items-center gap-2 text-gray-500">
             <Lock className="h-4 w-4 text-green-500" />
-            <span style={{ fontSize: "0.875rem" }}>Thanh toán bảo mật</span>
+            <span style={{ fontSize: "0.875rem" }}>{t("Thanh toán bảo mật")}</span>
           </div>
         </div>
       </div>
@@ -235,14 +239,14 @@ export function Checkout() {
         <div className="grid gap-8 lg:grid-cols-5">
           <div className="space-y-6 lg:col-span-3">
             <div className="rounded-3xl border border-gray-100 bg-white p-6 shadow-sm">
-              <h1 className="text-gray-900" style={{ fontSize: "1.8rem", fontWeight: 800 }}>Checkout gói thành viên</h1>
+              <h1 className="text-gray-900" style={{ fontSize: "1.8rem", fontWeight: 800 }}>{t("Checkout gói thành viên")}</h1>
               <p className="mt-2 text-gray-500" style={{ fontSize: "0.92rem" }}>
-                Báo giá và kích hoạt gói được lấy trực tiếp từ backend, không còn là màn demo cứng.
+                {t("Báo giá và kích hoạt gói được lấy trực tiếp từ backend, không còn là màn demo cứng.")}
               </p>
             </div>
 
             <div className="rounded-3xl border border-gray-100 bg-white p-6 shadow-sm">
-              <h2 className="mb-4 text-gray-700" style={{ fontSize: "0.9rem", fontWeight: 700, letterSpacing: "0.04em", textTransform: "uppercase" }}>Chọn gói</h2>
+              <h2 className="mb-4 text-gray-700" style={{ fontSize: "0.9rem", fontWeight: 700, letterSpacing: "0.04em", textTransform: "uppercase" }}>{t("Chọn gói")}</h2>
               <div className="grid gap-3 md:grid-cols-2">
                 {(["vip", "svip"] as PlanId[]).map((planId) => {
                   const plan = plans.find((item) => item.id === planId);
@@ -264,7 +268,7 @@ export function Checkout() {
                             <p className="text-gray-900" style={{ fontSize: "0.95rem", fontWeight: 800 }}>{plan?.name ?? planId.toUpperCase()}</p>
                             {isActive && <CheckCircle className={`h-5 w-5 ${colors.accent}`} />}
                           </div>
-                          <p className="mt-1 text-gray-500" style={{ fontSize: "0.82rem" }}>{plan?.description ?? "Đang tải mô tả gói..."}</p>
+                          <p className="mt-1 text-gray-500" style={{ fontSize: "0.82rem" }}>{plan ? t(plan.description) : t("Đang tải mô tả gói...")}</p>
                         </div>
                       </div>
                     </button>
@@ -274,14 +278,14 @@ export function Checkout() {
             </div>
 
             <div className="rounded-3xl border border-gray-100 bg-white p-6 shadow-sm">
-              <h2 className="mb-4 text-gray-700" style={{ fontSize: "0.9rem", fontWeight: 700, letterSpacing: "0.04em", textTransform: "uppercase" }}>Chu kỳ thanh toán</h2>
+              <h2 className="mb-4 text-gray-700" style={{ fontSize: "0.9rem", fontWeight: 700, letterSpacing: "0.04em", textTransform: "uppercase" }}>{t("Chu kỳ thanh toán")}</h2>
               <div className="grid gap-3 md:grid-cols-2">
                 <button
                   onClick={() => setBilling("monthly")}
                   className={`rounded-2xl border-2 p-4 text-left transition-all ${billing === "monthly" ? "border-green-500 bg-green-50" : "border-gray-200 hover:border-gray-300"}`}
                 >
-                  <p className="text-gray-900" style={{ fontSize: "0.92rem", fontWeight: 800 }}>Hàng tháng</p>
-                  <p className="mt-1 text-gray-500" style={{ fontSize: "0.82rem" }}>Thanh toán linh hoạt theo tháng</p>
+                  <p className="text-gray-900" style={{ fontSize: "0.92rem", fontWeight: 800 }}>{t("Hàng tháng")}</p>
+                  <p className="mt-1 text-gray-500" style={{ fontSize: "0.82rem" }}>{t("Thanh toán linh hoạt theo tháng")}</p>
                 </button>
                 <button
                   onClick={() => setBilling("annual")}
@@ -290,16 +294,16 @@ export function Checkout() {
                   <span className="absolute right-4 top-4 rounded-full bg-green-500 px-2 py-0.5 text-white" style={{ fontSize: "0.7rem", fontWeight: 700 }}>
                     -20%
                   </span>
-                  <p className="text-gray-900" style={{ fontSize: "0.92rem", fontWeight: 800 }}>Hàng năm</p>
-                  <p className="mt-1 text-gray-500" style={{ fontSize: "0.82rem" }}>Tiết kiệm hơn với giá theo năm</p>
+                  <p className="text-gray-900" style={{ fontSize: "0.92rem", fontWeight: 800 }}>{t("Hàng năm")}</p>
+                  <p className="mt-1 text-gray-500" style={{ fontSize: "0.82rem" }}>{t("Tiết kiệm hơn với giá theo năm")}</p>
                 </button>
               </div>
               <div className="mt-4 rounded-2xl border border-green-100 bg-green-50 p-4">
                 <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                   <div>
-                    <p className="text-green-800" style={{ fontSize: "0.9rem", fontWeight: 800 }}>Dùng thử 7 ngày miễn phí</p>
+                    <p className="text-green-800" style={{ fontSize: "0.9rem", fontWeight: 800 }}>{t("Dùng thử 7 ngày miễn phí")}</p>
                     <p className="mt-1 text-green-700" style={{ fontSize: "0.82rem", lineHeight: 1.5 }}>
-                      Kích hoạt quyền VIP/SVIP trong 7 ngày, thanh toán hôm nay là 0đ.
+                      {t("Kích hoạt quyền VIP/SVIP trong 7 ngày, thanh toán hôm nay là 0đ.")}
                     </p>
                   </div>
                   <button
@@ -308,17 +312,17 @@ export function Checkout() {
                     className={`rounded-xl px-4 py-2.5 transition ${isTrialCheckout ? "bg-green-600 text-white hover:bg-green-700" : "bg-white text-green-700 hover:bg-green-100"}`}
                     style={{ fontSize: "0.84rem", fontWeight: 800 }}
                   >
-                    {isTrialCheckout ? "Đang dùng thử" : "Bật dùng thử"}
+                    {t(isTrialCheckout ? "Đang dùng thử" : "Bật dùng thử")}
                   </button>
                 </div>
               </div>
             </div>
 
             <div className="rounded-3xl border border-gray-100 bg-white p-6 shadow-sm">
-              <h2 className="mb-4 text-gray-700" style={{ fontSize: "0.9rem", fontWeight: 700, letterSpacing: "0.04em", textTransform: "uppercase" }}>Phương thức thanh toán</h2>
+              <h2 className="mb-4 text-gray-700" style={{ fontSize: "0.9rem", fontWeight: 700, letterSpacing: "0.04em", textTransform: "uppercase" }}>{t("Phương thức thanh toán")}</h2>
               {isTrialCheckout && (
                 <div className="mb-4 rounded-2xl border border-amber-100 bg-amber-50 px-5 py-4 text-amber-800" style={{ fontSize: "0.85rem", lineHeight: 1.6 }}>
-                  Dùng thử không yêu cầu nhập thẻ. Bạn có thể thanh toán sau khi hết thời gian dùng thử.
+                  {t("Dùng thử không yêu cầu nhập thẻ. Bạn có thể thanh toán sau khi hết thời gian dùng thử.")}
                 </div>
               )}
               <div className="grid gap-2 sm:grid-cols-2">
@@ -329,16 +333,16 @@ export function Checkout() {
                     className={`flex items-center gap-2 rounded-xl border-2 p-3 transition-all ${paymentMethod === id ? "border-green-500 bg-green-50" : "border-gray-200 hover:border-gray-300"}`}
                   >
                     <Icon className={`h-4 w-4 ${paymentMethod === id ? "text-green-600" : "text-gray-400"}`} />
-                    <span className={paymentMethod === id ? "text-green-700" : "text-gray-600"} style={{ fontSize: "0.82rem", fontWeight: 700 }}>{label}</span>
+                    <span className={paymentMethod === id ? "text-green-700" : "text-gray-600"} style={{ fontSize: "0.82rem", fontWeight: 700 }}>{t(label)}</span>
                   </button>
                 ))}
               </div>
 
               {!isTrialCheckout && (
                 <div className="mt-5 rounded-2xl border border-blue-100 bg-blue-50 px-5 py-4 text-blue-800 dark:border-blue-900/70 dark:bg-blue-950/40 dark:text-blue-200" style={{ fontSize: "0.85rem", lineHeight: 1.7 }}>
-                  {paymentMethod === "payos"
+                  {t(paymentMethod === "payos"
                     ? "Bạn sẽ được chuyển sang PayOS để quét VietQR hoặc chọn phương thức ngân hàng được hỗ trợ. NutriPath không nhận hoặc lưu thông tin tài khoản ngân hàng và OTP."
-                    : "Bạn sẽ được chuyển sang VNPAY Sandbox để nhập thông tin thanh toán. NutriPath không nhận hoặc lưu số thẻ, CVV và OTP."}
+                    : "Bạn sẽ được chuyển sang VNPAY Sandbox để nhập thông tin thanh toán. NutriPath không nhận hoặc lưu số thẻ, CVV và OTP.")}
                 </div>
               )}
             </div>
@@ -352,7 +356,7 @@ export function Checkout() {
                 </div>
                 <div>
                   <p className="text-gray-900" style={{ fontSize: "1.05rem", fontWeight: 800 }}>{selectedPlanData?.name ?? selectedPlan.toUpperCase()}</p>
-                  <p className="text-gray-500" style={{ fontSize: "0.82rem" }}>{selectedPlanData?.description ?? "Đang lấy mô tả gói..."}</p>
+                  <p className="text-gray-500" style={{ fontSize: "0.82rem" }}>{selectedPlanData ? t(selectedPlanData.description) : t("Đang lấy mô tả gói...")}</p>
                 </div>
               </div>
 
@@ -363,7 +367,7 @@ export function Checkout() {
                     type="text"
                     value={discountInput}
                     onChange={(event) => setDiscountInput(event.target.value.toUpperCase())}
-                    placeholder="Mã giảm giá"
+                    placeholder={t("Mã giảm giá")}
                     className="w-full bg-transparent outline-none text-gray-700"
                     style={{ fontSize: "0.88rem" }}
                   />
@@ -373,37 +377,37 @@ export function Checkout() {
                   className="rounded-xl bg-gray-900 px-4 py-3 text-white hover:bg-gray-700"
                   style={{ fontSize: "0.85rem", fontWeight: 700 }}
                 >
-                  Áp dụng
+                  {t("Áp dụng")}
                 </button>
               </div>
 
               {loadingQuote || !quote ? (
                 <div className="rounded-2xl border border-dashed border-gray-200 bg-gray-50 px-5 py-8 text-center text-gray-400">
-                  Đang lấy báo giá từ backend...
+                  {t("Đang lấy báo giá từ backend...")}
                 </div>
               ) : (
                 <>
                   <div className="space-y-3">
                     <div className="flex justify-between text-gray-600">
-                      <span>{quote.planName} ({quote.billing === "annual" ? "12 tháng" : "1 tháng"})</span>
-                      <span className="text-gray-900" style={{ fontWeight: 700 }}>{formatMoney(quote.trialDays ? (quote.originalTotal ?? quote.subtotal) : quote.subtotal, quote.currency)}</span>
+                      <span>{t(quote.planName)} ({t(quote.billing === "annual" ? "12 tháng" : "1 tháng")})</span>
+                      <span className="text-gray-900" style={{ fontWeight: 700 }}>{formatMoney(quote.trialDays ? (quote.originalTotal ?? quote.subtotal) : quote.subtotal, locale, quote.currency)}</span>
                     </div>
                     {quote.trialDays ? (
                       <div className="flex justify-between text-green-600">
-                        <span>Dùng thử {quote.trialDays} ngày</span>
-                        <span>-{formatMoney(quote.originalTotal ?? quote.subtotal, quote.currency)}</span>
+                        <span>{t("Dùng thử {days} ngày", { days: quote.trialDays })}</span>
+                        <span>-{formatMoney(quote.originalTotal ?? quote.subtotal, locale, quote.currency)}</span>
                       </div>
                     ) : null}
                     {!quote.trialDays && (
                       <div className="flex justify-between text-gray-500">
                         <span>VAT</span>
-                        <span>{formatMoney(quote.vat, quote.currency)}</span>
+                        <span>{formatMoney(quote.vat, locale, quote.currency)}</span>
                       </div>
                     )}
                     {quote.discountAmount > 0 && !quote.trialDays && (
                       <div className="flex justify-between text-green-600">
-                        <span>Giảm giá {quote.discountCode}</span>
-                        <span>-{formatMoney(quote.discountAmount, quote.currency)}</span>
+                        <span>{t("Giảm giá {code}", { code: quote.discountCode || "" })}</span>
+                        <span>-{formatMoney(quote.discountAmount, locale, quote.currency)}</span>
                       </div>
                     )}
                   </div>
@@ -411,11 +415,11 @@ export function Checkout() {
                   <div className="mt-5 border-t border-gray-100 pt-5">
                     <div className="flex items-end justify-between">
                       <div>
-                        <p className="text-gray-500" style={{ fontSize: "0.8rem" }}>{quote.trialDays ? "Thanh toán hôm nay" : "Tổng thanh toán"}</p>
-                        <p className="mt-1 text-gray-900" style={{ fontSize: "1.6rem", fontWeight: 850 }}>{formatMoney(quote.total, quote.currency)}</p>
+                        <p className="text-gray-500" style={{ fontSize: "0.8rem" }}>{t(quote.trialDays ? "Thanh toán hôm nay" : "Tổng thanh toán")}</p>
+                        <p className="mt-1 text-gray-900" style={{ fontSize: "1.6rem", fontWeight: 850 }}>{formatMoney(quote.total, locale, quote.currency)}</p>
                       </div>
                       <span className={`rounded-full border px-3 py-1 ${palette.badge}`} style={{ fontSize: "0.74rem", fontWeight: 700 }}>
-                        {billing === "annual" ? "Theo năm" : "Theo tháng"}
+                        {t(billing === "annual" ? "Theo năm" : "Theo tháng")}
                       </span>
                     </div>
                   </div>
@@ -427,7 +431,13 @@ export function Checkout() {
                     style={{ fontSize: "1rem", fontWeight: 800 }}
                   >
                     <Lock className="h-5 w-5" />
-                    {submitting ? (quote.trialDays ? "Đang kích hoạt gói..." : `Đang chuyển sang ${gatewayName}...`) : quote.trialDays ? "Kích hoạt dùng thử" : `Thanh toán qua ${gatewayName}`}
+                    {submitting
+                      ? (quote.trialDays
+                        ? t("Đang kích hoạt gói...")
+                        : t("Đang chuyển sang {gateway}...", { gateway: gatewayName }))
+                      : quote.trialDays
+                        ? t("Kích hoạt dùng thử")
+                        : t("Thanh toán qua {gateway}", { gateway: gatewayName })}
                     <ArrowRight className="h-5 w-5" />
                   </button>
                 </>
@@ -443,7 +453,7 @@ export function Checkout() {
                 ].map(({ icon: Icon, text }) => (
                   <div key={text} className="flex items-start gap-2.5">
                     <Icon className="mt-0.5 h-4 w-4 flex-shrink-0 text-green-500" />
-                    <span className="text-gray-600" style={{ fontSize: "0.84rem", lineHeight: 1.6 }}>{text}</span>
+                    <span className="text-gray-600" style={{ fontSize: "0.84rem", lineHeight: 1.6 }}>{t(text)}</span>
                   </div>
                 ))}
               </div>

@@ -8,6 +8,7 @@ import {
   verifyVnpayReturn,
   type VnpayPaymentStatus,
 } from "../api";
+import { useLanguage } from "../language";
 
 type ResultState = "checking" | "pending" | "paid" | "failed" | "invalid" | "error";
 type PaymentGateway = "payos" | "vnpay";
@@ -29,11 +30,12 @@ const responseMessages: Record<string, string> = {
 };
 
 export function PaymentResult() {
+  const { t } = useLanguage();
   const query = useMemo(() => new URLSearchParams(window.location.search), []);
   const gateway: PaymentGateway = query.get("gateway") === "payos" || query.has("orderCode") ? "payos" : "vnpay";
   const gatewayName = gateway === "payos" ? "PayOS" : "VNPAY";
   const [state, setState] = useState<ResultState>("checking");
-  const [message, setMessage] = useState("Đang kiểm tra trạng thái giao dịch...");
+  const [message, setMessage] = useState(() => t("Đang kiểm tra trạng thái giao dịch..."));
   const [transactionRef, setTransactionRef] = useState("");
   const responseCodeRef = useRef<string | null>(null);
 
@@ -41,22 +43,22 @@ export function PaymentResult() {
     if (result.paymentStatus === "paid" && result.member) {
       syncStoredMember(result.member);
       setState("paid");
-      setMessage("Thanh toán thành công. Gói thành viên đã được kích hoạt trên tài khoản của bạn.");
+      setMessage(t("Thanh toán thành công. Gói thành viên đã được kích hoạt trên tài khoản của bạn."));
       return true;
     }
     if (result.paymentStatus === "failed") {
       setState("failed");
       setMessage(
         gateway === "vnpay"
-          ? responseMessages[responseCodeRef.current || ""] || "Giao dịch không thành công. Tài khoản chưa được nâng gói."
-          : "Giao dịch PayOS đã bị hủy, hết hạn hoặc không thành công. Tài khoản chưa được nâng gói.",
+          ? t(responseMessages[responseCodeRef.current || ""] || "Giao dịch không thành công. Tài khoản chưa được nâng gói.")
+          : t("Giao dịch PayOS đã bị hủy, hết hạn hoặc không thành công. Tài khoản chưa được nâng gói."),
       );
       return true;
     }
     setState("pending");
-    setMessage(`${gatewayName} đã chuyển bạn về NutriPath. Hệ thống đang chờ xác nhận thanh toán từ máy chủ.`);
+    setMessage(t("{gateway} đã chuyển bạn về NutriPath. Hệ thống đang chờ xác nhận thanh toán từ máy chủ.", { gateway: gatewayName }));
     return false;
-  }, [gateway, gatewayName]);
+  }, [gateway, gatewayName, t]);
 
   const loadStatus = useCallback((reference: string) => (
     gateway === "payos" ? getPayosPaymentStatus(reference) : getVnpayPaymentStatus(reference)
@@ -68,10 +70,10 @@ export function PaymentResult() {
       return applyPaymentStatus(await loadStatus(transactionRef));
     } catch (error) {
       setState("error");
-      setMessage(error instanceof Error ? error.message : "Không tải được trạng thái giao dịch.");
+      setMessage(error instanceof Error ? t(error.message) : t("Không tải được trạng thái giao dịch."));
       return true;
     }
-  }, [applyPaymentStatus, loadStatus, transactionRef]);
+  }, [applyPaymentStatus, loadStatus, t, transactionRef]);
 
   useEffect(() => {
     let cancelled = false;
@@ -89,7 +91,7 @@ export function PaymentResult() {
         } catch (error) {
           if (cancelled) return;
           setState("error");
-          setMessage(error instanceof Error ? error.message : "Không tải được trạng thái giao dịch.");
+          setMessage(error instanceof Error ? t(error.message) : t("Không tải được trạng thái giao dịch."));
         }
       };
       timer = setTimeout(poll, 1200);
@@ -101,7 +103,7 @@ export function PaymentResult() {
           const orderCode = query.get("orderCode") || "";
           if (!/^\d+$/.test(orderCode)) {
             setState("invalid");
-            setMessage("Không tìm thấy mã đơn PayOS hợp lệ trong liên kết trả về.");
+            setMessage(t("Không tìm thấy mã đơn PayOS hợp lệ trong liên kết trả về."));
             return;
           }
           setTransactionRef(orderCode);
@@ -109,7 +111,7 @@ export function PaymentResult() {
           if (cancelled || applyPaymentStatus(result)) return;
           if (query.get("cancelled") === "true" || query.get("cancel") === "true") {
             setState("failed");
-            setMessage("Bạn đã hủy thanh toán PayOS. Gói thành viên chưa được kích hoạt.");
+            setMessage(t("Bạn đã hủy thanh toán PayOS. Gói thành viên chưa được kích hoạt."));
             return;
           }
           pollStatus(orderCode);
@@ -123,33 +125,33 @@ export function PaymentResult() {
 
         if (!result.signatureValid) {
           setState("invalid");
-          setMessage("Chữ ký phản hồi VNPAY không hợp lệ. NutriPath không cập nhật gói từ dữ liệu này.");
+          setMessage(t("Chữ ký phản hồi VNPAY không hợp lệ. NutriPath không cập nhật gói từ dữ liệu này."));
           return;
         }
         if (result.paymentStatus === "paid" && result.member) {
           syncStoredMember(result.member);
           setState("paid");
-          setMessage(result.message);
+          setMessage(t(result.message));
           return;
         }
         if (result.paymentStatus === "failed" || (result.responseCode && result.responseCode !== "00")) {
           setState("failed");
-          setMessage(responseMessages[result.responseCode || ""] || result.message);
+          setMessage(t(responseMessages[result.responseCode || ""] || result.message));
           return;
         }
         if (result.paymentStatus === "not_found") {
           setState("invalid");
-          setMessage("Không tìm thấy giao dịch tương ứng trong NutriPath.");
+          setMessage(t("Không tìm thấy giao dịch tương ứng trong NutriPath."));
           return;
         }
 
         setState("pending");
-        setMessage(result.message);
+        setMessage(t(result.message));
         pollStatus(result.transactionRef);
       } catch (error) {
         if (cancelled) return;
         setState("error");
-        setMessage(error instanceof Error ? error.message : "Không thể xác minh kết quả thanh toán.");
+        setMessage(error instanceof Error ? t(error.message) : t("Không thể xác minh kết quả thanh toán."));
       }
     }
 
@@ -158,15 +160,15 @@ export function PaymentResult() {
       cancelled = true;
       if (timer) clearTimeout(timer);
     };
-  }, [applyPaymentStatus, gateway, loadStatus, query]);
+  }, [applyPaymentStatus, gateway, loadStatus, query, t]);
 
   const visual = state === "paid"
-    ? { icon: CheckCircle2, iconClass: "text-green-600 dark:text-green-400", surface: "bg-green-100 dark:bg-green-950/60", title: "Thanh toán thành công" }
+    ? { icon: CheckCircle2, iconClass: "text-green-600 dark:text-green-400", surface: "bg-green-100 dark:bg-green-950/60", title: t("Thanh toán thành công") }
     : state === "pending" || state === "checking"
-      ? { icon: Clock3, iconClass: "text-amber-600 dark:text-amber-300", surface: "bg-amber-100 dark:bg-amber-950/60", title: state === "checking" ? "Đang xác minh giao dịch" : `Đang chờ ${gatewayName} xác nhận` }
+      ? { icon: Clock3, iconClass: "text-amber-600 dark:text-amber-300", surface: "bg-amber-100 dark:bg-amber-950/60", title: state === "checking" ? t("Đang xác minh giao dịch") : t("Đang chờ {gateway} xác nhận", { gateway: gatewayName }) }
       : state === "invalid"
-        ? { icon: AlertTriangle, iconClass: "text-orange-600 dark:text-orange-300", surface: "bg-orange-100 dark:bg-orange-950/60", title: "Phản hồi không hợp lệ" }
-        : { icon: XCircle, iconClass: "text-red-600 dark:text-red-300", surface: "bg-red-100 dark:bg-red-950/60", title: "Thanh toán chưa hoàn tất" };
+        ? { icon: AlertTriangle, iconClass: "text-orange-600 dark:text-orange-300", surface: "bg-orange-100 dark:bg-orange-950/60", title: t("Phản hồi không hợp lệ") }
+        : { icon: XCircle, iconClass: "text-red-600 dark:text-red-300", surface: "bg-red-100 dark:bg-red-950/60", title: t("Thanh toán chưa hoàn tất") };
   const StatusIcon = visual.icon;
 
   return (
@@ -184,7 +186,7 @@ export function PaymentResult() {
 
         {transactionRef && (
           <div className="mt-6 flex items-center justify-between gap-4 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 dark:border-slate-700 dark:bg-slate-800">
-            <span className="text-sm text-slate-500 dark:text-slate-400">Mã giao dịch</span>
+            <span className="text-sm text-slate-500 dark:text-slate-400">{t("Mã giao dịch")}</span>
             <span className="break-all text-right font-mono text-sm font-semibold">{transactionRef}</span>
           </div>
         )}
@@ -192,14 +194,14 @@ export function PaymentResult() {
         <div className="mt-8 grid gap-3 sm:grid-cols-2">
           {state === "pending" && (
             <button type="button" onClick={refreshStatus} className="flex items-center justify-center gap-2 rounded-xl border border-slate-300 px-4 py-3 font-semibold transition hover:bg-slate-100 dark:border-slate-600 dark:hover:bg-slate-800">
-              <RefreshCw className="h-4 w-4" /> Kiểm tra lại
+              <RefreshCw className="h-4 w-4" /> {t("Kiểm tra lại")}
             </button>
           )}
           <Link to={state === "paid" ? "/member" : "/checkout"} className="flex items-center justify-center gap-2 rounded-xl bg-green-600 px-4 py-3 font-semibold text-white transition hover:bg-green-700">
-            {state === "paid" ? "Xem gói thành viên" : "Quay lại thanh toán"} <ArrowRight className="h-4 w-4" />
+            {t(state === "paid" ? "Xem gói thành viên" : "Quay lại thanh toán")} <ArrowRight className="h-4 w-4" />
           </Link>
           <Link to="/dashboard" className="flex items-center justify-center rounded-xl px-4 py-3 font-semibold text-slate-600 transition hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-800">
-            Về dashboard
+            {t("Về dashboard")}
           </Link>
         </div>
       </section>

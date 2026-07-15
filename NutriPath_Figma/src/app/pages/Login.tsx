@@ -3,9 +3,11 @@ import { Link, useLocation, useNavigate } from "react-router";
 import { ArrowRight, Eye, EyeOff, Leaf, Loader2, Lock, Mail } from "lucide-react";
 import { useAuth } from "../auth";
 import { isSupabaseAuthConfigured, type SocialAuthProvider } from "../supabaseAuth";
+import { useLanguage } from "../language";
 
 export function Login() {
   const { login, loginWithSocialProvider } = useAuth();
+  const { t } = useLanguage();
   const navigate = useNavigate();
   const location = useLocation();
   const [email, setEmail] = useState("");
@@ -27,7 +29,7 @@ export function Login() {
       await login(email, password);
       navigate(from, { replace: true });
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Không đăng nhập được.");
+      setError(t(err instanceof Error ? err.message : "Không đăng nhập được."));
     } finally {
       setSubmitting(false);
     }
@@ -39,7 +41,7 @@ export function Login() {
     try {
       await loginWithSocialProvider(provider, from);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Không đăng nhập được bằng mạng xã hội.");
+      setError(t(err instanceof Error ? err.message : "Không đăng nhập được bằng mạng xã hội."));
       setSocialSubmitting(null);
     }
   };
@@ -61,10 +63,10 @@ export function Login() {
                 <span style={{ fontSize: "0.86rem", fontWeight: 700 }}>NutriPath Account</span>
               </div>
               <h1 style={{ fontSize: "2.8rem", lineHeight: 1.08, fontWeight: 850 }}>
-                Theo dõi dinh dưỡng bằng dữ liệu thật của bạn.
+                {t("Theo dõi dinh dưỡng bằng dữ liệu thật của bạn.")}
               </h1>
               <p className="text-green-50 mt-5" style={{ fontSize: "1rem", lineHeight: 1.8 }}>
-                Đăng nhập để dashboard, nhật ký bữa ăn và hồ sơ thành viên lấy đúng dữ liệu từ SQL theo tài khoản hiện tại.
+                {t("Đăng nhập để dashboard, nhật ký bữa ăn và hồ sơ thành viên lấy đúng dữ liệu từ SQL theo tài khoản hiện tại.")}
               </p>
             </div>
           </div>
@@ -78,9 +80,9 @@ export function Login() {
               </span>
               NutriPath
             </Link>
-            <h2 className="text-gray-950" style={{ fontSize: "1.7rem", fontWeight: 850 }}>Đăng nhập</h2>
+            <h2 className="text-gray-950" style={{ fontSize: "1.7rem", fontWeight: 850 }}>{t("Đăng nhập")}</h2>
             <p className="text-gray-500 mt-2" style={{ fontSize: "0.92rem" }}>
-              Dùng email và mật khẩu đã đăng ký để vào dữ liệu cá nhân.
+              {t("Dùng email và mật khẩu đã đăng ký để vào dữ liệu cá nhân.")}
             </p>
           </div>
 
@@ -101,7 +103,7 @@ export function Login() {
             </label>
 
             <label className="block">
-              <span className="text-gray-700" style={{ fontSize: "0.84rem", fontWeight: 700 }}>Mật khẩu</span>
+              <span className="text-gray-700" style={{ fontSize: "0.84rem", fontWeight: 700 }}>{t("Mật khẩu")}</span>
               <div className="mt-2 flex items-center gap-2 rounded-xl border border-gray-200 bg-white px-3 py-3 focus-within:border-green-500 focus-within:ring-4 focus-within:ring-green-100">
                 <Lock className="w-4 h-4 text-gray-400" />
                 <input
@@ -130,14 +132,14 @@ export function Login() {
               className="w-full flex items-center justify-center gap-2 rounded-xl bg-green-600 px-4 py-3.5 text-white hover:bg-green-700 transition-colors disabled:opacity-60"
               style={{ fontWeight: 800 }}
             >
-              {submitting ? "Đang đăng nhập..." : "Đăng nhập"}
+              {submitting ? t("Đang đăng nhập...") : t("Đăng nhập")}
               <ArrowRight className="w-4 h-4" />
             </button>
           </form>
 
           <div className="my-6 flex items-center gap-3">
             <div className="h-px flex-1 bg-slate-200" />
-            <span className="text-xs font-bold uppercase tracking-wide text-slate-400">hoặc</span>
+            <span className="text-xs font-bold uppercase tracking-wide text-slate-400">{t("hoặc")}</span>
             <div className="h-px flex-1 bg-slate-200" />
           </div>
 
@@ -152,7 +154,7 @@ export function Login() {
               {socialSubmitting === "google"
                 ? <Loader2 className="h-5 w-5 animate-spin" />
                 : <span className="flex h-6 w-6 items-center justify-center rounded-full border border-slate-200 text-sm text-red-500">G</span>}
-              {socialSubmitting === "google" ? "Đang mở Google..." : "Google"}
+              {socialSubmitting === "google" ? t("Đang mở Google...") : "Google"}
             </button>
             <button
               type="button"
@@ -164,26 +166,26 @@ export function Login() {
               {socialSubmitting === "facebook"
                 ? <Loader2 className="h-5 w-5 animate-spin" />
                 : <span className="flex h-6 w-6 items-center justify-center rounded-full bg-blue-600 text-sm text-white">f</span>}
-              {socialSubmitting === "facebook" ? "Đang mở Facebook..." : "Facebook"}
+              {socialSubmitting === "facebook" ? t("Đang mở Facebook...") : "Facebook"}
             </button>
           </div>
 
           {socialSubmitting ? (
             <p role="status" aria-live="polite" className="mt-3 text-center text-xs font-medium text-green-700">
-              Đang chuyển đến {socialSubmitting === "google" ? "Google" : "Facebook"}...
+              {t("Đang chuyển đến {provider}...", { provider: socialSubmitting === "google" ? "Google" : "Facebook" })}
             </p>
           ) : null}
 
           {!socialAuthReady ? (
             <p className="mt-3 text-center text-xs text-amber-600">
-              Cần cấu hình VITE_SUPABASE_URL và VITE_SUPABASE_ANON_KEY để bật Google/Facebook.
+              {t("Cần cấu hình VITE_SUPABASE_URL và VITE_SUPABASE_ANON_KEY để bật Google/Facebook.")}
             </p>
           ) : null}
 
           <p className="text-center text-gray-500 mt-6" style={{ fontSize: "0.9rem" }}>
-            Chưa có tài khoản?{" "}
+            {t("Chưa có tài khoản?")}{" "}
             <Link to="/register" className="text-green-700 hover:text-green-800" style={{ fontWeight: 800 }}>
-              Đăng ký ngay
+              {t("Đăng ký ngay")}
             </Link>
           </p>
         </section>

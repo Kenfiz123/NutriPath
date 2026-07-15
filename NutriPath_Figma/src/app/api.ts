@@ -2,7 +2,12 @@ const LEGACY_SESSION_KEY = "nutripath_session";
 let activeSession: AuthSession | null = null;
 
 function buildApiUrl(path: string) {
-  return path.startsWith("/") ? path : `/${path}`;
+  if (/^https?:\/\//i.test(path)) return path;
+  const apiBaseUrl = String(import.meta.env.VITE_API_BASE_URL || "")
+    .trim()
+    .replace(/\/+$/, "");
+  const normalizedPath = path.startsWith("/") ? path : `/${path}`;
+  return apiBaseUrl ? `${apiBaseUrl}${normalizedPath}` : normalizedPath;
 }
 
 function getLocalDateString(date = new Date()) {
@@ -78,9 +83,13 @@ export function getCurrentMemberId() {
 }
 
 export async function apiFetch<T>(path: string, options: { method?: string; body?: RequestBody; auth?: boolean; signal?: AbortSignal } = {}): Promise<T> {
+  const preferredLanguage = typeof window !== "undefined" && window.localStorage.getItem("nutripath_language") === "en"
+    ? "en-US"
+    : "vi-VN";
   const headers: Record<string, string> = {
     "Content-Type": "application/json",
     "X-Requested-With": "XMLHttpRequest",
+    "Accept-Language": preferredLanguage,
   };
 
   const response = await fetch(buildApiUrl(path), {

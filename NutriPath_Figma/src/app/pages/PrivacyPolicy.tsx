@@ -1,5 +1,6 @@
 import { Link } from "react-router";
 import { Leaf, Lock, Mail, ShieldCheck } from "lucide-react";
+import { useLanguage } from "../language";
 
 const sections = [
   {
@@ -47,6 +48,7 @@ const sections = [
 ];
 
 export function PrivacyPolicy() {
+  const { t } = useLanguage();
   return (
     <main className="min-h-screen bg-slate-50 px-5 py-20 text-slate-900 dark:bg-slate-950 dark:text-slate-50">
       <section className="mx-auto max-w-4xl">
@@ -61,10 +63,9 @@ export function PrivacyPolicy() {
           <div className="mb-8 flex flex-wrap items-start justify-between gap-5">
             <div>
               <p className="text-sm font-bold uppercase tracking-wide text-green-600 dark:text-green-400">Privacy Policy</p>
-              <h1 className="mt-3 text-3xl font-black tracking-tight sm:text-4xl">Chính sách quyền riêng tư</h1>
+              <h1 className="mt-3 text-3xl font-black tracking-tight sm:text-4xl">{t("Chính sách quyền riêng tư")}</h1>
               <p className="mt-4 max-w-2xl text-sm leading-7 text-slate-600 dark:text-slate-300">
-                Trang này mô tả cách NutriPath thu thập, sử dụng và bảo vệ dữ liệu người dùng khi dùng ứng dụng,
-                bao gồm đăng nhập bằng Google và Facebook qua Supabase Auth.
+                {t("Trang này mô tả cách NutriPath thu thập, sử dụng và bảo vệ dữ liệu người dùng khi dùng ứng dụng, bao gồm đăng nhập bằng Google và Facebook qua Supabase Auth.")}
               </p>
             </div>
             <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-green-50 text-green-700 dark:bg-green-500/10 dark:text-green-300">
@@ -75,10 +76,10 @@ export function PrivacyPolicy() {
           <div className="grid gap-5">
             {sections.map((section) => (
               <article key={section.title} className="rounded-2xl border border-slate-100 bg-slate-50 p-5 dark:border-slate-700 dark:bg-slate-800/70">
-                <h2 className="text-lg font-extrabold">{section.title}</h2>
+                <h2 className="text-lg font-extrabold">{t(section.title)}</h2>
                 <div className="mt-3 space-y-3 text-sm leading-7 text-slate-600 dark:text-slate-300">
                   {section.body.map((text) => (
-                    <p key={text}>{text}</p>
+                    <p key={text}>{t(text)}</p>
                   ))}
                 </div>
               </article>
@@ -88,7 +89,7 @@ export function PrivacyPolicy() {
           <div className="mt-8 grid gap-4 rounded-2xl border border-green-100 bg-green-50 p-5 text-sm text-green-900 dark:border-green-500/20 dark:bg-green-500/10 dark:text-green-100 sm:grid-cols-2">
             <Link to="/data-deletion" className="inline-flex items-center gap-2 font-bold text-green-700 dark:text-green-300">
               <Lock className="h-4 w-4" />
-              Xem hướng dẫn xóa dữ liệu
+              {t("Xem hướng dẫn xóa dữ liệu")}
             </Link>
             <a href="mailto:support@nutripath.app" className="inline-flex items-center gap-2 font-bold text-green-700 dark:text-green-300">
               <Mail className="h-4 w-4" />

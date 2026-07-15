@@ -3,6 +3,7 @@ import { Link, useNavigate } from "react-router";
 import { Leaf, Loader2, RefreshCw } from "lucide-react";
 import { useAuth } from "../auth";
 import { consumeOAuthReturnTo, getCurrentSupabaseSession } from "../supabaseAuth";
+import { useLanguage } from "../language";
 
 const AUTH_CALLBACK_TIMEOUT_MS = 30000;
 
@@ -28,6 +29,7 @@ function withAbortSignal<T>(promise: Promise<T>, signal: AbortSignal): Promise<T
 
 export function AuthCallback() {
   const { completeSocialLogin } = useAuth();
+  const { t } = useLanguage();
   const navigate = useNavigate();
   const [error, setError] = useState<string | null>(null);
   const [step, setStep] = useState<AuthStep>("loading");
@@ -47,7 +49,7 @@ export function AuthCallback() {
       try {
         const session = await withAbortSignal(getCurrentSupabaseSession(), controller.signal);
         if (!session?.access_token) {
-          throw new Error("Không nhận được phiên đăng nhập từ Supabase.");
+          throw new Error(t("Không nhận được phiên đăng nhập từ Supabase."));
         }
 
         if (runIdRef.current !== runId) return;
@@ -59,11 +61,11 @@ export function AuthCallback() {
         if (runIdRef.current !== runId) return;
         if (controller.signal.aborted || (err instanceof Error && err.name === "AbortError")) {
           setStep("error");
-          setError("Hết thời gian xác thực (30 giây). Vui lòng thử lại.");
+          setError(t("Hết thời gian xác thực (30 giây). Vui lòng thử lại."));
           return;
         }
         setStep("error");
-        setError(err instanceof Error ? err.message : "Không hoàn tất đăng nhập bằng mạng xã hội.");
+        setError(t(err instanceof Error ? err.message : "Không hoàn tất đăng nhập bằng mạng xã hội."));
       } finally {
         window.clearTimeout(timeoutId);
       }
@@ -75,13 +77,13 @@ export function AuthCallback() {
       controller.abort();
       if (runIdRef.current === runId) runIdRef.current += 1;
     };
-  }, [attempt, completeSocialLogin, navigate]);
+  }, [attempt, completeSocialLogin, navigate, t]);
 
   const statusMessage = {
-    loading: "Đang tải thông tin đăng nhập...",
-    verifying: "Đang xác thực tài khoản Google/Facebook...",
-    syncing: "Đang đồng bộ hồ sơ cá nhân...",
-    error: error || "Đã xảy ra lỗi không xác định.",
+    loading: t("Đang tải thông tin đăng nhập..."),
+    verifying: t("Đang xác thực tài khoản Google/Facebook..."),
+    syncing: t("Đang đồng bộ hồ sơ cá nhân..."),
+    error: error || t("Đã xảy ra lỗi không xác định."),
   }[step];
 
   return (
@@ -95,7 +97,7 @@ export function AuthCallback() {
           {step === "error" ? <Leaf className="h-6 w-6" /> : <Loader2 className="h-6 w-6 animate-spin" />}
         </div>
         <h1 className="text-2xl font-bold text-slate-950 dark:text-slate-50">
-          {step === "error" ? "Không hoàn tất đăng nhập" : "Đang hoàn tất đăng nhập"}
+          {step === "error" ? t("Không hoàn tất đăng nhập") : t("Đang hoàn tất đăng nhập")}
         </h1>
         <p className="mt-3 text-sm leading-6 text-slate-500 dark:text-slate-300">
           {statusMessage}
@@ -113,13 +115,13 @@ export function AuthCallback() {
               className="inline-flex items-center gap-2 rounded-xl bg-green-600 px-5 py-3 text-sm font-semibold text-white transition hover:bg-green-700"
             >
               <RefreshCw className="h-4 w-4" />
-              Thử lại
+              {t("Thử lại")}
             </button>
             <Link
               to="/login"
               className="inline-flex rounded-xl border border-slate-200 px-5 py-3 text-sm font-semibold text-slate-700 transition hover:bg-slate-50 dark:border-slate-700 dark:text-slate-200 dark:hover:bg-slate-800"
             >
-              Quay lại đăng nhập
+              {t("Quay lại đăng nhập")}
             </Link>
           </div>
         )}

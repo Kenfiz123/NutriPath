@@ -10,6 +10,7 @@ import {
   YAxis,
 } from "recharts";
 import type { DashboardData, Member } from "../../api";
+import { useLanguage } from "../../language";
 
 interface WeeklyProgressCardProps {
   data: DashboardData["weeklyProgress"];
@@ -17,11 +18,12 @@ interface WeeklyProgressCardProps {
 }
 
 export function WeeklyProgressCard({ data, access }: WeeklyProgressCardProps) {
+  const { t } = useLanguage();
   return (
     <section className="rounded-2xl border border-gray-100 bg-white p-6 shadow-sm dark:border-slate-700 dark:bg-slate-800">
       <div className="mb-4 flex items-center justify-between">
         <h2 className="text-base font-bold text-gray-900 dark:text-slate-50">
-          Tiến trình tuần
+          {t("Tiến trình tuần")}
         </h2>
         <TrendingUp className="h-5 w-5 text-green-600" />
       </div>
@@ -59,21 +61,23 @@ export function WeeklyProgressCard({ data, access }: WeeklyProgressCardProps) {
       <div className="mt-2 flex items-center gap-4 text-xs text-gray-500 dark:text-slate-300">
         <span className="flex items-center gap-1.5">
           <i className="h-3 w-3 rounded-sm bg-green-600" />
-          Thực tế
+          {t("Thực tế")}
         </span>
         <span className="flex items-center gap-1.5">
           <i className="h-3 w-3 rounded-sm bg-green-100" />
-          Mục tiêu
+          {t("Mục tiêu")}
         </span>
       </div>
       {access && (
         <div className="mt-4 rounded-xl border border-amber-200 bg-amber-50 px-3 py-3 dark:border-amber-400/20 dark:bg-amber-500/10">
           <p className="text-xs font-extrabold text-amber-900 dark:text-amber-200">
-            Báo cáo theo gói {access.tier.toUpperCase()}
+            {t("Báo cáo theo gói {tier}", { tier: access.tier.toUpperCase() })}
           </p>
           <p className="mt-1 text-xs leading-5 text-amber-800 dark:text-amber-100">
-            Mở lịch sử và phân tích trong {access.analyticsWindowDays} ngày
-            {access.reportExports ? ", có xuất báo cáo." : "."}
+            {t("Mở lịch sử và phân tích trong {days} ngày{exportSuffix}", {
+              days: access.analyticsWindowDays,
+              exportSuffix: t(access.reportExports ? ", có xuất báo cáo." : "."),
+            })}
           </p>
         </div>
       )}

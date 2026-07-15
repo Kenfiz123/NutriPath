@@ -37,6 +37,7 @@ import {
 } from "../api";
 import { useAuth } from "../auth";
 import { VoiceInputButton } from "../components/VoiceInputButton";
+import { useLanguage } from "../language";
 
 type Tier = "free" | "vip" | "svip";
 type ProfileTab = "overview" | "membership" | "activity" | "notifications" | "settings";
@@ -114,9 +115,9 @@ function textToList(value: string) {
   return value.split(/[,\n;]/).map((item) => item.trim()).filter(Boolean);
 }
 
-function formatDate(date?: string | null) {
+function formatDate(date: string | null | undefined, locale: "vi-VN" | "en-US") {
   if (!date) return "Không xác định";
-  return new Date(date).toLocaleDateString("vi-VN");
+  return new Date(date).toLocaleDateString(locale);
 }
 
 function formatSubscriptionStatus(status?: string) {
@@ -125,23 +126,24 @@ function formatSubscriptionStatus(status?: string) {
   return status ?? "Đang hoạt động";
 }
 
-function formatMoney(amount: number, currency = "VND") {
-  return amount.toLocaleString("vi-VN") + (currency === "VND" ? "đ" : ` ${currency}`);
+function formatMoney(amount: number, locale: "vi-VN" | "en-US", currency = "VND") {
+  return amount.toLocaleString(locale) + (currency === "VND" ? "đ" : ` ${currency}`);
 }
 
-function makeInvoiceFile(payment: Payment) {
+function makeInvoiceFile(payment: Payment, locale: "vi-VN" | "en-US") {
   return [
     "NutriPath Invoice",
     `Mã hóa đơn: ${payment.invoice}`,
     `Gói: ${payment.planId.toUpperCase()}`,
     `Chu kỳ: ${payment.billing}`,
-    `Số tiền: ${formatMoney(payment.amount, payment.currency)}`,
+    `Số tiền: ${formatMoney(payment.amount, locale, payment.currency)}`,
     `Trạng thái: ${payment.status}`,
-    `Ngày thanh toán: ${formatDate(payment.paidAt)}`,
+    `Ngày thanh toán: ${formatDate(payment.paidAt, locale)}`,
   ].join("\n");
 }
 
 export function MemberProfile() {
+  const { locale, t } = useLanguage();
   const navigate = useNavigate();
   const { logout } = useAuth();
   const [member, setMember] = useState<Member | null>(null);
@@ -193,8 +195,8 @@ export function MemberProfile() {
         });
         setError(null);
       })
-      .catch((err) => setError(err instanceof Error ? err.message : "Không tải được hồ sơ thành viên"));
-  }, []);
+      .catch((err) => setError(err instanceof Error ? t(err.message) : t("Không tải được hồ sơ thành viên")));
+  }, [t]);
 
   useEffect(() => {
     if (!member) return;
@@ -217,11 +219,11 @@ export function MemberProfile() {
   }, [member?.id, member?.calorieTarget, member?.subscription?.daysRemaining]);
 
   if (error) {
-    return <div className="min-h-screen bg-gray-50 p-8 text-red-600">{error}</div>;
+    return <div className="min-h-screen bg-gray-50 p-8 text-red-600">{t(error)}</div>;
   }
 
   if (!member) {
-    return <div className="min-h-screen bg-gray-50 p-8 text-gray-500">Đang tải hồ sơ thành viên...</div>;
+    return <div className="min-h-screen bg-gray-50 p-8 text-gray-500">{t("Đang tải hồ sơ thành viên...")}</div>;
   }
 
   const tier = member.tier as Tier;
@@ -235,10 +237,10 @@ export function MemberProfile() {
   const subscriptionStartedAt = member.subscription?.purchaseAt || member.subscription?.startedAt || member.joinedAt;
 
   const statCards = [
-    { icon: Calendar, label: "Ngày thành viên", value: stats.memberDays.toLocaleString("vi-VN"), unit: "ngày", color: "text-blue-600", bg: "bg-blue-50" },
-    { icon: BookOpen, label: "Công thức đã lưu", value: stats.savedRecipes.toLocaleString("vi-VN"), unit: "công thức", color: "text-orange-600", bg: "bg-orange-50" },
-    { icon: MessageCircle, label: "AI Conversations", value: stats.aiConversations.toLocaleString("vi-VN"), unit: "cuộc hội thoại", color: "text-purple-600", bg: "bg-purple-50" },
-    { icon: TrendingUp, label: "Calo đã theo dõi", value: stats.trackedCalories.toLocaleString("vi-VN"), unit: "kcal tổng", color: "text-green-600", bg: "bg-green-50" },
+    { icon: Calendar, label: "Ngày thành viên", value: stats.memberDays.toLocaleString(locale), unit: "ngày", color: "text-blue-600", bg: "bg-blue-50" },
+    { icon: BookOpen, label: "Công thức đã lưu", value: stats.savedRecipes.toLocaleString(locale), unit: "công thức", color: "text-orange-600", bg: "bg-orange-50" },
+    { icon: MessageCircle, label: "AI Conversations", value: stats.aiConversations.toLocaleString(locale), unit: "cuộc hội thoại", color: "text-purple-600", bg: "bg-purple-50" },
+    { icon: TrendingUp, label: "Calo đã theo dõi", value: stats.trackedCalories.toLocaleString(locale), unit: "kcal tổng", color: "text-green-600", bg: "bg-green-50" },
   ];
 
   async function handleLogout() {
@@ -247,7 +249,7 @@ export function MemberProfile() {
   }
 
   function handleDownloadInvoice(payment: Payment) {
-    const blob = new Blob([makeInvoiceFile(payment)], { type: "text/plain;charset=utf-8" });
+    const blob = new Blob([makeInvoiceFile(payment, locale)], { type: "text/plain;charset=utf-8" });
     const url = URL.createObjectURL(blob);
     const anchor = document.createElement("a");
     anchor.href = url;
@@ -277,20 +279,20 @@ export function MemberProfile() {
     const waterTargetGlasses = Math.round((waterTargetMl / 250) * 10) / 10;
 
     if (!settingsForm.name.trim() || !settingsForm.email.trim()) {
-      setStatusMessage("Tên và email không được để trống.");
+      setStatusMessage(t("Tên và email không được để trống."));
       return;
     }
     if (calorieTarget < 1200 || calorieTarget > 5000) {
-      setStatusMessage("Mục tiêu calo nên nằm trong khoảng 1200-5000 kcal/ngày.");
+      setStatusMessage(t("Mục tiêu calo nên nằm trong khoảng 1200-5000 kcal/ngày."));
       return;
     }
     if (waterTargetMl < 500 || waterTargetMl > 5000) {
-      setStatusMessage("Mục tiêu nước nên nằm trong khoảng 500-5000ml/ngày.");
+      setStatusMessage(t("Mục tiêu nước nên nằm trong khoảng 500-5000ml/ngày."));
       return;
     }
 
     if (settingsForm.latestWeightKg < 30 || settingsForm.latestWeightKg > 250 || settingsForm.targetWeightKg < 30 || settingsForm.targetWeightKg > 250) {
-      setStatusMessage("CÃ¢n náº·ng nÃªn náº±m trong khoáº£ng 30-250kg.");
+      setStatusMessage(t("Cân nặng nên nằm trong khoảng 30-250kg."));
       return;
     }
 
@@ -316,9 +318,9 @@ export function MemberProfile() {
       });
       setMember(updated);
       syncStoredMember(updated);
-      setStatusMessage("Đã lưu cài đặt hồ sơ.");
+      setStatusMessage(t("Đã lưu cài đặt hồ sơ."));
     } catch (err) {
-      setStatusMessage(err instanceof Error ? err.message : "Không lưu được cài đặt hồ sơ.");
+      setStatusMessage(err instanceof Error ? t(err.message) : t("Không lưu được cài đặt hồ sơ."));
     } finally {
       setSavingSettings(false);
     }
@@ -345,13 +347,13 @@ export function MemberProfile() {
               {navItems.map(({ icon: Icon, label, id }) => (
                 <button key={id} onClick={() => setActiveNav(id)} className={`flex w-full items-center gap-3 rounded-xl px-4 py-3 transition-all ${activeNav === id ? `${config.accentBg} ${config.accent}` : "text-gray-600 hover:bg-gray-50"}`}>
                   <Icon className="h-4 w-4" />
-                  <span style={{ fontSize: "0.875rem", fontWeight: activeNav === id ? 600 : 400 }}>{label}</span>
+                   <span style={{ fontSize: "0.875rem", fontWeight: activeNav === id ? 600 : 400 }}>{t(label)}</span>
                 </button>
               ))}
               <div className="mt-2 border-t border-gray-100 pt-2">
                 <button onClick={() => void handleLogout()} className="flex w-full items-center gap-3 rounded-xl px-4 py-3 text-red-500 transition-all hover:bg-red-50">
                   <LogOut className="h-4 w-4" />
-                  <span style={{ fontSize: "0.875rem" }}>Đăng xuất</span>
+                   <span style={{ fontSize: "0.875rem" }}>{t("Đăng xuất")}</span>
                 </button>
               </div>
             </div>
@@ -368,23 +370,23 @@ export function MemberProfile() {
                       <span className="text-white/80" style={{ fontSize: "0.85rem", fontWeight: 600, letterSpacing: "0.08em" }}>{config.label} MEMBERSHIP</span>
                     </div>
                     <h2 className="mb-1 text-white" style={{ fontSize: "1.8rem", fontWeight: 800 }}>{member.name}</h2>
-                    <p className="text-white/70" style={{ fontSize: "0.875rem" }}>Mua gói từ: {formatDate(subscriptionStartedAt)}</p>
+                     <p className="text-white/70" style={{ fontSize: "0.875rem" }}>{t("Mua gói từ")}: {formatDate(subscriptionStartedAt, locale)}</p>
                     <div className="mt-2 flex items-center gap-2">
                       <div className="h-2 w-2 animate-pulse rounded-full bg-green-300" />
                       <span className="text-green-200" style={{ fontSize: "0.8rem" }}>
-                        {formatSubscriptionStatus(member.subscription?.status)} · Hết hạn: {formatDate(member.subscription?.renewsAt)}
+                         {t(formatSubscriptionStatus(member.subscription?.status))} · {t("Hết hạn")}: {formatDate(member.subscription?.renewsAt, locale)}
                       </span>
                     </div>
                   </div>
                   <div className="flex flex-wrap gap-3">
                     <Link to={`/checkout?plan=${tier === "svip" ? "svip" : "vip"}&billing=monthly`} className="flex items-center gap-2 rounded-xl bg-white/20 px-5 py-2.5 text-white transition-all hover:bg-white/30" style={{ fontSize: "0.875rem", fontWeight: 600 }}>
                       <RefreshCw className="h-4 w-4" />
-                      Gia hạn
+                      {t("Gia hạn")}
                     </Link>
                     {tier !== "svip" && (
                       <Link to="/svip" className="flex items-center gap-2 rounded-xl bg-amber-500 px-5 py-2.5 text-white transition-all hover:bg-amber-400" style={{ fontSize: "0.875rem", fontWeight: 600 }}>
                         <Crown className="h-4 w-4" />
-                        Lên SVIP
+                        {t("Lên SVIP")}
                       </Link>
                     )}
                   </div>
@@ -392,9 +394,9 @@ export function MemberProfile() {
 
                 <div className="mt-6">
                   <div className="mb-2 flex justify-between">
-                    <span className="text-white/70" style={{ fontSize: "0.8rem" }}>Thời gian còn lại</span>
+                    <span className="text-white/70" style={{ fontSize: "0.8rem" }}>{t("Thời gian còn lại")}</span>
                     <span className="text-white" style={{ fontSize: "0.8rem", fontWeight: 600 }}>
-                      {member.subscription?.daysRemaining ?? 0}/{member.subscription?.daysTotal ?? 0} ngày
+                      {t("{remaining}/{total} ngày", { remaining: member.subscription?.daysRemaining ?? 0, total: member.subscription?.daysTotal ?? 0 })}
                     </span>
                   </div>
                   <div className="h-2 w-full rounded-full bg-white/20">
@@ -413,8 +415,8 @@ export function MemberProfile() {
                         <Icon className={`h-5 w-5 ${color}`} />
                       </div>
                       <p className="text-gray-900" style={{ fontSize: "1.6rem", fontWeight: 800, lineHeight: 1 }}>{value}</p>
-                      <p className="mt-1 text-gray-500" style={{ fontSize: "0.75rem" }}>{unit}</p>
-                      <p className="mt-0.5 text-gray-400" style={{ fontSize: "0.72rem" }}>{label}</p>
+                      <p className="mt-1 text-gray-500" style={{ fontSize: "0.75rem" }}>{t(unit)}</p>
+                      <p className="mt-0.5 text-gray-400" style={{ fontSize: "0.72rem" }}>{t(label)}</p>
                     </div>
                   ))}
                 </div>
@@ -438,7 +440,7 @@ export function MemberProfile() {
                         <Icon className={`h-5 w-5 ${color}`} />
                       </div>
                       <p className="text-gray-900" style={{ fontSize: "1.35rem", fontWeight: 800 }}>{value}</p>
-                      <p className="text-gray-500" style={{ fontSize: "0.75rem" }}>{label} · {unit}</p>
+                      <p className="text-gray-500" style={{ fontSize: "0.75rem" }}>{t(label)} · {t(unit)}</p>
                     </div>
                   ))}
                 </div>
@@ -450,8 +452,8 @@ export function MemberProfile() {
               <section className="rounded-3xl border border-gray-100 bg-white p-6 shadow-sm">
                 <div className="mb-5 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                   <div>
-                    <h3 className="text-gray-900" style={{ fontSize: "1.1rem", fontWeight: 700 }}>Thông báo của bạn</h3>
-                    <p className="mt-1 text-sm text-gray-500">{unreadNotifications} thông báo chưa đọc từ backend.</p>
+                    <h3 className="text-gray-900" style={{ fontSize: "1.1rem", fontWeight: 700 }}>{t("Thông báo của bạn")}</h3>
+                    <p className="mt-1 text-sm text-gray-500">{t("{count} thông báo chưa đọc từ backend.", { count: unreadNotifications })}</p>
                   </div>
                   <button
                     type="button"
@@ -459,7 +461,7 @@ export function MemberProfile() {
                     className="inline-flex items-center justify-center gap-2 rounded-xl bg-green-600 px-4 py-2.5 text-sm font-bold text-white hover:bg-green-700"
                   >
                     <CheckCheck className="h-4 w-4" />
-                    Đánh dấu tất cả đã đọc
+                    {t("Đánh dấu tất cả đã đọc")}
                   </button>
                 </div>
                 <div className="space-y-3">
@@ -469,10 +471,10 @@ export function MemberProfile() {
                         <div>
                           <div className="flex items-center gap-2">
                             {!item.readAt && <span className="h-2 w-2 rounded-full bg-green-500" />}
-                            <p className="font-semibold text-gray-900">{item.title}</p>
+                            <p className="font-semibold text-gray-900">{t(item.title)}</p>
                           </div>
-                          <p className="mt-1 text-sm leading-6 text-gray-600">{item.text}</p>
-                          <p className="mt-2 text-xs text-gray-400">{formatDate(item.createdAt)}</p>
+                          <p className="mt-1 text-sm leading-6 text-gray-600">{t(item.text)}</p>
+                          <p className="mt-2 text-xs text-gray-400">{formatDate(item.createdAt, locale)}</p>
                         </div>
                         {!item.readAt && (
                           <button
@@ -480,14 +482,14 @@ export function MemberProfile() {
                             onClick={() => void handleMarkNotificationRead(item.id)}
                             className="rounded-xl border border-green-200 bg-white px-3 py-2 text-xs font-bold text-green-700 hover:bg-green-50"
                           >
-                            Đã đọc
+                            {t("Đã đọc")}
                           </button>
                         )}
                       </div>
                     </div>
                   )) : (
                     <div className="rounded-2xl border border-gray-100 bg-gray-50 px-4 py-8 text-center text-sm text-gray-500">
-                      Chưa có thông báo nào.
+                      {t("Chưa có thông báo nào.")}
                     </div>
                   )}
                 </div>
@@ -496,11 +498,11 @@ export function MemberProfile() {
 
             {activeNav === "settings" && (
               <section className="rounded-3xl border border-gray-100 bg-white p-6 shadow-sm">
-                <h3 className="mb-1 text-gray-900" style={{ fontSize: "1.1rem", fontWeight: 700 }}>Cài đặt hồ sơ</h3>
-                <p className="mb-5 text-sm text-gray-500">Các thay đổi được lưu vào backend và đồng bộ lại toàn app.</p>
+                <h3 className="mb-1 text-gray-900" style={{ fontSize: "1.1rem", fontWeight: 700 }}>{t("Cài đặt hồ sơ")}</h3>
+                <p className="mb-5 text-sm text-gray-500">{t("Các thay đổi được lưu vào backend và đồng bộ lại toàn app.")}</p>
                 <form onSubmit={(event) => void handleSaveSettings(event)} className="grid gap-4 md:grid-cols-2">
                   <label className="block">
-                    <span className="mb-1 block text-sm font-semibold text-gray-700">Họ tên</span>
+                    <span className="mb-1 block text-sm font-semibold text-gray-700">{t("Họ tên")}</span>
                     <input value={settingsForm.name} onChange={(event) => setSettingsForm({ ...settingsForm, name: event.target.value })} className="w-full rounded-xl border border-gray-200 bg-gray-50 px-4 py-3 outline-none focus:border-green-500" />
                   </label>
                   <label className="block">
@@ -508,40 +510,40 @@ export function MemberProfile() {
                     <input type="email" value={settingsForm.email} onChange={(event) => setSettingsForm({ ...settingsForm, email: event.target.value })} className="w-full rounded-xl border border-gray-200 bg-gray-50 px-4 py-3 outline-none focus:border-green-500" />
                   </label>
                   <label className="block">
-                    <span className="mb-1 block text-sm font-semibold text-gray-700">Mục tiêu calo/ngày</span>
+                    <span className="mb-1 block text-sm font-semibold text-gray-700">{t("Mục tiêu calo/ngày")}</span>
                     <input type="number" min={1200} max={5000} value={settingsForm.calorieTarget} onChange={(event) => setSettingsForm({ ...settingsForm, calorieTarget: Number(event.target.value) })} className="w-full rounded-xl border border-gray-200 bg-gray-50 px-4 py-3 outline-none focus:border-green-500" />
                   </label>
                   <label className="block">
-                    <span className="mb-1 block text-sm font-semibold text-gray-700">Mục tiêu nước/ngày (ml)</span>
+                    <span className="mb-1 block text-sm font-semibold text-gray-700">{t("Mục tiêu nước/ngày (ml)")}</span>
                     <input type="number" min={500} max={5000} step={50} value={settingsForm.waterTargetMl} onChange={(event) => setSettingsForm({ ...settingsForm, waterTargetMl: Number(event.target.value) })} className="w-full rounded-xl border border-gray-200 bg-gray-50 px-4 py-3 outline-none focus:border-green-500" />
                   </label>
                   <div className="md:col-span-2 rounded-2xl border border-green-100 bg-green-50/70 p-4">
-                    <h4 className="text-gray-900" style={{ fontSize: "0.95rem", fontWeight: 800 }}>Hồ sơ cơ thể & khẩu vị</h4>
-                    <p className="mt-1 text-gray-500" style={{ fontSize: "0.8rem" }}>Dữ liệu này giúp dashboard mô phỏng cơ thể, theo dõi cân nặng và cho AI tránh món dị ứng.</p>
+                    <h4 className="text-gray-900" style={{ fontSize: "0.95rem", fontWeight: 800 }}>{t("Hồ sơ cơ thể & khẩu vị")}</h4>
+                    <p className="mt-1 text-gray-500" style={{ fontSize: "0.8rem" }}>{t("Dữ liệu này giúp dashboard mô phỏng cơ thể, theo dõi cân nặng và cho AI tránh món dị ứng.")}</p>
                     <div className="mt-4 grid gap-4 md:grid-cols-2">
                       <label className="block">
-                        <span className="mb-1 block text-sm font-semibold text-gray-700">Hình dáng cơ thể</span>
+                        <span className="mb-1 block text-sm font-semibold text-gray-700">{t("Hình dáng cơ thể")}</span>
                         <select value={settingsForm.bodyShape} onChange={(event) => setSettingsForm({ ...settingsForm, bodyShape: event.target.value as NonNullable<MemberPreferences["bodyShape"]> })} className="w-full rounded-xl border border-gray-200 bg-white px-4 py-3 outline-none focus:border-green-500">
-                          {bodyShapeOptions.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
+                          {bodyShapeOptions.map((option) => <option key={option.value} value={option.value}>{t(option.label)}</option>)}
                         </select>
                       </label>
                       <label className="block">
-                        <span className="mb-1 block text-sm font-semibold text-gray-700">Phong cách ăn</span>
+                        <span className="mb-1 block text-sm font-semibold text-gray-700">{t("Phong cách ăn")}</span>
                         <select value={settingsForm.dietStyle} onChange={(event) => setSettingsForm({ ...settingsForm, dietStyle: event.target.value as NonNullable<MemberPreferences["dietStyle"]> })} className="w-full rounded-xl border border-gray-200 bg-white px-4 py-3 outline-none focus:border-green-500">
-                          {dietStyleOptions.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
+                          {dietStyleOptions.map((option) => <option key={option.value} value={option.value}>{t(option.label)}</option>)}
                         </select>
                       </label>
                       <label className="block">
-                        <span className="mb-1 block text-sm font-semibold text-gray-700">Cân nặng hiện tại</span>
+                        <span className="mb-1 block text-sm font-semibold text-gray-700">{t("Cân nặng hiện tại")}</span>
                         <input type="number" min={30} max={250} step={0.1} value={settingsForm.latestWeightKg} onChange={(event) => setSettingsForm({ ...settingsForm, latestWeightKg: Number(event.target.value) })} className="w-full rounded-xl border border-gray-200 bg-white px-4 py-3 outline-none focus:border-green-500" />
                       </label>
                       <label className="block">
-                        <span className="mb-1 block text-sm font-semibold text-gray-700">Cân nặng mục tiêu</span>
+                        <span className="mb-1 block text-sm font-semibold text-gray-700">{t("Cân nặng mục tiêu")}</span>
                         <input type="number" min={30} max={250} step={0.1} value={settingsForm.targetWeightKg} onChange={(event) => setSettingsForm({ ...settingsForm, targetWeightKg: Number(event.target.value) })} className="w-full rounded-xl border border-gray-200 bg-white px-4 py-3 outline-none focus:border-green-500" />
                       </label>
                     </div>
                     <div className="mt-4">
-                      <span className="mb-2 block text-sm font-semibold text-gray-700">Nền ẩm thực ưu tiên</span>
+                      <span className="mb-2 block text-sm font-semibold text-gray-700">{t("Nền ẩm thực ưu tiên")}</span>
                       <div className="flex flex-wrap gap-2">
                         {cuisineOptions.map((option) => {
                           const active = settingsForm.cuisinePreferences.includes(option.value);
@@ -557,7 +559,7 @@ export function MemberProfile() {
                               })}
                               className={`rounded-xl border px-3 py-2 text-sm font-bold ${active ? "border-green-500 bg-white text-green-700" : "border-gray-200 bg-white/70 text-gray-600"}`}
                             >
-                              {option.label}
+                              {t(option.label)}
                             </button>
                           );
                         })}
@@ -570,12 +572,12 @@ export function MemberProfile() {
                         { key: "mealPreferences", label: "Ghi chú khẩu vị", placeholder: "Ví dụ: thích cay nhẹ, ít dầu, món gia đình..." },
                       ].map((field) => (
                         <label key={field.key} className={field.key === "mealPreferences" ? "block md:col-span-2" : "block"}>
-                          <span className="mb-1 block text-sm font-semibold text-gray-700">{field.label}</span>
+                          <span className="mb-1 block text-sm font-semibold text-gray-700">{t(field.label)}</span>
                           <div className="flex gap-2">
                             <input
                               value={String(settingsForm[field.key as "allergies" | "dislikedFoods" | "mealPreferences"])}
                               onChange={(event) => setSettingsForm({ ...settingsForm, [field.key]: event.target.value })}
-                              placeholder={field.placeholder}
+                              placeholder={t(field.placeholder)}
                               className="min-w-0 flex-1 rounded-xl border border-gray-200 bg-white px-4 py-3 outline-none focus:border-green-500"
                             />
                             <VoiceInputButton onTranscript={(text) => setSettingsForm({ ...settingsForm, [field.key]: `${String(settingsForm[field.key as "allergies" | "dislikedFoods" | "mealPreferences"])} ${text}`.trim() })} />
@@ -585,10 +587,10 @@ export function MemberProfile() {
                     </div>
                   </div>
                   <div className="md:col-span-2 flex flex-wrap items-center justify-between gap-3">
-                    {statusMessage ? <p className="text-sm font-semibold text-green-700">{statusMessage}</p> : <span />}
+                    {statusMessage ? <p className="text-sm font-semibold text-green-700">{t(statusMessage)}</p> : <span />}
                     <button disabled={savingSettings} type="submit" className="inline-flex items-center gap-2 rounded-xl bg-green-600 px-5 py-3 text-white transition hover:bg-green-700 disabled:opacity-60">
                       <Save className="h-4 w-4" />
-                      {savingSettings ? "Đang lưu..." : "Lưu cài đặt"}
+                      {t(savingSettings ? "Đang lưu..." : "Lưu cài đặt")}
                     </button>
                   </div>
                 </form>
@@ -602,11 +604,12 @@ export function MemberProfile() {
 }
 
 function ProfileBenefits({ plan, benefits, tier, config }: { plan: Plan | null; benefits: Plan["features"]; tier: Tier; config: typeof tierConfig[Tier] }) {
+  const { t } = useLanguage();
   return (
     <section className="rounded-3xl border border-gray-100 bg-white p-6 shadow-sm">
       <div className="mb-5 flex items-center justify-between">
-        <h3 className="text-gray-900" style={{ fontSize: "1.1rem", fontWeight: 700 }}>Quyền lợi của bạn</h3>
-        <span className={`rounded-full px-3 py-1 text-xs font-semibold ${config.badgeBg}`}>{plan?.name ?? config.label}</span>
+        <h3 className="text-gray-900" style={{ fontSize: "1.1rem", fontWeight: 700 }}>{t("Quyền lợi của bạn")}</h3>
+        <span className={`rounded-full px-3 py-1 text-xs font-semibold ${config.badgeBg}`}>{plan ? t(plan.name) : config.label}</span>
       </div>
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 md:grid-cols-3">
         {benefits.map((benefit, index) => {
@@ -620,7 +623,7 @@ function ProfileBenefits({ plan, benefits, tier, config }: { plan: Plan | null; 
                 </div>
                 {benefit.included ? <Check className={`h-4 w-4 ${config.accent}`} /> : <Lock className="h-4 w-4 text-gray-400" />}
               </div>
-              <p className={benefit.included ? "text-gray-900" : "text-gray-400"} style={{ fontSize: "0.875rem", fontWeight: 600 }}>{benefit.label}</p>
+              <p className={benefit.included ? "text-gray-900" : "text-gray-400"} style={{ fontSize: "0.875rem", fontWeight: 600 }}>{t(benefit.label)}</p>
             </div>
           );
         })}
@@ -630,12 +633,12 @@ function ProfileBenefits({ plan, benefits, tier, config }: { plan: Plan | null; 
           <div className="flex items-center gap-3">
             <Crown className="h-5 w-5 text-amber-500" />
             <div>
-              <p className="text-gray-900" style={{ fontSize: "0.875rem", fontWeight: 600 }}>Nâng lên SVIP để mở khóa AI Coach và thêm quyền lợi</p>
-              <p className="text-gray-500" style={{ fontSize: "0.75rem" }}>Quyền gói được lấy từ backend sau checkout.</p>
+              <p className="text-gray-900" style={{ fontSize: "0.875rem", fontWeight: 600 }}>{t("Nâng lên SVIP để mở khóa AI Coach và thêm quyền lợi")}</p>
+              <p className="text-gray-500" style={{ fontSize: "0.75rem" }}>{t("Quyền gói được lấy từ backend sau checkout.")}</p>
             </div>
           </div>
           <Link to="/svip" className="flex flex-shrink-0 items-center gap-1 rounded-xl bg-amber-500 px-4 py-2 text-white transition-all hover:bg-amber-600" style={{ fontSize: "0.8rem", fontWeight: 700 }}>
-            Nâng cấp <ArrowUpCircle className="h-4 w-4" />
+            {t("Nâng cấp")} <ArrowUpCircle className="h-4 w-4" />
           </Link>
         </div>
       )}
@@ -644,12 +647,13 @@ function ProfileBenefits({ plan, benefits, tier, config }: { plan: Plan | null; 
 }
 
 function PaymentHistory({ payments, showAll, onToggle, onDownload }: { payments: Payment[]; showAll: boolean; onToggle(): void; onDownload(payment: Payment): void }) {
+  const { locale, t } = useLanguage();
   return (
     <section className="rounded-3xl border border-gray-100 bg-white p-6 shadow-sm">
       <div className="mb-5 flex items-center justify-between">
-        <h3 className="text-gray-900" style={{ fontSize: "1.1rem", fontWeight: 700 }}>Lịch sử thanh toán</h3>
+        <h3 className="text-gray-900" style={{ fontSize: "1.1rem", fontWeight: 700 }}>{t("Lịch sử thanh toán")}</h3>
         <button onClick={onToggle} className="text-green-600 hover:underline" style={{ fontSize: "0.875rem", fontWeight: 600 }}>
-          {showAll ? "Thu gọn" : "Xem tất cả"}
+          {t(showAll ? "Thu gọn" : "Xem tất cả")}
         </button>
       </div>
       <div className="overflow-x-auto">
@@ -657,22 +661,22 @@ function PaymentHistory({ payments, showAll, onToggle, onDownload }: { payments:
           <thead>
             <tr className="border-b border-gray-100">
               {["Ngày", "Gói", "Số tiền", "Trạng thái", "Hóa đơn"].map((header) => (
-                <th key={header} className="py-3 text-left text-gray-500" style={{ fontSize: "0.78rem", fontWeight: 600 }}>{header}</th>
+                <th key={header} className="py-3 text-left text-gray-500" style={{ fontSize: "0.78rem", fontWeight: 600 }}>{t(header)}</th>
               ))}
             </tr>
           </thead>
           <tbody>
             {payments.length ? payments.map((payment) => (
               <tr key={payment.id} className="border-b border-gray-50 transition-colors hover:bg-gray-50">
-                <td className="py-3.5 text-gray-600" style={{ fontSize: "0.875rem" }}>{formatDate(payment.paidAt)}</td>
+                <td className="py-3.5 text-gray-600" style={{ fontSize: "0.875rem" }}>{formatDate(payment.paidAt, locale)}</td>
                 <td className="py-3.5">
                   <span className={`rounded-full border px-2.5 py-1 text-xs font-semibold ${payment.planId === "svip" ? "bg-amber-50 text-amber-700 border-amber-200" : "bg-green-50 text-green-700 border-green-200"}`}>{payment.planId.toUpperCase()}</span>
                 </td>
-                <td className="py-3.5 text-gray-900" style={{ fontSize: "0.875rem", fontWeight: 600 }}>{formatMoney(payment.amount, payment.currency)}</td>
+                <td className="py-3.5 text-gray-900" style={{ fontSize: "0.875rem", fontWeight: 600 }}>{formatMoney(payment.amount, locale, payment.currency)}</td>
                 <td className="py-3.5">
                   <div className="flex items-center gap-1.5">
                     <div className="h-2 w-2 rounded-full bg-green-500" />
-                    <span className="text-green-700" style={{ fontSize: "0.8rem" }}>{payment.status}</span>
+                    <span className="text-green-700" style={{ fontSize: "0.8rem" }}>{t(payment.status)}</span>
                   </div>
                 </td>
                 <td className="py-3.5">
@@ -684,7 +688,7 @@ function PaymentHistory({ payments, showAll, onToggle, onDownload }: { payments:
               </tr>
             )) : (
               <tr>
-                <td colSpan={5} className="py-8 text-center text-sm text-gray-500">Chưa có giao dịch nào.</td>
+                <td colSpan={5} className="py-8 text-center text-sm text-gray-500">{t("Chưa có giao dịch nào.")}</td>
               </tr>
             )}
           </tbody>

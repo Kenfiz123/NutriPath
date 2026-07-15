@@ -23,10 +23,11 @@ vi.mock("../app/components/ChatBot", () => ({
 }));
 
 import { Root } from "../app/components/layout/Root";
+import { LanguageProvider } from "../app/language";
 
 describe("Root ChatBot lazy mount", () => {
   it("mounts ChatBot only after the authenticated user opens the FAB", () => {
-    render(<Root />);
+    render(<LanguageProvider><Root /></LanguageProvider>);
 
     expect(screen.queryByTestId("chatbot")).not.toBeInTheDocument();
 

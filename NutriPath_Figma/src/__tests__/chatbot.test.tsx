@@ -18,10 +18,11 @@ import {
 } from "../app/api";
 import { ChatBot } from "../app/components/ChatBot";
 import { invalidateChatHistoryCache } from "../app/services/chatCache";
+import { LanguageProvider } from "../app/language";
 
 function renderChatBot(memberId = "member-1") {
   const onClose = vi.fn();
-  render(<ChatBot memberId={memberId} onClose={onClose} />);
+  render(<LanguageProvider><ChatBot memberId={memberId} onClose={onClose} /></LanguageProvider>);
   return { onClose };
 }
 

@@ -24,6 +24,8 @@ import {
   invalidateNotificationCache,
 } from "../../services/notificationCache";
 import { ThemeToggle } from "../ThemeToggle";
+import { LanguageToggle } from "../LanguageToggle";
+import { useLanguage } from "../../language";
 
 const navLinks = [
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
@@ -41,6 +43,7 @@ interface NavbarProps {
 export function Navbar({ isLanding = false }: NavbarProps) {
   const location = useLocation();
   const { session, logout } = useAuth();
+  const { t } = useLanguage();
   const [mobileOpen, setMobileOpen] = useState(false);
   const [notificationsOpen, setNotificationsOpen] = useState(false);
   const [notifications, setNotifications] = useState<AppNotification[]>([]);
@@ -137,7 +140,7 @@ export function Navbar({ isLanding = false }: NavbarProps) {
                 style={{ fontSize: "0.875rem", fontWeight: 500 }}
               >
                 <Icon className="w-4 h-4" />
-                {label}
+                {t(label)}
               </Link>
             );
           })}
@@ -163,16 +166,17 @@ export function Navbar({ isLanding = false }: NavbarProps) {
             </Link>
           )}
 
+          <LanguageToggle isLanding={isLanding} />
+          <ThemeToggle compact isLanding={isLanding} />
           {member ? (
             <>
-              <ThemeToggle compact isLanding={isLanding} />
               <div className="relative">
                 <button
                   type="button"
                   onClick={() => setNotificationsOpen((value) => !value)}
                   className={`relative p-2 rounded-full transition-all ${isLanding ? "text-white/80 hover:text-white hover:bg-white/10" : "text-gray-500 hover:text-gray-700 hover:bg-gray-100 dark:text-slate-300 dark:hover:bg-slate-800 dark:hover:text-white"}`}
                   aria-expanded={notificationsOpen}
-                  aria-label="Mở thông báo"
+                  aria-label={t("Mở thông báo")}
                 >
                   <Bell className="w-5 h-5" />
                   {unreadCount > 0 && (
@@ -185,14 +189,14 @@ export function Navbar({ isLanding = false }: NavbarProps) {
                   <div className="absolute right-0 top-11 z-50 w-80 rounded-2xl border border-gray-100 bg-white p-3 shadow-xl dark:border-slate-700 dark:bg-slate-900">
                     <div className="mb-2 flex items-center justify-between px-1">
                       <p className="text-sm font-bold text-gray-900 dark:text-slate-50">
-                        Thông báo
+                        {t("Thông báo")}
                       </p>
                       <button
                         type="button"
                         onClick={() => void handleMarkAllNotificationsRead()}
                         className="text-xs font-semibold text-green-600 hover:text-green-700"
                       >
-                        Đánh dấu đã đọc
+                        {t("Đánh dấu đã đọc")}
                       </button>
                     </div>
                     <div className="space-y-2">
@@ -206,20 +210,20 @@ export function Navbar({ isLanding = false }: NavbarProps) {
                           >
                             <div className="flex items-start justify-between gap-2">
                               <p className="text-sm font-semibold text-gray-900 dark:text-slate-50">
-                                {item.title}
+                                {t(item.title)}
                               </p>
                               {!item.readAt && (
                                 <span className="mt-1 h-2 w-2 flex-shrink-0 rounded-full bg-green-500" />
                               )}
                             </div>
                             <p className="mt-0.5 text-xs leading-5 text-gray-500 dark:text-slate-300">
-                              {item.text}
+                              {t(item.text)}
                             </p>
                           </Link>
                         ))
                       ) : (
                         <div className="rounded-xl bg-slate-50 px-3 py-3 text-xs text-slate-500 dark:bg-slate-800 dark:text-slate-300">
-                          Chưa có thông báo mới.
+                          {t("Chưa có thông báo mới.")}
                         </div>
                       )}
                     </div>
@@ -246,19 +250,18 @@ export function Navbar({ isLanding = false }: NavbarProps) {
                 style={{ fontSize: "0.875rem", fontWeight: 600 }}
               >
                 <LogOut className="w-4 h-4" />
-                Đăng xuất
+                {t("Đăng xuất")}
               </button>
             </>
           ) : (
             <>
-              <ThemeToggle compact isLanding={isLanding} />
               <Link
                 to="/login"
                 className={`flex items-center gap-1.5 px-3 py-2 rounded-lg transition-all ${buttonGhost}`}
                 style={{ fontSize: "0.875rem", fontWeight: 600 }}
               >
                 <LogIn className="w-4 h-4" />
-                Đăng nhập
+                {t("Đăng nhập")}
               </Link>
               <Link
                 to="/register"
@@ -270,13 +273,14 @@ export function Navbar({ isLanding = false }: NavbarProps) {
                 style={{ fontSize: "0.875rem", fontWeight: 700 }}
               >
                 <UserPlus className="w-4 h-4" />
-                Đăng ký
+                {t("Đăng ký")}
               </Link>
             </>
           )}
         </div>
 
         <div className="flex items-center gap-2 md:hidden">
+          <LanguageToggle isLanding={isLanding} />
           <ThemeToggle compact isLanding={isLanding} />
           <button
             className={`p-2 ${isLanding ? "text-white" : "text-gray-600 dark:text-slate-200"}`}
@@ -304,7 +308,7 @@ export function Navbar({ isLanding = false }: NavbarProps) {
               onClick={() => setMobileOpen(false)}
             >
               <Icon className="w-4 h-4" />
-              {label}
+              {t(label)}
             </Link>
           ))}
           <Link
@@ -348,7 +352,7 @@ export function Navbar({ isLanding = false }: NavbarProps) {
                   className={`flex w-full items-center gap-2 py-2.5 ${isLanding ? "text-white" : "text-gray-700 dark:text-slate-200"}`}
                 >
                   <LogOut className="w-4 h-4" />
-                  Đăng xuất
+                  {t("Đăng xuất")}
                 </button>
               </>
             ) : (
@@ -359,7 +363,7 @@ export function Navbar({ isLanding = false }: NavbarProps) {
                   onClick={() => setMobileOpen(false)}
                 >
                   <LogIn className="w-4 h-4" />
-                  Đăng nhập
+                  {t("Đăng nhập")}
                 </Link>
                 <Link
                   to="/register"
@@ -367,7 +371,7 @@ export function Navbar({ isLanding = false }: NavbarProps) {
                   onClick={() => setMobileOpen(false)}
                 >
                   <UserPlus className="w-4 h-4" />
-                  Đăng ký
+                  {t("Đăng ký")}
                 </Link>
               </div>
             )}

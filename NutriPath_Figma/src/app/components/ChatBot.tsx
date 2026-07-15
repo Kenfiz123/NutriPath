@@ -18,6 +18,7 @@ import {
   getChatHistoryCached,
   invalidateChatHistoryCache,
 } from "../services/chatCache";
+import { useLanguage } from "../language";
 
 interface Message {
   id: string;
@@ -25,15 +26,6 @@ interface Message {
   text: string;
   time: string;
 }
-
-const initialMessages: Message[] = [
-  {
-    id: "welcome",
-    sender: "ai",
-    text: "Xin chào! Tôi là NutriBot. Tôi có thể giúp bạn tính calo, gợi ý món ăn và xây dựng thói quen ăn uống lành mạnh.",
-    time: "09:00",
-  },
-];
 
 function TypingIndicator() {
   return (
@@ -61,10 +53,10 @@ function TypingIndicator() {
   );
 }
 
-function formatMessageTime(value: string) {
+function formatMessageTime(value: string, locale: string) {
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return value;
-  return date.toLocaleTimeString("vi-VN", {
+  return date.toLocaleTimeString(locale, {
     hour: "2-digit",
     minute: "2-digit",
   });
@@ -76,7 +68,13 @@ interface ChatBotProps {
 }
 
 export function ChatBot({ memberId, onClose }: ChatBotProps) {
-  const [messages, setMessages] = useState<Message[]>(initialMessages);
+  const { locale, t } = useLanguage();
+  const [messages, setMessages] = useState<Message[]>(() => [{
+    id: "welcome",
+    sender: "ai",
+    text: t("Xin chào! Tôi là NutriBot. Tôi có thể giúp bạn tính calo, gợi ý món ăn và xây dựng thói quen ăn uống lành mạnh."),
+    time: "09:00",
+  }]);
   const [quickReplies, setQuickReplies] = useState<string[]>([]);
   const [inputText, setInputText] = useState("");
   const [isTyping, setIsTyping] = useState(false);
@@ -99,6 +97,14 @@ export function ChatBot({ memberId, onClose }: ChatBotProps) {
   }, [messages, isTyping]);
 
   useEffect(() => {
+    setMessages((current) => current.map((message) => (
+      message.id === "welcome"
+        ? { ...message, text: t("Xin chào! Tôi là NutriBot. Tôi có thể giúp bạn tính calo, gợi ý món ăn và xây dựng thói quen ăn uống lành mạnh.") }
+        : message
+    )));
+  }, [t]);
+
+  useEffect(() => {
     if (bootstrapRequestedRef.current) return;
     bootstrapRequestedRef.current = true;
 
@@ -109,7 +115,7 @@ export function ChatBot({ memberId, onClose }: ChatBotProps) {
           setMessages(
             data.messages.map((message) => ({
               ...message,
-              time: formatMessageTime(message.time),
+              time: formatMessageTime(message.time, locale),
             })),
           );
         }
@@ -119,7 +125,7 @@ export function ChatBot({ memberId, onClose }: ChatBotProps) {
           .then((data) => setQuickReplies(data.quickReplies))
           .catch(() => setQuickReplies([]));
       });
-  }, [memberId]);
+  }, [locale, memberId]);
 
   useEffect(() => {
     const handleMemberUpdated = () => {
@@ -141,7 +147,7 @@ export function ChatBot({ memberId, onClose }: ChatBotProps) {
       id: `user-${Date.now()}`,
       sender: "user",
       text,
-      time: new Date().toLocaleTimeString("vi-VN", {
+      time: new Date().toLocaleTimeString(locale, {
         hour: "2-digit",
         minute: "2-digit",
       }),
@@ -173,8 +179,8 @@ export function ChatBot({ memberId, onClose }: ChatBotProps) {
       const aiMsg: Message = {
         id: ai?.id ?? `ai-${Date.now()}`,
         sender: "ai",
-        text: ai?.text ?? "Tôi chưa nhận được phản hồi từ hệ thống.",
-        time: formatMessageTime(ai?.time ?? new Date().toISOString()),
+        text: ai?.text ?? t("Tôi chưa nhận được phản hồi từ hệ thống."),
+        time: formatMessageTime(ai?.time ?? new Date().toISOString(), locale),
       };
 
       setIsTyping(false);
@@ -197,7 +203,7 @@ export function ChatBot({ memberId, onClose }: ChatBotProps) {
       const errorMessage =
         error instanceof Error
           ? error.message
-          : "Không thể kết nối đến NutriBot. Vui lòng thử lại.";
+          : t("Không thể kết nối đến NutriBot. Vui lòng thử lại.");
       setChatError(errorMessage);
       // Auto-dismiss error after 5 seconds
       setTimeout(() => setChatError(null), 5000);
@@ -220,13 +226,13 @@ export function ChatBot({ memberId, onClose }: ChatBotProps) {
       setInputText(
         (current) =>
           current ||
-          "Trình duyệt hiện chưa hỗ trợ ghi âm. Bạn có thể nhập tin nhắn bằng bàn phím.",
+          t("Trình duyệt hiện chưa hỗ trợ ghi âm. Bạn có thể nhập tin nhắn bằng bàn phím."),
       );
       return;
     }
 
     const recognition = new SpeechRecognition();
-    recognition.lang = "vi-VN";
+    recognition.lang = locale;
     recognition.interimResults = false;
     recognition.maxAlternatives = 1;
     setIsListening(true);
@@ -239,7 +245,7 @@ export function ChatBot({ memberId, onClose }: ChatBotProps) {
       setInputText(
         (current) =>
           current ||
-          "Mình chưa nghe rõ. Bạn thử nói lại hoặc nhập bằng bàn phím nhé.",
+          t("Mình chưa nghe rõ. Bạn thử nói lại hoặc nhập bằng bàn phím nhé."),
       );
     };
     recognition.onend = () => setIsListening(false);
@@ -282,8 +288,8 @@ export function ChatBot({ memberId, onClose }: ChatBotProps) {
                       style={{ fontSize: "0.75rem" }}
                     >
                       {chatMode === "coach"
-                        ? "Cá nhân hóa theo hồ sơ"
-                        : "Đang hoạt động"}
+                        ? t("Cá nhân hóa theo hồ sơ")
+                        : t("Đang hoạt động")}
                     </span>
                   </div>
                 </div>
@@ -291,7 +297,7 @@ export function ChatBot({ memberId, onClose }: ChatBotProps) {
 
               <button
                 onClick={onClose}
-                aria-label="Đóng cửa sổ NutriBot"
+                aria-label={t("Đóng cửa sổ NutriBot")}
                 className="rounded-full p-1.5 text-white transition-colors hover:bg-white/20"
               >
                 <X className="h-5 w-5" />
@@ -308,7 +314,7 @@ export function ChatBot({ memberId, onClose }: ChatBotProps) {
                 }`}
                 style={{ fontSize: "0.75rem", fontWeight: 700 }}
               >
-                NutriBot thường
+                {t("NutriBot thường")}
               </button>
               <button
                 onClick={() => coachUnlocked && setChatMode("coach")}
@@ -337,8 +343,7 @@ export function ChatBot({ memberId, onClose }: ChatBotProps) {
                 className="mt-2 text-left text-green-50/95 transition-colors hover:text-white"
                 style={{ fontSize: "0.72rem", fontWeight: 600 }}
               >
-                SVIP mở AI Coach cá nhân hóa theo hồ sơ, nhật ký bữa ăn và mục
-                tiêu của bạn.
+                {t("SVIP mở AI Coach cá nhân hóa theo hồ sơ, nhật ký bữa ăn và mục tiêu của bạn.")}
               </button>
             )}
           </div>
@@ -415,7 +420,7 @@ export function ChatBot({ memberId, onClose }: ChatBotProps) {
                 <button
                   onClick={() => setChatError(null)}
                   className="text-red-500 hover:text-red-700"
-                  aria-label="Đóng thông báo lỗi"
+                  aria-label={t("Đóng thông báo lỗi")}
                 >
                   <X className="h-4 w-4" />
                 </button>
@@ -432,23 +437,23 @@ export function ChatBot({ memberId, onClose }: ChatBotProps) {
                 onKeyDown={handleKeyDown}
                 placeholder={
                   chatMode === "coach"
-                    ? "Nhắn mục tiêu hoặc vấn đề dinh dưỡng của bạn..."
-                    : "Nhắn tin cho NutriBot..."
+                    ? t("Nhắn mục tiêu hoặc vấn đề dinh dưỡng của bạn...")
+                    : t("Nhắn tin cho NutriBot...")
                 }
                 className="flex-1 bg-transparent text-gray-700 outline-none placeholder-gray-400"
                 style={{ fontSize: "0.875rem" }}
                 aria-label={
                   chatMode === "coach"
-                    ? "Tin nhắn cho AI Coach"
-                    : "Tin nhắn cho NutriBot"
+                    ? t("Tin nhắn cho AI Coach")
+                    : t("Tin nhắn cho NutriBot")
                 }
               />
               <button
                 type="button"
                 onClick={handleVoiceInput}
                 className={`transition-colors ${isListening ? "text-green-600" : "text-gray-400 hover:text-green-600"}`}
-                aria-label={isListening ? "Đang nghe" : "Ghi âm"}
-                title={isListening ? "Đang nghe..." : "Ghi âm tiếng Việt"}
+                aria-label={isListening ? t("Đang nghe") : t("Ghi âm")}
+                title={isListening ? t("Đang nghe...") : t("Ghi âm bằng ngôn ngữ đã chọn")}
               >
                 <Mic className="h-4 w-4" />
               </button>
@@ -456,7 +461,7 @@ export function ChatBot({ memberId, onClose }: ChatBotProps) {
             <button
               onClick={() => sendMessage(inputText)}
               disabled={!inputText.trim()}
-              aria-label="Gửi tin nhắn"
+              aria-label={t("Gửi tin nhắn")}
               className="flex h-9 w-9 items-center justify-center rounded-full bg-green-600 text-white transition-colors hover:bg-green-700 disabled:cursor-not-allowed disabled:opacity-40"
             >
               <Send className="h-4 w-4" />

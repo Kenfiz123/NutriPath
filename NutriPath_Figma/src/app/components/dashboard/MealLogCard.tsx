@@ -1,6 +1,7 @@
 import { Apple, Check, ChevronRight, Plus } from "lucide-react";
 import { Link } from "react-router";
 import type { MealSection } from "../../api";
+import { useLanguage } from "../../language";
 
 const mealIcons: Record<string, string> = {
   breakfast: "🌅",
@@ -40,6 +41,7 @@ interface MealLogCardProps {
 }
 
 export function MealLogCard({ meals: mealSections }: MealLogCardProps) {
+  const { t } = useLanguage();
   const meals = mealSections
     .filter((meal) => meal.items.length > 0)
     .map((meal) => ({
@@ -61,13 +63,13 @@ export function MealLogCard({ meals: mealSections }: MealLogCardProps) {
     <section className="rounded-2xl border border-gray-100 bg-white p-6 shadow-sm dark:border-slate-700 dark:bg-slate-800">
       <div className="mb-5 flex items-center justify-between">
         <h2 className="text-base font-bold text-gray-900 dark:text-slate-50">
-          Nhật ký bữa ăn hôm nay
+          {t("Nhật ký bữa ăn hôm nay")}
         </h2>
         <Link
           to="/tracker"
           className="flex items-center gap-1 text-sm font-semibold text-green-600 hover:text-green-700 dark:text-emerald-300"
         >
-          Xem tất cả <ChevronRight className="h-4 w-4" />
+          {t("Xem tất cả")} <ChevronRight className="h-4 w-4" />
         </Link>
       </div>
       <div className="space-y-4">
@@ -75,17 +77,16 @@ export function MealLogCard({ meals: mealSections }: MealLogCardProps) {
           <div className="rounded-2xl border border-dashed border-gray-200 bg-gray-50 p-8 text-center dark:border-slate-700 dark:bg-slate-900">
             <Apple className="mx-auto mb-3 h-8 w-8 text-green-500" />
             <p className="text-sm font-bold text-gray-900 dark:text-slate-50">
-              Hôm nay chưa có bữa ăn nào
+              {t("Hôm nay chưa có bữa ăn nào")}
             </p>
             <p className="mx-auto mt-2 max-w-sm text-sm leading-6 text-gray-500 dark:text-slate-300">
-              Thêm món ở Meal Tracker để dashboard cập nhật calo, macro và tiến
-              trình tuần theo dữ liệu thật.
+              {t("Thêm món ở Meal Tracker để dashboard cập nhật calo, macro và tiến trình tuần theo dữ liệu thật.")}
             </p>
             <Link
               to="/tracker"
               className="mt-4 inline-flex items-center gap-2 rounded-xl bg-green-600 px-4 py-2.5 text-sm font-bold text-white hover:bg-green-700"
             >
-              <Plus className="h-4 w-4" /> Thêm bữa ăn
+              <Plus className="h-4 w-4" /> {t("Thêm bữa ăn")}
             </Link>
           </div>
         )}
@@ -103,7 +104,7 @@ export function MealLogCard({ meals: mealSections }: MealLogCardProps) {
                 </div>
                 <div>
                   <p className="text-sm font-bold text-gray-900 dark:text-slate-50">
-                    {meal.type}
+                    {t(meal.type)}
                   </p>
                   <p className="text-xs text-gray-400 dark:text-slate-400">
                     {meal.time}
@@ -121,7 +122,7 @@ export function MealLogCard({ meals: mealSections }: MealLogCardProps) {
                   to="/tracker"
                   className="text-xs font-medium text-green-600 dark:text-emerald-300"
                 >
-                  + Thêm
+                  {t("+ Thêm")}
                 </Link>
               </div>
             </div>
