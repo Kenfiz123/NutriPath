@@ -412,8 +412,8 @@ INSERT INTO dbo.ExerciseTypes (id, label, calories_per_minute) VALUES
 
 INSERT INTO dbo.Plans (id, name, monthly_price, period, description) VALUES
 (N'free', N'Free', 0, N'mãi mãi', N'Khởi đầu hành trình sức khỏe của bạn'),
-(N'vip', N'VIP', 99000, N'tháng', N'Nâng cao sức khỏe với đầy đủ tính năng'),
-(N'svip', N'SVIP', 199000, N'tháng', N'Trải nghiệm đỉnh cao với AI Coach cá nhân');
+(N'vip', N'VIP', 25000, N'tháng', N'Nâng cao sức khỏe với đầy đủ tính năng'),
+(N'svip', N'SVIP', 50000, N'tháng', N'Trải nghiệm đỉnh cao với AI Coach cá nhân');
 
 INSERT INTO dbo.PlanFeatures (plan_id, label, included) VALUES
 (N'free', N'May tinh calo co ban', 1),

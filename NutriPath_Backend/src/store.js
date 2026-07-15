@@ -2,7 +2,7 @@ import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { existsSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { healthyBeverageFoods, healthyDrinkRecipes, healthyVietnameseFoods, seedData } from "./data/seed.js";
+import { PLAN_MONTHLY_PRICES, healthyBeverageFoods, healthyDrinkRecipes, healthyVietnameseFoods, seedData } from "./data/seed.js";
 import { loadSqlServerData } from "./sqlserver-import.js";
 import { loadSupabaseData, persistSupabaseData, resetSupabaseData } from "./supabase-postgres-store.js";
 import { loadSupabaseNormalizedData, persistSupabaseNormalizedData, resetSupabaseNormalizedData } from "./supabase-normalized-store.js";
@@ -28,6 +28,13 @@ async function ensureFile(filePath) {
 
 function normalizeCatalogData(db) {
   if (!db || typeof db !== "object") return db;
+
+  if (!Array.isArray(db.plans) || db.plans.length === 0) db.plans = clone(seedData.plans);
+  for (const plan of db.plans) {
+    if (Object.hasOwn(PLAN_MONTHLY_PRICES, plan.id)) {
+      plan.monthlyPrice = PLAN_MONTHLY_PRICES[plan.id];
+    }
+  }
 
   if (!Array.isArray(db.foods) || db.foods.length === 0) db.foods = clone(seedData.foods);
   const syncedFoods = [...healthyVietnameseFoods, ...healthyBeverageFoods];

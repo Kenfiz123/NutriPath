@@ -26,7 +26,7 @@ export function UpgradeModal({ defaultPlan = "vip", onClose }: UpgradeModalProps
 
   const isVip = selected === "vip";
   const benefits = isVip ? vipBenefits : svipBenefits;
-  const price = isVip ? "99,000₫" : "199,000₫";
+  const price = isVip ? "25,000₫" : "50,000₫";
 
   return (
     <div
@@ -90,7 +90,7 @@ export function UpgradeModal({ defaultPlan = "vip", onClose }: UpgradeModalProps
               style={{ fontSize: "0.9rem", fontWeight: 700 }}
             >
               <Star className="w-4 h-4" />
-              VIP — 99,000₫/tháng
+              VIP — 25,000₫/tháng
             </button>
             <button
               onClick={() => setSelected("svip")}
@@ -100,7 +100,7 @@ export function UpgradeModal({ defaultPlan = "vip", onClose }: UpgradeModalProps
               style={{ fontSize: "0.9rem", fontWeight: 700 }}
             >
               <Crown className="w-4 h-4" />
-              SVIP — 199,000₫/tháng
+              SVIP — 50,000₫/tháng
             </button>
           </div>
 

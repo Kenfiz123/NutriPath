@@ -34,6 +34,17 @@ create table if not exists public.nutripath_plans (
   updated_at timestamptz not null default now()
 );
 
+-- Keep existing production rows aligned with NutriPath's current prices.
+update public.nutripath_plans as plan
+set monthly_price = price.monthly_price,
+    data = jsonb_set(coalesce(plan.data, '{}'::jsonb), '{monthlyPrice}', to_jsonb(price.monthly_price), true),
+    updated_at = now()
+from (values
+  ('vip', 25000),
+  ('svip', 50000)
+) as price(id, monthly_price)
+where plan.id = price.id;
+
 create table if not exists public.nutripath_meal_logs (
   id text primary key,
   member_id text not null,

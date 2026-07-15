@@ -135,7 +135,7 @@ export function SVIPLanding() {
 
   const orderedPlans = [...plans].sort((a, b) => ["free", "vip", "svip"].indexOf(a.id) - ["free", "vip", "svip"].indexOf(b.id));
   const svipPlan = plans.find((plan) => plan.id === "svip");
-  const svipMonthly = svipPlan ? formatPrice(svipPlan, billing) : "199.000đ";
+  const svipMonthly = svipPlan ? formatPrice(svipPlan, billing) : "50.000đ";
 
   const handlePaidPlan = (planId: "vip" | "svip") => {
     setSelectedPlan(planId);

@@ -1,3 +1,9 @@
+export const PLAN_MONTHLY_PRICES = Object.freeze({
+  free: 0,
+  vip: 25000,
+  svip: 50000,
+});
+
 export const healthyBeverageFoods = [
   { id: "food-101", name: "Coca-Cola Zero lon", category: "Đồ uống", calories: 0, protein: 0, carbs: 0, fat: 0, portion: "1 lon (330ml)", volumeMl: 330 },
   { id: "food-102", name: "Pepsi Black Zero lon", category: "Đồ uống", calories: 0, protein: 0, carbs: 0, fat: 0, portion: "1 lon (330ml)", volumeMl: 330 },
@@ -487,7 +493,7 @@ export const seedData = {
     {
       id: "free",
       name: "Free",
-      monthlyPrice: 0,
+      monthlyPrice: PLAN_MONTHLY_PRICES.free,
       period: "mãi mãi",
       description: "Khởi đầu hành trình sức khỏe của bạn",
       features: [
@@ -502,7 +508,7 @@ export const seedData = {
     {
       id: "vip",
       name: "VIP",
-      monthlyPrice: 99000,
+      monthlyPrice: PLAN_MONTHLY_PRICES.vip,
       period: "tháng",
       description: "Nâng cao sức khỏe với đầy đủ tính năng",
       features: [
@@ -516,7 +522,7 @@ export const seedData = {
     {
       id: "svip",
       name: "SVIP",
-      monthlyPrice: 199000,
+      monthlyPrice: PLAN_MONTHLY_PRICES.svip,
       period: "tháng",
       description: "Trải nghiệm đỉnh cao với AI Coach cá nhân",
       features: [

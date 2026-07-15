@@ -235,7 +235,26 @@ try {
     method: "POST",
     body: JSON.stringify({ planId: "vip", billing: "monthly", discountCode: "NUTRIPATH10" }),
   });
-  assert.ok(quote.quote.total > 0);
+  assert.equal(quote.quote.monthlyPrice, 25000);
+  assert.equal(quote.quote.total, 25000);
+
+  for (const [planId, originalTotal] of [["vip", 27500], ["svip", 55000]]) {
+    const { json: kenfiQuote } = await request("/api/checkout/quote", {
+      method: "POST",
+      body: JSON.stringify({ planId, billing: "monthly", discountCode: "kenfi" }),
+    });
+    assert.equal(kenfiQuote.quote.discountCode, "KENFI");
+    assert.equal(kenfiQuote.quote.originalTotal, originalTotal);
+    assert.equal(kenfiQuote.quote.discountAmount, originalTotal - 1);
+    assert.equal(kenfiQuote.quote.total, 1);
+  }
+
+  const { json: annualQuote } = await request("/api/checkout/quote", {
+    method: "POST",
+    body: JSON.stringify({ planId: "svip", billing: "annual" }),
+  });
+  assert.equal(annualQuote.quote.monthlyPrice, 40000);
+  assert.equal(annualQuote.quote.total, 528000);
 
   const { json: pendingPayment } = await request("/api/payments/vnpay/create", {
     method: "POST",

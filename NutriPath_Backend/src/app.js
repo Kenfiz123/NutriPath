@@ -2174,12 +2174,16 @@ function buildQuote(db, body) {
   const subtotal = monthlyPrice * months;
   const vat = Math.round(subtotal * 0.1);
   const discountCode = String(body.discountCode || "").trim().toUpperCase();
+  const isKenfiDiscount = discountCode === "KENFI" && ["vip", "svip"].includes(plan.id);
   const discountRate = discountCode === "NUTRIPATH10" ? 0.1 : 0;
-  const discountAmount = Math.round(subtotal * discountRate);
-  const originalTotal = subtotal + vat - discountAmount;
+  const originalTotal = subtotal + vat;
+  const discountAmount = isKenfiDiscount
+    ? Math.max(0, originalTotal - 1)
+    : Math.round(subtotal * discountRate);
+  const discountedTotal = Math.max(0, originalTotal - discountAmount);
   const trialDays = Number(body.trialDays || 0);
   const safeTrialDays = trialDays === 7 && plan.id !== "free" ? 7 : 0;
-  const total = safeTrialDays ? 0 : originalTotal;
+  const total = safeTrialDays ? 0 : discountedTotal;
 
   return {
     planId: plan.id,
@@ -2190,7 +2194,7 @@ function buildQuote(db, body) {
     monthlyPrice,
     subtotal,
     vat,
-    discountCode: discountRate ? discountCode : null,
+    discountCode: isKenfiDiscount || discountRate ? discountCode : null,
     discountAmount,
     total,
     trialDays: safeTrialDays,

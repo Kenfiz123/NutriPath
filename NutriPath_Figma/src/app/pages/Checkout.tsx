@@ -386,7 +386,7 @@ export function Checkout() {
                   <div className="space-y-3">
                     <div className="flex justify-between text-gray-600">
                       <span>{quote.planName} ({quote.billing === "annual" ? "12 tháng" : "1 tháng"})</span>
-                      <span className="text-gray-900" style={{ fontWeight: 700 }}>{formatMoney(quote.originalTotal ?? quote.subtotal, quote.currency)}</span>
+                      <span className="text-gray-900" style={{ fontWeight: 700 }}>{formatMoney(quote.trialDays ? (quote.originalTotal ?? quote.subtotal) : quote.subtotal, quote.currency)}</span>
                     </div>
                     {quote.trialDays ? (
                       <div className="flex justify-between text-green-600">

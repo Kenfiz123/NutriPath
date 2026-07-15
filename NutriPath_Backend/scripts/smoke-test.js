@@ -68,7 +68,14 @@ try {
     method: "POST",
     body: JSON.stringify({ planId: "vip", billing: "monthly", discountCode: "NUTRIPATH10" }),
   });
-  assert.equal(quote.quote.discountAmount, 9900);
+  assert.equal(quote.quote.discountAmount, 2500);
+
+  const kenfiQuote = await request("/api/checkout/quote", {
+    method: "POST",
+    body: JSON.stringify({ planId: "svip", billing: "monthly", discountCode: "KENFI" }),
+  });
+  assert.equal(kenfiQuote.quote.discountCode, "KENFI");
+  assert.equal(kenfiQuote.quote.total, 1);
 
   console.log(`Smoke test passed against ${baseUrl}`);
 } finally {
