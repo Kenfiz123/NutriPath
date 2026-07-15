@@ -245,8 +245,8 @@ try {
     });
     assert.equal(kenfiQuote.quote.discountCode, "KENFI");
     assert.equal(kenfiQuote.quote.originalTotal, originalTotal);
-    assert.equal(kenfiQuote.quote.discountAmount, originalTotal - 1);
-    assert.equal(kenfiQuote.quote.total, 1);
+    assert.equal(kenfiQuote.quote.discountAmount, originalTotal - 2000);
+    assert.equal(kenfiQuote.quote.total, 2000);
   }
 
   const { json: annualQuote } = await request("/api/checkout/quote", {

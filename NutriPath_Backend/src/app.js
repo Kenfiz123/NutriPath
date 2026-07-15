@@ -2178,7 +2178,7 @@ function buildQuote(db, body) {
   const discountRate = discountCode === "NUTRIPATH10" ? 0.1 : 0;
   const originalTotal = subtotal + vat;
   const discountAmount = isKenfiDiscount
-    ? Math.max(0, originalTotal - 1)
+    ? Math.max(0, originalTotal - 2000)
     : Math.round(subtotal * discountRate);
   const discountedTotal = Math.max(0, originalTotal - discountAmount);
   const trialDays = Number(body.trialDays || 0);

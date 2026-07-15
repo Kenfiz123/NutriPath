@@ -75,7 +75,7 @@ try {
     body: JSON.stringify({ planId: "svip", billing: "monthly", discountCode: "KENFI" }),
   });
   assert.equal(kenfiQuote.quote.discountCode, "KENFI");
-  assert.equal(kenfiQuote.quote.total, 1);
+  assert.equal(kenfiQuote.quote.total, 2000);
 
   console.log(`Smoke test passed against ${baseUrl}`);
 } finally {
