@@ -909,6 +909,42 @@ export interface AdminUsersResponse {
   };
 }
 
+export interface AdminPayment extends Payment {
+  planName: string;
+  member: {
+    id: string;
+    name: string;
+    email: string;
+    initials: string;
+  } | null;
+}
+
+export interface AdminPaymentsResponse {
+  summary: {
+    totalTransactions: number;
+    paidTransactions: number;
+    pendingTransactions: number;
+    failedTransactions: number;
+    trialTransactions: number;
+    grossRevenue: number;
+    currency: string;
+  };
+  filters: {
+    search: string;
+    status: string;
+    planId: string;
+  };
+  pagination: {
+    page: number;
+    limit: number;
+    total: number;
+    totalPages: number;
+  };
+  _embedded: {
+    payments: AdminPayment[];
+  };
+}
+
 export interface AdminContent {
   foods: Food[];
   recipes: Recipe[];
@@ -1279,6 +1315,17 @@ export function getAdminUsers(filters: { search?: string; role?: string; status?
   if (filters.status && filters.status !== "Tất cả") params.set("status", filters.status);
   const query = params.toString();
   return apiFetch<AdminUsersResponse>(`/api/admin/users${query ? `?${query}` : ""}`);
+}
+
+export function getAdminPayments(filters: { search?: string; status?: string; planId?: string; page?: number; limit?: number } = {}) {
+  const params = new URLSearchParams();
+  if (filters.search) params.set("search", filters.search);
+  if (filters.status && filters.status !== "all") params.set("status", filters.status);
+  if (filters.planId && filters.planId !== "all") params.set("planId", filters.planId);
+  if (filters.page) params.set("page", String(filters.page));
+  if (filters.limit) params.set("limit", String(filters.limit));
+  const query = params.toString();
+  return apiFetch<AdminPaymentsResponse>(`/api/admin/payments${query ? `?${query}` : ""}`);
 }
 
 

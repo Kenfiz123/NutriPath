@@ -3,6 +3,7 @@ import { createHmac } from "node:crypto";
 import { unlink } from "node:fs/promises";
 import path from "node:path";
 import { createServer } from "../src/app.js";
+import { seedData } from "../src/data/seed.js";
 
 process.env.VNPAY_TMN_CODE = "TEST1234";
 process.env.VNPAY_HASH_SECRET = "test-hash-secret-for-local-controller-flow";
@@ -10,6 +11,15 @@ process.env.VNPAY_URL = "https://sandbox.vnpayment.vn/paymentv2/vpcpay.html";
 process.env.VNPAY_RETURN_URL = "http://127.0.0.1:5173/payment-result";
 
 const dbPath = path.resolve("data/controller-flow-test-db.json");
+seedData.members.push({
+  ...structuredClone(seedData.members[0]),
+  id: "mem-flow-admin",
+  name: "Flow Admin",
+  email: "flow-admin@example.com",
+  initials: "FA",
+  role: "admin",
+  tier: "free",
+});
 const server = await createServer({ dbPath });
 
 await new Promise((resolve) => server.listen(0, "127.0.0.1", resolve));
@@ -183,6 +193,28 @@ try {
     headers,
     expectStatus: 403,
   });
+
+  const adminPassword = "FlowAdmin@123456";
+  const { json: adminRegistration } = await request("/api/auth/register", {
+    method: "POST",
+    body: JSON.stringify({ name: "Flow Admin", email: "flow-admin@example.com", password: adminPassword }),
+  });
+  assert.equal(adminRegistration.member.role, "admin");
+
+  const adminHeaders = authHeaders(adminRegistration.token);
+  const { json: adminPayments } = await request(
+    `/api/admin/payments?status=paid&planId=vip&search=${encodeURIComponent(email)}`,
+    { headers: adminHeaders },
+  );
+  assert.ok(adminPayments.summary.totalTransactions >= 1);
+  assert.ok(adminPayments.summary.paidTransactions >= 1);
+  assert.ok(adminPayments.summary.grossRevenue >= pendingPayment.quote.total);
+  assert.equal(adminPayments.pagination.total, 1);
+  const recordedPayment = adminPayments._embedded.payments.find((payment) => payment.transactionRef === transactionRef);
+  assert.equal(recordedPayment.status, "paid");
+  assert.equal(recordedPayment.member.email, email);
+  assert.equal(recordedPayment.planId, "vip");
+  assert.equal(recordedPayment.providerTransactionNo, "15000001");
 
   await request("/api/foods", {
     method: "POST",

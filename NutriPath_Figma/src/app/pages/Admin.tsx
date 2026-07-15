@@ -7,6 +7,7 @@ import {
   Edit3,
   LayoutDashboard,
   LogOut,
+  ReceiptText,
   RefreshCw,
   Save,
   Search,
@@ -21,6 +22,7 @@ import {
   getAdminAnalytics,
   getAdminContent,
   getAdminOverview,
+  getAdminPayments,
   getAdminSecurity,
   getAdminUsers,
   updateFood,
@@ -32,17 +34,19 @@ import {
   type AdminAnalytics,
   type AdminContent,
   type AdminOverview,
+  type AdminPaymentsResponse,
   type AdminSecurity,
   type AdminUser,
   type CreateFoodPayload,
 } from "../api";
 import { useAuth } from "../auth";
 
-type AdminTab = "overview" | "users" | "content" | "analytics" | "ai" | "security";
+type AdminTab = "overview" | "users" | "payments" | "content" | "analytics" | "ai" | "security";
 
 const tabOptions: Array<{ id: AdminTab; label: string; icon: typeof LayoutDashboard }> = [
   { id: "overview", label: "Tổng quan", icon: LayoutDashboard },
   { id: "users", label: "Người dùng", icon: Users },
+  { id: "payments", label: "Thanh toán", icon: ReceiptText },
   { id: "content", label: "Nội dung", icon: BookOpen },
   { id: "analytics", label: "Analytics", icon: BarChart3 },
   { id: "ai", label: "AI", icon: Bot },
@@ -77,6 +81,29 @@ function roleClass(role: string) {
   if (role === "Admin") return "bg-violet-50 text-violet-700 border border-violet-200";
   if (role === "Moderator") return "bg-blue-50 text-blue-700 border border-blue-200";
   return "bg-slate-100 text-slate-700 border border-slate-200";
+}
+
+function formatMoney(amount: number, currency = "VND") {
+  return new Intl.NumberFormat("vi-VN", {
+    style: "currency",
+    currency,
+    maximumFractionDigits: 0,
+  }).format(Number(amount) || 0);
+}
+
+function paymentStatusLabel(status: string) {
+  if (status === "paid") return "Đã thanh toán";
+  if (status === "pending") return "Đang chờ";
+  if (status === "failed") return "Thất bại";
+  if (status === "trial") return "Dùng thử";
+  return status || "Không xác định";
+}
+
+function paymentStatusClass(status: string) {
+  if (status === "paid") return "border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300";
+  if (status === "pending") return "border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-800 dark:bg-amber-950/60 dark:text-amber-300";
+  if (status === "failed") return "border-red-200 bg-red-50 text-red-700 dark:border-red-800 dark:bg-red-950/60 dark:text-red-300";
+  return "border-blue-200 bg-blue-50 text-blue-700 dark:border-blue-800 dark:bg-blue-950/60 dark:text-blue-300";
 }
 
 function Toggle({
@@ -141,6 +168,7 @@ export function Admin() {
 
   const [overview, setOverview] = useState<AdminOverview | null>(null);
   const [users, setUsers] = useState<AdminUser[]>([]);
+  const [payments, setPayments] = useState<AdminPaymentsResponse | null>(null);
   const [content, setContent] = useState<AdminContent | null>(null);
   const [analytics, setAnalytics] = useState<AdminAnalytics | null>(null);
   const [aiSettings, setAiSettings] = useState<AdminAiSettings | null>(null);
@@ -149,6 +177,7 @@ export function Admin() {
 
   const [loadingOverview, setLoadingOverview] = useState(true);
   const [loadingUsers, setLoadingUsers] = useState(true);
+  const [loadingPayments, setLoadingPayments] = useState(false);
   const [loadingContent, setLoadingContent] = useState(false);
   const [loadingAnalytics, setLoadingAnalytics] = useState(false);
   const [loadingAi, setLoadingAi] = useState(false);
@@ -170,6 +199,10 @@ export function Admin() {
   });
   const [roleFilter, setRoleFilter] = useState("Tất cả");
   const [statusFilter, setStatusFilter] = useState("Tất cả");
+  const [paymentSearch, setPaymentSearch] = useState("");
+  const [paymentStatusFilter, setPaymentStatusFilter] = useState("all");
+  const [paymentPlanFilter, setPaymentPlanFilter] = useState("all");
+  const [paymentPage, setPaymentPage] = useState(1);
   const [editingUser, setEditingUser] = useState<AdminUser | null>(null);
   const [savingUser, setSavingUser] = useState(false);
   const [userForm, setUserForm] = useState({
@@ -212,6 +245,25 @@ export function Admin() {
       setError(err instanceof Error ? err.message : "Không tải được danh sách người dùng.");
     } finally {
       setLoadingUsers(false);
+    }
+  }
+
+  async function loadPayments() {
+    setLoadingPayments(true);
+    try {
+      const data = await getAdminPayments({
+        search: paymentSearch.trim(),
+        status: paymentStatusFilter,
+        planId: paymentPlanFilter,
+        page: paymentPage,
+        limit: 25,
+      });
+      setPayments(data);
+      setError(null);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Không tải được dữ liệu thanh toán.");
+    } finally {
+      setLoadingPayments(false);
     }
   }
 
@@ -448,9 +500,18 @@ export function Admin() {
     };
   }, [search, roleFilter, statusFilter, activeTab]);
 
+  useEffect(() => {
+    if (activeTab !== "payments") return;
+    const timeout = setTimeout(() => {
+      void loadPayments();
+    }, paymentSearch ? 300 : 0);
+    return () => clearTimeout(timeout);
+  }, [activeTab, paymentSearch, paymentStatusFilter, paymentPlanFilter, paymentPage]);
+
   async function refreshCurrentTab() {
     if (activeTab === "overview") await loadOverview();
     if (activeTab === "users") await loadUsers();
+    if (activeTab === "payments") await loadPayments();
     if (activeTab === "content") await loadContent();
     if (activeTab === "analytics") await loadAnalytics();
     if (activeTab === "ai") await loadAi();
@@ -496,7 +557,7 @@ export function Admin() {
             </div>
             <h1 className="mt-4 text-3xl font-bold text-slate-900">Quản trị hệ thống NutriPath</h1>
             <p className="mt-2 text-sm text-slate-500">
-              Giữ dữ liệu thật ở tất cả các tab chính: người dùng, nội dung, analytics, AI và bảo mật.
+              Dữ liệu thật cho người dùng, thanh toán, nội dung, analytics, AI và bảo mật.
             </p>
           </div>
 
@@ -826,6 +887,177 @@ export function Admin() {
               </>
             )}
           </SectionCard>
+        ) : null}
+
+        {activeTab === "payments" ? (
+          loadingPayments && !payments ? (
+            <div className="rounded-2xl border border-slate-200 bg-white px-5 py-10 text-center text-slate-500 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-400">
+              Đang tải dữ liệu thanh toán...
+            </div>
+          ) : payments ? (
+            <div className="space-y-6">
+              <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+                <MetricCard
+                  label="Doanh thu đã xác nhận"
+                  value={formatMoney(payments.summary.grossRevenue, payments.summary.currency)}
+                  change={`${payments.summary.paidTransactions} giao dịch đã thanh toán`}
+                />
+                <MetricCard
+                  label="Tổng giao dịch"
+                  value={payments.summary.totalTransactions}
+                  change={`${payments.summary.trialTransactions} lượt dùng thử`}
+                />
+                <MetricCard
+                  label="Đang chờ IPN"
+                  value={payments.summary.pendingTransactions}
+                  change="Chưa kích hoạt quyền thành viên"
+                />
+                <MetricCard
+                  label="Giao dịch thất bại"
+                  value={payments.summary.failedTransactions}
+                  change="Không được tính vào doanh thu"
+                />
+              </div>
+
+              <SectionCard
+                title="Lịch sử thanh toán"
+                subtitle="Dữ liệu thật từ payments; trạng thái trả phí chỉ do IPN VNPAY xác nhận"
+              >
+                <div className="mb-5 grid gap-3 lg:grid-cols-[1.5fr_0.8fr_0.8fr]">
+                  <label className="flex items-center gap-2 rounded-xl border border-slate-200 bg-slate-50 px-3 py-3 dark:border-slate-700 dark:bg-slate-800">
+                    <Search className="h-4 w-4 text-slate-400" />
+                    <input
+                      value={paymentSearch}
+                      onChange={(event) => {
+                        setPaymentSearch(event.target.value);
+                        setPaymentPage(1);
+                      }}
+                      className="w-full bg-transparent text-sm text-slate-700 outline-none dark:text-slate-100"
+                      placeholder="Tìm email, hóa đơn hoặc mã giao dịch"
+                    />
+                  </label>
+
+                  <select
+                    value={paymentStatusFilter}
+                    onChange={(event) => {
+                      setPaymentStatusFilter(event.target.value);
+                      setPaymentPage(1);
+                    }}
+                    className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-3 text-sm text-slate-700 outline-none dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100"
+                  >
+                    <option value="all">Mọi trạng thái</option>
+                    <option value="paid">Đã thanh toán</option>
+                    <option value="pending">Đang chờ</option>
+                    <option value="failed">Thất bại</option>
+                    <option value="trial">Dùng thử</option>
+                  </select>
+
+                  <select
+                    value={paymentPlanFilter}
+                    onChange={(event) => {
+                      setPaymentPlanFilter(event.target.value);
+                      setPaymentPage(1);
+                    }}
+                    className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-3 text-sm text-slate-700 outline-none dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100"
+                  >
+                    <option value="all">Mọi gói</option>
+                    <option value="vip">VIP</option>
+                    <option value="svip">SVIP</option>
+                  </select>
+                </div>
+
+                {loadingPayments ? (
+                  <div className="mb-4 rounded-xl border border-dashed border-slate-200 px-4 py-3 text-center text-sm text-slate-500 dark:border-slate-700 dark:text-slate-400">
+                    Đang cập nhật danh sách giao dịch...
+                  </div>
+                ) : null}
+
+                <div className="overflow-x-auto">
+                  <table className="min-w-full border-separate border-spacing-y-2">
+                    <thead>
+                      <tr className="text-left text-xs uppercase tracking-wide text-slate-500 dark:text-slate-400">
+                        <th className="px-3 py-2">Giao dịch</th>
+                        <th className="px-3 py-2">Người mua</th>
+                        <th className="px-3 py-2">Gói</th>
+                        <th className="px-3 py-2">Số tiền</th>
+                        <th className="px-3 py-2">Trạng thái</th>
+                        <th className="px-3 py-2">Cổng</th>
+                        <th className="px-3 py-2">Thời gian</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {payments._embedded.payments.length ? payments._embedded.payments.map((payment) => (
+                        <tr key={payment.id} className="bg-slate-50 text-sm text-slate-700 dark:bg-slate-800 dark:text-slate-200">
+                          <td className="rounded-l-2xl px-3 py-3">
+                            <p className="font-semibold text-slate-900 dark:text-slate-50">{payment.invoice || payment.id}</p>
+                            <p className="mt-1 max-w-52 break-all font-mono text-xs text-slate-500 dark:text-slate-400">
+                              {payment.transactionRef || "Không có mã VNPAY"}
+                            </p>
+                          </td>
+                          <td className="px-3 py-3">
+                            <p className="font-semibold text-slate-900 dark:text-slate-50">{payment.member?.name || "Tài khoản không còn tồn tại"}</p>
+                            <p className="text-xs text-slate-500 dark:text-slate-400">{payment.member?.email || payment.memberId}</p>
+                          </td>
+                          <td className="px-3 py-3">
+                            <p className="font-semibold text-slate-900 dark:text-slate-50">{payment.planName}</p>
+                            <p className="text-xs text-slate-500 dark:text-slate-400">{payment.billing === "annual" ? "Hàng năm" : "Hàng tháng"}</p>
+                          </td>
+                          <td className="px-3 py-3 font-semibold text-slate-900 dark:text-slate-50">
+                            {formatMoney(payment.amount, payment.currency)}
+                          </td>
+                          <td className="px-3 py-3">
+                            <span className={`inline-flex rounded-full border px-2.5 py-1 text-xs font-semibold ${paymentStatusClass(payment.status)}`}>
+                              {paymentStatusLabel(payment.status)}
+                            </span>
+                          </td>
+                          <td className="px-3 py-3">
+                            <p className="font-medium uppercase">{payment.gateway || payment.paymentMethod || "--"}</p>
+                            {payment.providerTransactionNo ? (
+                              <p className="mt-1 font-mono text-xs text-slate-500 dark:text-slate-400">{payment.providerTransactionNo}</p>
+                            ) : null}
+                          </td>
+                          <td className="rounded-r-2xl px-3 py-3">
+                            <p>{formatDateTime(payment.paidAt || payment.createdAt || "")}</p>
+                            <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">{payment.paidAt ? "Đã xác nhận" : "Khởi tạo"}</p>
+                          </td>
+                        </tr>
+                      )) : (
+                        <tr>
+                          <td colSpan={7} className="rounded-2xl border border-dashed border-slate-200 px-4 py-10 text-center text-sm text-slate-500 dark:border-slate-700 dark:text-slate-400">
+                            Không có giao dịch phù hợp bộ lọc.
+                          </td>
+                        </tr>
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+
+                <div className="mt-5 flex flex-wrap items-center justify-between gap-3 text-sm text-slate-500 dark:text-slate-400">
+                  <span>
+                    {payments.pagination.total} giao dịch • Trang {payments.pagination.page}/{Math.max(payments.pagination.totalPages, 1)}
+                  </span>
+                  <div className="flex gap-2">
+                    <button
+                      type="button"
+                      disabled={paymentPage <= 1 || loadingPayments}
+                      onClick={() => setPaymentPage((page) => Math.max(1, page - 1))}
+                      className="rounded-xl border border-slate-200 bg-white px-3 py-2 font-semibold text-slate-700 transition hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 dark:hover:bg-slate-800"
+                    >
+                      Trang trước
+                    </button>
+                    <button
+                      type="button"
+                      disabled={paymentPage >= payments.pagination.totalPages || loadingPayments}
+                      onClick={() => setPaymentPage((page) => page + 1)}
+                      className="rounded-xl border border-slate-200 bg-white px-3 py-2 font-semibold text-slate-700 transition hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 dark:hover:bg-slate-800"
+                    >
+                      Trang sau
+                    </button>
+                  </div>
+                </div>
+              </SectionCard>
+            </div>
+          ) : null
         ) : null}
 
         {activeTab === "content" ? (

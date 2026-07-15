@@ -184,6 +184,7 @@ export function registerAdminRoutes(ctx) {
       _links: {
         self: currentLink(req),
         users: link(req, "/api/admin/users"),
+        payments: link(req, "/api/admin/payments"),
         content: link(req, "/api/admin/content"),
         analytics: link(req, "/api/admin/analytics"),
         aiSettings: link(req, "/api/admin/settings/ai"),
@@ -224,6 +225,77 @@ export function registerAdminRoutes(ctx) {
         ],
       },
     });
+  });
+
+  route("GET", "/api/admin/payments", async ({ req, store, url }) => {
+    requireAdminSession(req, store);
+    const search = String(url.searchParams.get("search") || "").trim().toLowerCase();
+    const status = String(url.searchParams.get("status") || "all").trim().toLowerCase();
+    const planId = String(url.searchParams.get("planId") || "all").trim().toLowerCase();
+    const allPayments = [...(store.db.payments || [])].sort((left, right) => {
+      const leftTime = Date.parse(left.createdAt || left.paidAt || "") || 0;
+      const rightTime = Date.parse(right.createdAt || right.paidAt || "") || 0;
+      return rightTime - leftTime;
+    });
+
+    const enrichedPayments = allPayments.map((payment) => {
+      const member = getMember(store.db, payment.memberId);
+      const plan = getPlan(store.db, payment.planId);
+      return {
+        ...paymentResource(req, payment),
+        planName: plan?.name || payment.planId?.toUpperCase() || "--",
+        member: member ? {
+          id: member.id,
+          name: member.name,
+          email: member.email,
+          initials: member.initials || initialsFromName(member.name),
+        } : null,
+      };
+    });
+
+    const filteredPayments = enrichedPayments.filter((payment) => {
+      const matchesStatus = status === "all" || String(payment.status || "").toLowerCase() === status;
+      const matchesPlan = planId === "all" || String(payment.planId || "").toLowerCase() === planId;
+      const searchable = [
+        payment.invoice,
+        payment.transactionRef,
+        payment.providerTransactionNo,
+        payment.member?.name,
+        payment.member?.email,
+      ].filter(Boolean).join(" ").toLowerCase();
+      return matchesStatus && matchesPlan && (!search || searchable.includes(search));
+    });
+    const paymentPage = paginateItems(url, filteredPayments, { defaultLimit: 25, maxLimit: 100 });
+    const countByStatus = (value) => allPayments.filter((payment) => payment.status === value).length;
+    const paidPayments = allPayments.filter((payment) => payment.status === "paid");
+
+    return {
+      summary: {
+        totalTransactions: allPayments.length,
+        paidTransactions: paidPayments.length,
+        pendingTransactions: countByStatus("pending"),
+        failedTransactions: countByStatus("failed"),
+        trialTransactions: countByStatus("trial"),
+        grossRevenue: paidPayments.reduce((sum, payment) => sum + (Number(payment.amount) || 0), 0),
+        currency: "VND",
+      },
+      filters: {
+        search: url.searchParams.get("search") || "",
+        status,
+        planId,
+      },
+      pagination: {
+        page: paymentPage.page,
+        limit: paymentPage.limit,
+        total: paymentPage.total,
+        totalPages: paymentPage.totalPages,
+      },
+      _embedded: { payments: paymentPage.items },
+      _links: {
+        self: currentLink(req),
+        overview: link(req, "/api/admin/overview"),
+      },
+    };
   });
 
   route("GET", "/api/admin/content", async ({ req, store, url }) => {
