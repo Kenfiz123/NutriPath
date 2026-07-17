@@ -44,7 +44,7 @@ describe("email OTP authentication", () => {
     mocks.resetPassword.mockResolvedValue({ reset: true, message: "updated" });
   });
 
-  it("verifies a six-digit code before completing registration", async () => {
+  it("verifies an eight-digit code before completing registration", async () => {
     const user = userEvent.setup();
     const onVerified = vi.fn();
     renderWithProviders(
@@ -57,11 +57,11 @@ describe("email OTP authentication", () => {
       />,
     );
 
-    await user.type(screen.getByLabelText("Mã OTP"), "123456");
+    await user.type(screen.getByLabelText("Mã OTP"), "34196799");
     await user.click(screen.getByRole("button", { name: "Xác minh và tạo tài khoản" }));
 
     await waitFor(() => {
-      expect(mocks.verifyAuthOtp).toHaveBeenCalledWith("member@example.com", "register", "123456");
+      expect(mocks.verifyAuthOtp).toHaveBeenCalledWith("member@example.com", "register", "34196799");
       expect(onVerified).toHaveBeenCalledWith("verified-ticket");
     });
   });

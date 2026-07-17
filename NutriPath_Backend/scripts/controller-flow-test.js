@@ -42,7 +42,7 @@ globalThis.fetch = async (input, init) => {
   }
   if (requestUrl === "https://supabase.test.local/auth/v1/verify" && init?.method === "POST") {
     const body = JSON.parse(String(init.body));
-    if (body.token !== "123456") {
+    if (!["123456", "34196799"].includes(body.token)) {
       return new Response(JSON.stringify({ message: "Token has expired or is invalid" }), {
         status: 400,
         headers: { "Content-Type": "application/json" },
@@ -116,7 +116,7 @@ async function verifiedOtpTicket(email, purpose) {
 
   const { json: verified } = await request("/api/auth/otp/verify", {
     method: "POST",
-    body: JSON.stringify({ email, purpose, otp: "123456" }),
+    body: JSON.stringify({ email, purpose, otp: "34196799" }),
   });
   assert.equal(verified.verified, true);
   assert.ok(verified.verificationTicket);

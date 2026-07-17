@@ -1,6 +1,8 @@
 import crypto from "node:crypto";
 
 const OTP_PURPOSES = new Set(["register", "password-reset"]);
+const OTP_MIN_LENGTH = 6;
+const OTP_MAX_LENGTH = 8;
 const OTP_REQUEST_COOLDOWN_MS = 60 * 1000;
 const OTP_REQUEST_WINDOW_MS = 60 * 60 * 1000;
 const OTP_REQUEST_MAX_PER_WINDOW = 5;
@@ -381,7 +383,9 @@ export function registerAuthRoutes(ctx) {
     const email = requireOtpEmail(body.email);
     const purpose = requireOtpPurpose(body.purpose);
     const otp = String(body.otp || "").trim();
-    if (!/^\d{6}$/.test(otp)) badRequest("Mã OTP phải gồm 6 chữ số.");
+    if (!new RegExp(`^\\d{${OTP_MIN_LENGTH},${OTP_MAX_LENGTH}}$`).test(otp)) {
+      badRequest(`Mã OTP phải gồm từ ${OTP_MIN_LENGTH} đến ${OTP_MAX_LENGTH} chữ số.`);
+    }
     if (purpose === "password-reset" && !findCredentialByEmail(store.db, email)) {
       unauthorized("Mã OTP không hợp lệ hoặc đã hết hạn.");
     }

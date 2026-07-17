@@ -40,8 +40,8 @@ export function OtpVerificationForm({
 
   const handleVerify = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    if (!/^\d{6}$/.test(otp)) {
-      setError(t("Mã OTP phải gồm 6 chữ số."));
+    if (!/^\d{6,8}$/.test(otp)) {
+      setError(t("Mã OTP phải gồm từ 6 đến 8 chữ số."));
       return;
     }
 
@@ -81,7 +81,7 @@ export function OtpVerificationForm({
         </span>
         <h3 className="mt-4 text-slate-950" style={{ fontSize: "1.15rem", fontWeight: 850 }}>{t("Xác minh email")}</h3>
         <p className="mt-2 text-sm leading-6 text-slate-600">
-          {t("Nhập mã OTP 6 chữ số đã gửi đến")} <strong className="text-slate-800">{maskEmail(email)}</strong>
+          {t("Nhập mã OTP đã gửi đến")} <strong className="text-slate-800">{maskEmail(email)}</strong>
         </p>
       </div>
 
@@ -94,9 +94,9 @@ export function OtpVerificationForm({
             required
             inputMode="numeric"
             autoComplete="one-time-code"
-            maxLength={6}
+            maxLength={8}
             value={otp}
-            onChange={(event) => setOtp(event.target.value.replace(/\D/g, "").slice(0, 6))}
+            onChange={(event) => setOtp(event.target.value.replace(/\D/g, "").slice(0, 8))}
             className="w-full bg-transparent text-center text-slate-900 outline-none"
             style={{ fontSize: "1.35rem", fontWeight: 850, letterSpacing: "0.35em" }}
             placeholder="000000"
@@ -113,7 +113,7 @@ export function OtpVerificationForm({
 
       <button
         type="submit"
-        disabled={submitting || otp.length !== 6}
+        disabled={submitting || otp.length < 6 || otp.length > 8}
         className="flex w-full items-center justify-center gap-2 rounded-xl bg-green-600 px-4 py-3.5 text-white transition-colors hover:bg-green-700 disabled:opacity-60"
         style={{ fontWeight: 800 }}
       >
