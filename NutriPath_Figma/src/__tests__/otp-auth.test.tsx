@@ -79,12 +79,12 @@ describe("email OTP authentication", () => {
 
     const passwordFields = await screen.findAllByDisplayValue("");
     const passwordInputs = passwordFields.filter((element) => element.getAttribute("type") === "password");
-    await user.type(passwordInputs[0], "NewPass123");
-    await user.type(passwordInputs[1], "NewPass123");
+    await user.type(passwordInputs[0], "NewPass123!");
+    await user.type(passwordInputs[1], "NewPass123!");
     await user.click(screen.getByRole("button", { name: "Đặt lại mật khẩu" }));
 
     await waitFor(() => {
-      expect(mocks.resetPassword).toHaveBeenCalledWith("member@example.com", "NewPass123", "verified-ticket");
+      expect(mocks.resetPassword).toHaveBeenCalledWith("member@example.com", "NewPass123!", "verified-ticket");
       expect(screen.getByText("Đổi mật khẩu thành công")).toBeInTheDocument();
     });
   });
