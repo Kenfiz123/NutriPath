@@ -154,6 +154,9 @@ export function registerMembersRoutes(ctx) {
     round,
     route,
     safeCannedChatResponse,
+    sanitizeEmail,
+    sanitizeNumber,
+    sanitizeText,
     saveMealLogChanges,
     saveMemberChatMessages,
     saveMemberNutritionProfile,
@@ -180,6 +183,24 @@ export function registerMembersRoutes(ctx) {
     verifyPassword
   } = ctx;
 
+  function sanitizeMemberPreferencesInput(value) {
+    if (!value || typeof value !== "object" || Array.isArray(value)) return {};
+    const sanitizeList = (input, maxLength) => input === undefined
+      ? undefined
+      : Array.isArray(input)
+        ? input.map((item) => sanitizeText(item, { maxLength })).filter(Boolean)
+        : sanitizeText(input, { maxLength: maxLength * 4 });
+    return {
+      ...value,
+      bodyShape: value.bodyShape === undefined ? undefined : sanitizeText(value.bodyShape, { maxLength: 30 }),
+      dietStyle: value.dietStyle === undefined ? undefined : sanitizeText(value.dietStyle, { maxLength: 30 }),
+      cuisinePreferences: sanitizeList(value.cuisinePreferences, 40),
+      allergies: sanitizeList(value.allergies, 50),
+      dislikedFoods: sanitizeList(value.dislikedFoods, 50),
+      mealPreferences: sanitizeList(value.mealPreferences, 80),
+    };
+  }
+
   route("GET", "/api/members", async ({ req, store, url }) => {
     const search = (url.searchParams.get("search") || "").toLowerCase();
     const tier = url.searchParams.get("tier");
@@ -198,30 +219,35 @@ export function registerMembersRoutes(ctx) {
 
   route("POST", "/api/members", async ({ req, store, body }) => {
     requireFields(body, ["name", "email"]);
+    const name = sanitizeText(body.name, { maxLength: 100 });
+    const email = sanitizeEmail(body.email);
+    if (!name) badRequest("Tên người dùng không hợp lệ.");
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) badRequest("Email không hợp lệ.");
+    const tier = sanitizeText(body.tier || "free", { maxLength: 20 });
     const member = {
       id: store.nextId("mem", store.db.members),
-      name: body.name,
-      email: body.email,
-      initials: body.initials || body.name.split(" ").map((part) => part[0]).join("").slice(0, 2).toUpperCase(),
+      name,
+      email,
+      initials: sanitizeText(body.initials, { maxLength: 4 }) || initialsFromName(name),
       role: "member",
       status: "active",
-      tier: body.tier || "free",
-      gender: body.gender || "female",
-      age: Number(body.age || 25),
-      weightKg: Number(body.weightKg || 65),
-      heightCm: Number(body.heightCm || 168),
-      activityLevel: body.activityLevel || "light",
-      goal: body.goal || "maintain",
-      preferences: normalizeMemberPreferences(body.preferences, {
-        bodyShape: body.bodyShape,
-        dietStyle: body.dietStyle,
+      tier,
+      gender: sanitizeText(body.gender || "female", { maxLength: 20 }),
+      age: sanitizeNumber(body.age || 25, 25),
+      weightKg: sanitizeNumber(body.weightKg || 65, 65),
+      heightCm: sanitizeNumber(body.heightCm || 168, 168),
+      activityLevel: sanitizeText(body.activityLevel || "light", { maxLength: 30 }),
+      goal: sanitizeText(body.goal || "maintain", { maxLength: 30 }),
+      preferences: normalizeMemberPreferences(sanitizeMemberPreferencesInput(body.preferences), {
+        bodyShape: sanitizeText(body.bodyShape, { maxLength: 30 }),
+        dietStyle: sanitizeText(body.dietStyle, { maxLength: 30 }),
       }),
       weightTracking: normalizeWeightTracking(body.weightTracking, {}, Number(body.weightKg || 65)),
       joinedAt: new Date().toISOString().slice(0, 10),
-      calorieTarget: Number(body.calorieTarget || 1800),
+      calorieTarget: sanitizeNumber(body.calorieTarget || 1800, 1800),
       macroTargets: body.macroTargets || { protein: 120, carbs: 220, fat: 60 },
-      waterTargetGlasses: Number(body.waterTargetGlasses || 8),
-      subscription: { planId: body.tier || "free", billing: "monthly", status: "active", startedAt: new Date().toISOString().slice(0, 10), renewsAt: null },
+      waterTargetGlasses: sanitizeNumber(body.waterTargetGlasses || 8, 8),
+      subscription: { planId: tier, billing: "monthly", status: "active", startedAt: new Date().toISOString().slice(0, 10), renewsAt: null },
       stats: { memberDays: 0, savedRecipes: 0, aiConversations: 0, trackedCalories: 0, streakDays: 0 },
     };
     store.db.members.push(member);
@@ -238,33 +264,45 @@ export function registerMembersRoutes(ctx) {
   route("PATCH", "/api/members/:id", async ({ req, store, params, body }) => {
     const { sessionMember, member } = assertMemberSessionAccess(req, store, params.id);
     const isAdmin = sessionMember.role?.toLowerCase() === "admin";
+    const updates = { ...body };
     const allowed = new Set(isAdmin
       ? ["name", "email", "calorieTarget", "waterTargetGlasses", "role", "status", "tier", "subscription", "macroTargets", "preferences", "weightTracking"]
       : ["name", "email", "calorieTarget", "waterTargetGlasses", "preferences", "weightTracking"]);
 
-    if (body.calorieTarget !== undefined) {
-      const target = Number(body.calorieTarget);
+    if (updates.name !== undefined) {
+      updates.name = sanitizeText(updates.name, { maxLength: 100 });
+      if (!updates.name) badRequest("Tên người dùng không hợp lệ.");
+    }
+    if (updates.email !== undefined) {
+      updates.email = sanitizeEmail(updates.email);
+      if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(updates.email)) badRequest("Email không hợp lệ.");
+    }
+    for (const field of ["role", "status", "tier"]) {
+      if (updates[field] !== undefined) updates[field] = sanitizeText(updates[field], { maxLength: 20 });
+    }
+    if (updates.calorieTarget !== undefined) {
+      const target = sanitizeNumber(updates.calorieTarget, Number.NaN);
       if (!Number.isFinite(target) || target < 1200 || target > 5000) badRequest("Mục tiêu calo phải nằm trong khoảng 1200-5000 kcal/ngày.");
-      body.calorieTarget = Math.round(target);
+      updates.calorieTarget = Math.round(target);
     }
-    if (body.waterTargetGlasses !== undefined) {
-      const target = Number(body.waterTargetGlasses);
+    if (updates.waterTargetGlasses !== undefined) {
+      const target = sanitizeNumber(updates.waterTargetGlasses, Number.NaN);
       if (!Number.isFinite(target) || target < 2 || target > 20) badRequest("Mục tiêu nước phải nằm trong khoảng 500-5000ml/ngày.");
-      body.waterTargetGlasses = Math.round(target * 10) / 10;
+      updates.waterTargetGlasses = Math.round(target * 10) / 10;
     }
 
-    if (body.preferences !== undefined) {
-      body.preferences = normalizeMemberPreferences(body.preferences, member.preferences);
+    if (updates.preferences !== undefined) {
+      updates.preferences = normalizeMemberPreferences(sanitizeMemberPreferencesInput(updates.preferences), member.preferences);
     }
-    if (body.weightTracking !== undefined) {
-      body.weightTracking = normalizeWeightTracking(body.weightTracking, member.weightTracking, member.weightKg || 65);
-      member.weightKg = body.weightTracking.latestWeightKg;
+    if (updates.weightTracking !== undefined) {
+      updates.weightTracking = normalizeWeightTracking(updates.weightTracking, member.weightTracking, member.weightKg || 65);
+      member.weightKg = updates.weightTracking.latestWeightKg;
     }
 
-    for (const [key, value] of Object.entries(body || {})) {
+    for (const [key, value] of Object.entries(updates)) {
       if (allowed.has(key)) member[key] = value;
     }
-    if (body.name) member.initials = initialsFromName(member.name);
+    if (updates.name) member.initials = initialsFromName(member.name);
     await store.save();
     return memberResource(req, member, store.db);
   });

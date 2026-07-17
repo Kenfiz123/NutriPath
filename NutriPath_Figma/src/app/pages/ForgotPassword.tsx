@@ -4,6 +4,7 @@ import { Link } from "react-router";
 import { OtpVerificationForm } from "../components/OtpVerificationForm";
 import { requestAuthOtp, resetPassword } from "../api";
 import { useLanguage } from "../language";
+import { validatePasswordStrength } from "../passwordPolicy";
 
 type ResetStep = "email" | "otp" | "password" | "success";
 
@@ -40,6 +41,11 @@ export function ForgotPassword() {
   const handleResetPassword = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     setError(null);
+    const passwordValidation = validatePasswordStrength(password);
+    if (!passwordValidation.valid) {
+      setError(t(passwordValidation.message));
+      return;
+    }
     if (password !== confirmPassword) {
       setError(t("Mật khẩu xác nhận chưa khớp."));
       return;
@@ -106,7 +112,7 @@ export function ForgotPassword() {
                 <span className="text-sm font-bold text-slate-700">{t("Mật khẩu mới")}</span>
                 <div className="mt-2 flex items-center gap-2 rounded-xl border border-gray-200 bg-white px-3 py-3 focus-within:border-green-500 focus-within:ring-4 focus-within:ring-green-100">
                   <Lock className="h-4 w-4 text-gray-400" />
-                  <input type={showPassword ? "text" : "password"} required minLength={6} value={password} onChange={(event) => setPassword(event.target.value)} className="w-full bg-transparent text-slate-800 outline-none" placeholder={t("Ít nhất 6 ký tự")} />
+                  <input type={showPassword ? "text" : "password"} required minLength={8} maxLength={128} value={password} onChange={(event) => setPassword(event.target.value)} className="w-full bg-transparent text-slate-800 outline-none" placeholder={t("8-128 ký tự, có hoa, thường, số và ký tự đặc biệt")} />
                   <button type="button" onClick={() => setShowPassword((value) => !value)} className="text-gray-400 hover:text-gray-700" aria-label={t("Hiện hoặc ẩn mật khẩu")}>
                     {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                   </button>
@@ -116,7 +122,7 @@ export function ForgotPassword() {
                 <span className="text-sm font-bold text-slate-700">{t("Xác nhận mật khẩu")}</span>
                 <div className="mt-2 flex items-center gap-2 rounded-xl border border-gray-200 bg-white px-3 py-3 focus-within:border-green-500 focus-within:ring-4 focus-within:ring-green-100">
                   <Lock className="h-4 w-4 text-gray-400" />
-                  <input type={showPassword ? "text" : "password"} required minLength={6} value={confirmPassword} onChange={(event) => setConfirmPassword(event.target.value)} className="w-full bg-transparent text-slate-800 outline-none" placeholder={t("Nhập lại mật khẩu")} />
+                  <input type={showPassword ? "text" : "password"} required minLength={8} maxLength={128} value={confirmPassword} onChange={(event) => setConfirmPassword(event.target.value)} className="w-full bg-transparent text-slate-800 outline-none" placeholder={t("Nhập lại mật khẩu")} />
                 </div>
               </label>
               {error && <div className="rounded-xl border border-red-100 bg-red-50 px-4 py-3 text-sm text-red-600">{error}</div>}

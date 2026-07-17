@@ -112,15 +112,17 @@ async function request(pathname, options = {}) {
   return { response, json };
 }
 
-async function verifiedOtpTicket(email, purpose) {
+async function verifiedOtpTicket(email, purpose, headers = {}) {
   const { json: requested } = await request("/api/auth/otp/request", {
     method: "POST",
+    headers,
     body: JSON.stringify({ email, purpose }),
   });
   assert.equal(requested.sent, true);
 
   const { json: verified } = await request("/api/auth/otp/verify", {
     method: "POST",
+    headers,
     body: JSON.stringify({ email, purpose, otp: "34196799" }),
   });
   assert.equal(verified.verified, true);
@@ -172,6 +174,31 @@ try {
   });
   assert.equal(bootstrapAdmin.member.role, "admin");
 
+  const rateLimitIp = "198.51.100.10";
+  let fifthLoginAttempt;
+  for (let attempt = 1; attempt <= 5; attempt += 1) {
+    fifthLoginAttempt = await request("/api/auth/login", {
+      method: "POST",
+      headers: { "X-Forwarded-For": rateLimitIp },
+      body: JSON.stringify({ email: "rate-limit@example.com", password: "invalid-password" }),
+      expectStatus: 401,
+    });
+  }
+  assert.equal(fifthLoginAttempt.response.headers.get("x-ratelimit-limit"), "5");
+  assert.equal(fifthLoginAttempt.response.headers.get("x-ratelimit-remaining"), "0");
+
+  const blockedLoginAttempt = await request("/api/auth/login", {
+    method: "POST",
+    headers: { "X-Forwarded-For": rateLimitIp },
+    body: JSON.stringify({ email: "rate-limit@example.com", password: "invalid-password" }),
+    expectStatus: 429,
+  });
+  assert.equal(blockedLoginAttempt.json.error.code, "RATE_LIMIT_EXCEEDED");
+  assert.ok(Number(blockedLoginAttempt.response.headers.get("retry-after")) > 0);
+  assert.equal(blockedLoginAttempt.response.headers.get("x-ratelimit-limit"), "5");
+  assert.equal(blockedLoginAttempt.response.headers.get("x-ratelimit-remaining"), "0");
+  assert.ok(Number(blockedLoginAttempt.response.headers.get("x-ratelimit-reset")) > 0);
+
   const payosSample = signedPayosWebhook({
     orderCode: 123,
     amount: 2000,
@@ -204,23 +231,86 @@ try {
   });
   assert.equal(socialLogin.member.email, "social-google@example.com");
 
+  const rejectedPasswords = [
+    { password: "123456", ip: "198.51.100.31" },
+    { password: "1234!@#$", ip: "198.51.100.32" },
+  ];
+  for (const [index, passwordCase] of rejectedPasswords.entries()) {
+    await request("/api/auth/register", {
+      method: "POST",
+      headers: { "X-Forwarded-For": passwordCase.ip },
+      body: JSON.stringify({
+        name: "Password Policy Rejected",
+        email: `password-rejected-${index}@example.com`,
+        password: passwordCase.password,
+        verificationTicket: "unused-ticket",
+      }),
+      expectStatus: 400,
+    });
+  }
+
+  const acceptedPasswords = [
+    { password: "Password1!", ip: "198.51.100.41" },
+    { password: "P@ssw0rd!", ip: "198.51.100.42" },
+  ];
+  for (const [index, passwordCase] of acceptedPasswords.entries()) {
+    const policyEmail = `password-accepted-${index}@example.com`;
+    const policyHeaders = { "X-Forwarded-For": passwordCase.ip };
+    const verificationTicket = await verifiedOtpTicket(policyEmail, "register", policyHeaders);
+    const { json: policyRegistration } = await request("/api/auth/register", {
+      method: "POST",
+      headers: policyHeaders,
+      body: JSON.stringify({
+        name: "Password Policy Accepted",
+        email: policyEmail,
+        password: passwordCase.password,
+        verificationTicket,
+      }),
+    });
+    assert.equal(policyRegistration.member.email, policyEmail);
+  }
+
   const email = `flow-${Date.now()}@example.com`;
-  const initialPassword = "Flow@123456";
-  const password = "Flow@654321";
+  const initialPassword = "FlowStart@7A";
+  const password = "FlowReset@8B";
   await request("/api/auth/register", {
     method: "POST",
     body: JSON.stringify({ name: "Flow Test", email, password: initialPassword }),
     expectStatus: 400,
   });
   const registerVerificationTicket = await verifiedOtpTicket(email, "register");
+  const unsafeDisplayName = "<script>alert('xss')</script> Nguyễn 🥗";
 
   const { response: registerResponse, json: registered } = await request("//api/auth/register", {
     method: "POST",
-    body: JSON.stringify({ name: "Flow Test", email, password: initialPassword, verificationTicket: registerVerificationTicket }),
+    body: JSON.stringify({
+      name: unsafeDisplayName,
+      email,
+      password: initialPassword,
+      verificationTicket: registerVerificationTicket,
+      preferences: {
+        allergies: ["<b>sữa bò</b>"],
+        cuisinePreferences: ["vietnamese"],
+      },
+    }),
   });
   assert.equal(registered.token, undefined);
   assert.equal(registered.member.email, email);
+  assert.equal(registered.member.name, "alert('xss') Nguyễn 🥗");
+  assert.doesNotMatch(registered.member.name, /<|>/);
+  assert.deepEqual(registered.member.preferences.allergies, ["sữa bò"]);
   assert.match(registerResponse.headers.get("set-cookie") || "", /nutripath_session=.*HttpOnly/i);
+
+  await request("/api/auth/password/reset", {
+    method: "POST",
+    headers: { "X-Forwarded-For": "198.51.100.51" },
+    body: JSON.stringify({
+      email,
+      newPassword: "123456",
+      verificationTicket: "unused-ticket",
+    }),
+    expectStatus: 400,
+  });
 
   const resetVerificationTicket = await verifiedOtpTicket(email, "password-reset");
   const { json: passwordReset } = await request("/api/auth/password/reset", {
@@ -263,6 +353,18 @@ try {
   const { json: dashboard } = await request(`/api/members/${memberId}/dashboard?date=${today}`, { headers });
   assert.equal(dashboard.greeting, `Xin chào, ${loggedIn.member.name}`);
   assert.doesNotMatch(dashboard.greeting, /Ã|Â|Ä‘|á»/);
+
+  const { json: sanitizedProfile } = await request(`/api/members/${memberId}`, {
+    method: "PATCH",
+    headers,
+    body: JSON.stringify({
+      name: "<strong>Nguyễn Thành 🥗</strong>",
+      preferences: { allergies: ["<script>alert(1)</script> đậu phộng"] },
+    }),
+  });
+  assert.equal(sanitizedProfile.name, "Nguyễn Thành 🥗");
+  assert.deepEqual(sanitizedProfile.preferences.allergies, ["alert(1) đậu phộng"]);
+  assert.equal(sanitizedProfile.preferences.dietStyle, "balanced");
 
   const { json: mealLog } = await request(`/api/members/${memberId}/meal-logs/${today}`, { headers });
   assert.equal(mealLog.memberId, memberId);
@@ -314,6 +416,40 @@ try {
     }),
   });
   assert.ok(estimate.estimate?.perServing?.calories > 0);
+
+  const sqlLikeFoodName = "Cơm gà '; DROP TABLE users;-- 🍚";
+  const { json: savedCustomFood } = await request(`/api/members/${memberId}/custom-foods`, {
+    method: "POST",
+    headers,
+    body: JSON.stringify({
+      name: sqlLikeFoodName,
+      calories: 450,
+      protein: 35,
+      carbs: 48,
+      fat: 12,
+      portion: "1 phần",
+      ingredients: [{ name: "<b>Ức gà</b>", note: "<img src=x onerror=alert(1)> ít dầu" }],
+    }),
+  });
+  assert.equal(savedCustomFood.name, sqlLikeFoodName);
+  assert.equal(savedCustomFood.ingredients[0].name, "Ức gà");
+  assert.equal(savedCustomFood.ingredients[0].note, "ít dầu");
+
+  const { json: sanitizedMealLog } = await request(`/api/members/${memberId}/meal-logs/${today}/meals/snack/items`, {
+    method: "POST",
+    headers,
+    body: JSON.stringify({
+      name: "<img src=x onerror=alert(1)> Phở bò 🍜",
+      calories: 420,
+      protein: 28,
+      carbs: 52,
+      fat: 11,
+      portion: "<strong>1 tô</strong>",
+    }),
+  });
+  const sanitizedMealItem = sanitizedMealLog.meals.find((meal) => meal.id === "snack").items.at(-1);
+  assert.equal(sanitizedMealItem.name, "Phở bò 🍜");
+  assert.equal(sanitizedMealItem.portion, "1 tô");
 
   const { json: report } = await request(`/api/members/${memberId}/reports/nutrition?days=7&endDate=${today}`, { headers });
   assert.ok(report.range);
@@ -428,7 +564,7 @@ try {
     expectStatus: 403,
   });
 
-  const adminPassword = "FlowAdmin@123456";
+  const adminPassword = "FlowAdmin@9C";
   const adminVerificationTicket = await verifiedOtpTicket("flow-admin@example.com", "register");
   const { response: adminRegisterResponse, json: adminRegistration } = await request("/api/auth/register", {
     method: "POST",

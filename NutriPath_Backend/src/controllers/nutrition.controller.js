@@ -157,6 +157,8 @@ export function registerNutritionRoutes(ctx) {
     round,
     route,
     safeCannedChatResponse,
+    sanitizeNumber,
+    sanitizeText,
     saveMealLogChanges,
     saveMemberChatMessages,
     saveMemberNutritionProfile,
@@ -220,14 +222,15 @@ export function registerNutritionRoutes(ctx) {
     requireFields(body, ["name", "calories", "protein", "carbs", "fat", "portion"]);
     const food = {
       id: store.nextId("food", store.db.foods),
-      name: body.name,
-      category: body.category || "Khác",
-      calories: Number(body.calories),
-      protein: Number(body.protein),
-      carbs: Number(body.carbs),
-      fat: Number(body.fat),
-      portion: body.portion,
+      name: sanitizeText(body.name, { maxLength: 100 }),
+      category: sanitizeText(body.category || "Khác", { maxLength: 60 }),
+      calories: sanitizeNumber(body.calories, Number.NaN),
+      protein: sanitizeNumber(body.protein, Number.NaN),
+      carbs: sanitizeNumber(body.carbs, Number.NaN),
+      fat: sanitizeNumber(body.fat, Number.NaN),
+      portion: sanitizeText(body.portion, { maxLength: 100 }),
     };
+    if (!food.name || !food.category || !food.portion) badRequest("Tên món ăn, danh mục hoặc khẩu phần không hợp lệ.");
     if ([food.calories, food.protein, food.carbs, food.fat].some((value) => Number.isNaN(value) || value < 0)) {
       badRequest("Thông tin dinh dưỡng không hợp lệ.");
     }
@@ -265,7 +268,23 @@ export function registerNutritionRoutes(ctx) {
 
   route("POST", "/api/nutrition/custom-food/estimate", async ({ req, store, body }) => {
     requireSession(req, store);
-    const result = estimateCustomCookedFood(body);
+    const sanitizedBody = {
+      ...body,
+      name: sanitizeText(body.name, { maxLength: 100 }),
+      dishName: sanitizeText(body.dishName, { maxLength: 100 }),
+      rawText: sanitizeText(body.rawText, { maxLength: 2000 }),
+      cookingMethod: sanitizeText(body.cookingMethod, { maxLength: 120 }),
+      ingredients: Array.isArray(body.ingredients)
+        ? body.ingredients.slice(0, 100).map((ingredient) => ({
+            ...ingredient,
+            name: sanitizeText(ingredient?.name, { maxLength: 100 }),
+            unit: sanitizeText(ingredient?.unit, { maxLength: 40 }),
+            note: sanitizeText(ingredient?.note, { maxLength: 200 }),
+            quantity: sanitizeNumber(ingredient?.quantity, Number.NaN),
+          }))
+        : body.ingredients,
+    };
+    const result = estimateCustomCookedFood(sanitizedBody);
     return {
       ...result,
       logic: {
@@ -285,7 +304,20 @@ export function registerNutritionRoutes(ctx) {
     requireAdminSession(req, store);
     const food = getFood(store.db, params.id);
     if (!food) notFound(req, "Food not found.");
-    Object.assign(food, body, { id: food.id });
+    const updates = {};
+    if (body.name !== undefined) updates.name = sanitizeText(body.name, { maxLength: 100 });
+    if (body.category !== undefined) updates.category = sanitizeText(body.category, { maxLength: 60 });
+    if (body.portion !== undefined) updates.portion = sanitizeText(body.portion, { maxLength: 100 });
+    for (const field of ["calories", "protein", "carbs", "fat"]) {
+      if (body[field] !== undefined) updates[field] = sanitizeNumber(body[field], Number.NaN);
+    }
+    if (updates.name === "" || updates.portion === "" || updates.category === "") {
+      badRequest("Tên món ăn, danh mục hoặc khẩu phần không hợp lệ.");
+    }
+    if (["calories", "protein", "carbs", "fat"].some((field) => Number.isNaN(updates[field]) || updates[field] < 0)) {
+      badRequest("Thông tin dinh dưỡng không hợp lệ.");
+    }
+    Object.assign(food, updates);
     await store.save();
     return foodResource(req, food);
   });
@@ -397,24 +429,44 @@ export function registerNutritionRoutes(ctx) {
     requireFields(addableItem, ["name", "calories", "protein", "carbs", "fat", "portion"]);
 
     const now = new Date().toISOString();
+    const ingredientRows = body.estimate?.ingredients || body.ingredients || [];
     const savedFood = {
       id: store.nextId("custom-food", ensurePersonalFoods(store.db)),
       memberId: member.id,
-      name: String(addableItem.name).trim(),
-      calories: round(Number(addableItem.calories), 1),
-      protein: round(Number(addableItem.protein), 1),
-      carbs: round(Number(addableItem.carbs), 1),
-      fat: round(Number(addableItem.fat), 1),
-      portion: String(addableItem.portion || "1 phần tự nấu"),
-      servings: Number(body.estimate?.servings || body.servings || 1),
-      cookingMethod: String(body.estimate?.cookingMethod || body.cookingMethod || ""),
-      ingredients: body.estimate?.ingredients || body.ingredients || [],
-      confidence: body.estimate?.confidence || body.confidence || null,
-      disclaimer: body.estimate?.disclaimer || "Món tự nấu đã lưu là ước tính, có thể dao động theo khẩu phần thực tế.",
+      name: sanitizeText(addableItem.name, { maxLength: 100 }),
+      calories: round(sanitizeNumber(addableItem.calories, Number.NaN), 1),
+      protein: round(sanitizeNumber(addableItem.protein, Number.NaN), 1),
+      carbs: round(sanitizeNumber(addableItem.carbs, Number.NaN), 1),
+      fat: round(sanitizeNumber(addableItem.fat, Number.NaN), 1),
+      portion: sanitizeText(addableItem.portion || "1 phần tự nấu", { maxLength: 100 }),
+      servings: sanitizeNumber(body.estimate?.servings || body.servings || 1, 1),
+      cookingMethod: sanitizeText(body.estimate?.cookingMethod || body.cookingMethod || "", { maxLength: 120 }),
+      ingredients: Array.isArray(ingredientRows)
+        ? ingredientRows.slice(0, 100).map((ingredient) => {
+            if (typeof ingredient === "string") {
+              return { name: sanitizeText(ingredient, { maxLength: 100 }), note: "" };
+            }
+            return {
+              ...ingredient,
+              name: sanitizeText(ingredient?.name || ingredient?.inputName || ingredient?.matchedName, { maxLength: 100 }),
+              inputName: sanitizeText(ingredient?.inputName, { maxLength: 100 }),
+              matchedName: sanitizeText(ingredient?.matchedName, { maxLength: 100 }),
+              unit: sanitizeText(ingredient?.unit, { maxLength: 40 }),
+              unitLabel: sanitizeText(ingredient?.unitLabel, { maxLength: 40 }),
+              note: sanitizeText(ingredient?.note, { maxLength: 200 }),
+            };
+          }).filter((ingredient) => ingredient.name)
+        : [],
+      confidence: sanitizeText(body.estimate?.confidence || body.confidence || "", { maxLength: 30 }) || null,
+      disclaimer: sanitizeText(
+        body.estimate?.disclaimer || "Món tự nấu đã lưu là ước tính, có thể dao động theo khẩu phần thực tế.",
+        { maxLength: 500 },
+      ),
       createdAt: now,
       updatedAt: now,
     };
 
+    if (!savedFood.name || !savedFood.portion) badRequest("Tên món ăn hoặc khẩu phần không hợp lệ.");
     if ([savedFood.calories, savedFood.protein, savedFood.carbs, savedFood.fat].some((value) => Number.isNaN(value) || value < 0)) {
       badRequest("Thông tin dinh dưỡng của món cá nhân không hợp lệ.");
     }
@@ -528,20 +580,20 @@ export function registerNutritionRoutes(ctx) {
       source = getFood(store.db, body.foodId);
       if (!source) notFound(req, "Food not found.");
     }
-    const quantity = Math.max(0.1, Number(body.quantity || 1));
-    const category = body.category || source?.category || null;
-    const portion = body.portion || source?.portion || "1 phần";
+    const quantity = Math.max(0.1, sanitizeNumber(body.quantity || 1, 1));
+    const category = sanitizeText(body.category || source?.category || "", { maxLength: 60 }) || null;
+    const portion = sanitizeText(body.portion || source?.portion || "1 phần", { maxLength: 100 });
     const waterEquivalentMl = getDrinkWaterEquivalentMl({ ...source, ...body, category, portion }, quantity);
     const waterEquivalentGlasses = waterMlToGlasses(waterEquivalentMl);
     const item = {
       id: store.nextId("item", meal.items),
       foodId: source?.id || body.foodId || null,
-      name: body.name || source?.name,
+      name: sanitizeText(body.name || source?.name, { maxLength: 100 }),
       category,
-      calories: round(Number(body.calories ?? source?.calories ?? 0) * quantity, 1),
-      protein: round(Number(body.protein ?? source?.protein ?? 0) * quantity, 1),
-      carbs: round(Number(body.carbs ?? source?.carbs ?? 0) * quantity, 1),
-      fat: round(Number(body.fat ?? source?.fat ?? 0) * quantity, 1),
+      calories: round(sanitizeNumber(body.calories ?? source?.calories ?? 0) * quantity, 1),
+      protein: round(sanitizeNumber(body.protein ?? source?.protein ?? 0) * quantity, 1),
+      carbs: round(sanitizeNumber(body.carbs ?? source?.carbs ?? 0) * quantity, 1),
+      fat: round(sanitizeNumber(body.fat ?? source?.fat ?? 0) * quantity, 1),
       portion,
       quantity,
       waterEquivalentMl,

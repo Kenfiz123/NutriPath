@@ -209,6 +209,8 @@ export function registerAuthRoutes(ctx) {
     round,
     route,
     safeCannedChatResponse,
+    sanitizeEmail,
+    sanitizeText,
     saveMealLogChanges,
     saveMemberChatMessages,
     saveMemberNutritionProfile,
@@ -232,6 +234,7 @@ export function registerAuthRoutes(ctx) {
     upsertNotification,
     validateSafeChatInput,
     validateSafeChatOutput,
+    validatePasswordStrength,
     verifyPassword,
     verifySupabaseAccessToken
   } = ctx;
@@ -243,9 +246,27 @@ export function registerAuthRoutes(ctx) {
   }
 
   function requireOtpEmail(value) {
-    const email = normalizeEmail(value);
+    const email = sanitizeEmail(value);
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) badRequest("Email không hợp lệ.");
     return email;
+  }
+
+  function sanitizeRegistrationPreferences(value) {
+    if (!value || typeof value !== "object" || Array.isArray(value)) return value;
+    const sanitizeList = (input, maxLength) => input === undefined
+      ? undefined
+      : Array.isArray(input)
+        ? input.map((item) => sanitizeText(item, { maxLength })).filter(Boolean)
+        : sanitizeText(input, { maxLength: maxLength * 4 });
+    return {
+      ...value,
+      bodyShape: value.bodyShape === undefined ? undefined : sanitizeText(value.bodyShape, { maxLength: 30 }),
+      dietStyle: value.dietStyle === undefined ? undefined : sanitizeText(value.dietStyle, { maxLength: 30 }),
+      cuisinePreferences: sanitizeList(value.cuisinePreferences, 40),
+      allergies: sanitizeList(value.allergies, 50),
+      dislikedFoods: sanitizeList(value.dislikedFoods, 50),
+      mealPreferences: sanitizeList(value.mealPreferences, 80),
+    };
   }
 
   function reserveOtpRequest(req, email, purpose) {
@@ -332,7 +353,7 @@ export function registerAuthRoutes(ctx) {
       token: otp,
       type: "email",
     });
-    const verifiedEmail = normalizeEmail(payload?.user?.email || payload?.email);
+    const verifiedEmail = sanitizeEmail(payload?.user?.email || payload?.email);
     if (verifiedEmail !== email) unauthorized("Mã OTP không khớp với email cần xác minh.");
   }
 
@@ -401,11 +422,25 @@ export function registerAuthRoutes(ctx) {
 
   route("POST", "/api/auth/register", async ({ req, store, body }) => {
     requireFields(body, ["name", "email", "password", "verificationTicket"]);
-    const email = normalizeEmail(body.email);
+    const sanitizedPayload = {
+      ...body,
+      name: sanitizeText(body.name, { maxLength: 100 }),
+      email: sanitizeEmail(body.email),
+      gender: body.gender === undefined ? undefined : sanitizeText(body.gender, { maxLength: 20 }),
+      tier: body.tier === undefined ? undefined : sanitizeText(body.tier, { maxLength: 20 }),
+      activityLevel: body.activityLevel === undefined ? undefined : sanitizeText(body.activityLevel, { maxLength: 30 }),
+      goal: body.goal === undefined ? undefined : sanitizeText(body.goal, { maxLength: 30 }),
+      bodyShape: body.bodyShape === undefined ? undefined : sanitizeText(body.bodyShape, { maxLength: 30 }),
+      dietStyle: body.dietStyle === undefined ? undefined : sanitizeText(body.dietStyle, { maxLength: 30 }),
+      preferences: sanitizeRegistrationPreferences(body.preferences),
+    };
+    if (!sanitizedPayload.name) badRequest("Tên người dùng không hợp lệ.");
+    const email = sanitizedPayload.email;
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) badRequest("Email không hợp lệ.");
 
     const password = String(body.password);
-    if (password.length < 6) badRequest("Mật khẩu cần ít nhất 6 ký tự.");
+    const passwordValidation = validatePasswordStrength(password);
+    if (!passwordValidation.valid) badRequest(passwordValidation.message);
 
     const credentials = ensureAuthCredentials(store.db);
     if (findCredentialByEmail(store.db, email)) {
@@ -416,7 +451,7 @@ export function registerAuthRoutes(ctx) {
     let member = findMemberByEmail(store.db, email);
     const isNewMember = !member;
     if (!member) {
-      member = memberFromRegistration(store, { ...body, email });
+      member = memberFromRegistration(store, sanitizedPayload);
     }
 
     const hashed = hashPassword(password);
@@ -447,7 +482,8 @@ export function registerAuthRoutes(ctx) {
     requireFields(body, ["email", "newPassword", "verificationTicket"]);
     const email = requireOtpEmail(body.email);
     const newPassword = String(body.newPassword || "");
-    if (newPassword.length < 6) badRequest("Mật khẩu cần ít nhất 6 ký tự.");
+    const passwordValidation = validatePasswordStrength(newPassword);
+    if (!passwordValidation.valid) badRequest(passwordValidation.message);
 
     const credential = findCredentialByEmail(store.db, email);
     if (!credential) unauthorized("Không thể đặt lại mật khẩu cho tài khoản này.");
@@ -481,7 +517,7 @@ export function registerAuthRoutes(ctx) {
 
   route("POST", "/api/auth/login", async ({ req, store, body }) => {
     requireFields(body, ["email", "password"]);
-    const email = normalizeEmail(body.email);
+    const email = sanitizeEmail(body.email);
     const credential = findCredentialByEmail(store.db, email);
 
     if (!credential || !verifyPassword(body.password, credential)) {
@@ -497,7 +533,8 @@ export function registerAuthRoutes(ctx) {
   route("POST", "/api/auth/supabase", async ({ req, store, body }) => {
     requireFields(body, ["accessToken"]);
     const supabaseUser = await verifySupabaseAccessToken(body.accessToken);
-    const email = normalizeEmail(supabaseUser.email);
+    const email = sanitizeEmail(supabaseUser.email);
+    const providerName = sanitizeText(supabaseUser.name, { maxLength: 100 }) || email.split("@")[0];
     if (!supabaseUser.id) badRequest("Supabase user id không hợp lệ.");
 
     const credential = findCredentialByEmail(store.db, email);
@@ -507,7 +544,7 @@ export function registerAuthRoutes(ctx) {
     if (!member) {
       member = memberFromRegistration(store, {
         email,
-        name: supabaseUser.name,
+        name: providerName,
         goal: "maintain",
       });
     }
@@ -524,7 +561,7 @@ export function registerAuthRoutes(ctx) {
         providerName: supabaseUser.provider,
         providerUserId: supabaseUser.id,
         email,
-        name: supabaseUser.name,
+        name: providerName,
         avatarUrl: supabaseUser.avatarUrl,
         emailConfirmedAt: supabaseUser.emailConfirmedAt,
         lastLoginAt: now,

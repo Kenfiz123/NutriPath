@@ -10,6 +10,23 @@ await new Promise((resolve) => server.listen(0, "127.0.0.1", resolve));
 const address = server.address();
 const baseUrl = `http://127.0.0.1:${address.port}`;
 
+const expectedSecurityHeaders = {
+  "cache-control": "no-store, no-cache, must-revalidate, proxy-revalidate",
+  "content-security-policy": "default-src 'none'; frame-ancestors 'none'; form-action 'self'; base-uri 'self';",
+  "permissions-policy": "camera=(), microphone=(), geolocation=()",
+  "referrer-policy": "strict-origin-when-cross-origin",
+  "strict-transport-security": "max-age=31536000; includeSubDomains",
+  "x-content-type-options": "nosniff",
+  "x-frame-options": "DENY",
+  "x-xss-protection": "1; mode=block",
+};
+
+function assertSecurityHeaders(response) {
+  for (const [header, expected] of Object.entries(expectedSecurityHeaders)) {
+    assert.equal(response.headers.get(header), expected, `Missing or invalid ${header} header`);
+  }
+}
+
 async function request(pathname, options = {}) {
   const response = await fetch(`${baseUrl}${pathname}`, {
     ...options,
@@ -19,6 +36,7 @@ async function request(pathname, options = {}) {
       ...(options.headers || {}),
     },
   });
+  assertSecurityHeaders(response);
   const json = await response.json();
   assert.ok(response.ok, `${options.method || "GET"} ${pathname} failed: ${JSON.stringify(json)}`);
   assert.ok(json._links, `${pathname} should include HATEOAS _links`);
@@ -32,6 +50,12 @@ try {
 
   const healthWithDoubleSlash = await request("//api/health");
   assert.equal(healthWithDoubleSlash.status, "ok");
+
+  const notFound = await fetch(`${baseUrl}/api/missing`, {
+    headers: { "X-Requested-With": "XMLHttpRequest" },
+  });
+  assert.equal(notFound.status, 404);
+  assertSecurityHeaders(notFound);
 
   const dashboard = await request("/api/members/mem-001/dashboard?date=2026-03-13");
   assert.equal(dashboard.member.id, "mem-001");

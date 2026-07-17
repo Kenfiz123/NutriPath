@@ -38,6 +38,187 @@ function loadEnvFile(filePath = ".env") {
 
 loadEnvFile();
 
+function truncateUnicode(value, maxLength) {
+  return Array.from(value).slice(0, Math.max(0, maxLength)).join("");
+}
+
+function sanitizeForStorage(input, maxLength = 255) {
+  if (typeof input !== "string" || !input) return "";
+  const normalized = input
+    .normalize("NFC")
+    .replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F]/g, "")
+    .trim();
+  return truncateUnicode(normalized, maxLength);
+}
+
+function sanitizeText(input, options = {}) {
+  const {
+    maxLength = 255,
+    allowHtml = false,
+    stripTags = true,
+  } = options;
+
+  if (typeof input !== "string" || !input) return "";
+
+  let result = input
+    .normalize("NFC")
+    .replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F]/g, "");
+
+  if (!allowHtml && stripTags) {
+    result = result
+      .replace(/<[^>]*>/g, " ")
+      .replace(/&lt;[^&]*?&gt;/gi, " ")
+      .replace(/\b(?:javascript|vbscript)\s*:/gi, "")
+      .replace(/\bon\w+\s*=/gi, "");
+  }
+
+  const normalized = result
+    .replace(/\s+/g, " ")
+    .trim();
+  return truncateUnicode(normalized, maxLength);
+}
+
+function sanitizeEmail(input) {
+  return sanitizeForStorage(input, 254).toLowerCase();
+}
+
+function sanitizeNumber(input, fallback = 0) {
+  const number = Number(input);
+  return Number.isFinite(number) ? number : fallback;
+}
+
+function isValidUUID(value) {
+  if (typeof value !== "string") return false;
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value);
+}
+
+function validatePasswordStrength(password) {
+  if (typeof password !== "string") {
+    return { valid: false, message: "Mật khẩu không hợp lệ." };
+  }
+  if (password.length < 8) {
+    return { valid: false, message: "Mật khẩu cần ít nhất 8 ký tự." };
+  }
+  if (password.length > 128) {
+    return { valid: false, message: "Mật khẩu không được quá 128 ký tự." };
+  }
+  if (!/[A-Z]/.test(password)) {
+    return { valid: false, message: "Mật khẩu cần ít nhất 1 chữ hoa (A-Z)." };
+  }
+  if (!/[a-z]/.test(password)) {
+    return { valid: false, message: "Mật khẩu cần ít nhất 1 chữ thường (a-z)." };
+  }
+  if (!/[0-9]/.test(password)) {
+    return { valid: false, message: "Mật khẩu cần ít nhất 1 số (0-9)." };
+  }
+  if (!/[!@#$%^&*()_+\-=[\]{};':"\\|,.<>/?]/.test(password)) {
+    return { valid: false, message: "Mật khẩu cần ít nhất 1 ký tự đặc biệt (!@#$%^&*...)." };
+  }
+
+  const weakPatterns = [
+    /^123/,
+    /abc/i,
+    /qwerty/i,
+    /111/,
+    /222/,
+    /333/,
+    /444/,
+    /555/,
+    /666/,
+    /777/,
+    /888/,
+    /999/,
+    /000/,
+    /1234/,
+    /2345/,
+    /3456/,
+    /4567/,
+    /5678/,
+    /6789/,
+    /7890/,
+  ];
+  if (weakPatterns.some((pattern) => pattern.test(password))) {
+    return { valid: false, message: "Mật khẩu quá yếu. Tránh dùng các mẫu đơn giản như 123456, abc123." };
+  }
+
+  return { valid: true, message: "" };
+}
+
+const authRateLimitStores = new Set();
+
+function createRateLimiter(options = {}) {
+  const {
+    maxAttempts = 5,
+    windowMs = 15 * 60 * 1000,
+    maxKeys = 10000,
+    keyGenerator = getClientIp,
+  } = options;
+  const records = new Map();
+  authRateLimitStores.add(records);
+
+  return function rateLimit(req, res) {
+    const key = String(keyGenerator(req) || "unknown");
+    const now = Date.now();
+    let record = records.get(key);
+
+    if (!record || now >= record.resetAt) {
+      if (!record && records.size >= maxKeys) {
+        records.delete(records.keys().next().value);
+      }
+      record = { count: 0, resetAt: now + windowMs };
+      records.set(key, record);
+    }
+
+    const resetAtSeconds = Math.ceil(record.resetAt / 1000);
+    if (record.count >= maxAttempts) {
+      const retryAfter = Math.max(1, Math.ceil((record.resetAt - now) / 1000));
+      res.setHeader("Retry-After", retryAfter);
+      res.setHeader("X-RateLimit-Limit", maxAttempts);
+      res.setHeader("X-RateLimit-Remaining", 0);
+      res.setHeader("X-RateLimit-Reset", resetAtSeconds);
+
+      const error = new Error(`Quá nhiều yêu cầu. Vui lòng thử lại sau ${retryAfter} giây.`);
+      error.status = 429;
+      error.code = "RATE_LIMIT_EXCEEDED";
+      error.details = { limit: maxAttempts, retryAfterSeconds: retryAfter, resetAt: resetAtSeconds };
+      throw error;
+    }
+
+    record.count += 1;
+    res.setHeader("X-RateLimit-Limit", maxAttempts);
+    res.setHeader("X-RateLimit-Remaining", Math.max(0, maxAttempts - record.count));
+    res.setHeader("X-RateLimit-Reset", resetAtSeconds);
+  };
+}
+
+const loginRateLimiter = createRateLimiter({ maxAttempts: 5, windowMs: 15 * 60 * 1000 });
+const registerRateLimiter = createRateLimiter({ maxAttempts: 3, windowMs: 60 * 60 * 1000 });
+const otpRateLimiter = createRateLimiter({ maxAttempts: 3, windowMs: 15 * 60 * 1000 });
+const otpVerifyRateLimiter = createRateLimiter({ maxAttempts: 5, windowMs: 15 * 60 * 1000 });
+const passwordResetRateLimiter = createRateLimiter({ maxAttempts: 3, windowMs: 15 * 60 * 1000 });
+const authEndpointRateLimiters = new Map([
+  ["/api/auth/login", loginRateLimiter],
+  ["/api/auth/register", registerRateLimiter],
+  ["/api/auth/otp/request", otpRateLimiter],
+  ["/api/auth/otp/verify", otpVerifyRateLimiter],
+  ["/api/auth/password/reset", passwordResetRateLimiter],
+]);
+
+function enforceAuthEndpointRateLimit(req, res, pathname) {
+  if (req.method !== "POST") return;
+  authEndpointRateLimiters.get(pathname)?.(req, res);
+}
+
+const authRateLimitCleanupTimer = setInterval(() => {
+  const now = Date.now();
+  for (const records of authRateLimitStores) {
+    for (const [key, record] of records) {
+      if (now >= record.resetAt) records.delete(key);
+    }
+  }
+}, 5 * 60 * 1000);
+authRateLimitCleanupTimer.unref?.();
+
 const routes = [];
 const sessions = new Map();
 const chatRateBuckets = new Map();
@@ -189,8 +370,14 @@ function sendJson(req, res, status, payload) {
     "Access-Control-Allow-Methods": "GET,POST,PATCH,PUT,DELETE,OPTIONS",
     "Access-Control-Allow-Headers": "Content-Type, Authorization, X-Requested-With",
     Vary: "Origin",
-    "Cache-Control": "no-store",
+    "Cache-Control": "no-store, no-cache, must-revalidate, proxy-revalidate",
+    "Content-Security-Policy": "default-src 'none'; frame-ancestors 'none'; form-action 'self'; base-uri 'self';",
     "X-Content-Type-Options": "nosniff",
+    "X-Frame-Options": "DENY",
+    "X-XSS-Protection": "1; mode=block",
+    "Strict-Transport-Security": "max-age=31536000; includeSubDomains",
+    "Referrer-Policy": "strict-origin-when-cross-origin",
+    "Permissions-Policy": "camera=(), microphone=(), geolocation=()",
   };
   if (origin) {
     headers["Access-Control-Allow-Origin"] = origin;
@@ -3853,6 +4040,10 @@ registerControllers({
   round,
   route,
   safeCannedChatResponse,
+  sanitizeEmail,
+  sanitizeForStorage,
+  sanitizeNumber,
+  sanitizeText,
   saveMealLogChanges,
   saveMemberChatMessages,
   saveMemberNutritionProfile,
@@ -3878,6 +4069,7 @@ registerControllers({
   upsertNotification,
   validateSafeChatInput,
   validateSafeChatOutput,
+  validatePasswordStrength,
   verifyPassword,
   verifySupabaseAccessToken,
   waterGlassesToMl,
@@ -3899,6 +4091,7 @@ export async function createServer(options = {}) {
       const safeUrl = rawUrl.startsWith("//") ? rawUrl.replace(/^\/+/, "/") : rawUrl;
       const requestUrl = new URL(safeUrl, `http://${req.headers.host || "127.0.0.1:8080"}`);
       const pathname = normalizePath(requestUrl.pathname);
+      enforceAuthEndpointRateLimit(req, res, pathname);
       assertTrustedMutation(req, pathname);
       const matched = routes.find((candidate) => candidate.method === req.method && matchRoute(candidate.pattern, pathname));
 

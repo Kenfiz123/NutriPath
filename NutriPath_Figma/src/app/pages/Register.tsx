@@ -6,6 +6,7 @@ import { requestAuthOtp, type RegisterPayload } from "../api";
 import { OtpVerificationForm } from "../components/OtpVerificationForm";
 import { isSupabaseAuthConfigured, type SocialAuthProvider } from "../supabaseAuth";
 import { useLanguage } from "../language";
+import { validatePasswordStrength } from "../passwordPolicy";
 
 type Goal = NonNullable<RegisterPayload["goal"]>;
 
@@ -28,6 +29,12 @@ export function Register() {
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     setError(null);
+
+    const passwordValidation = validatePasswordStrength(password);
+    if (!passwordValidation.valid) {
+      setError(t(passwordValidation.message));
+      return;
+    }
 
     if (password !== confirmPassword) {
       setError(t("Mật khẩu xác nhận chưa khớp."));
@@ -144,11 +151,12 @@ export function Register() {
                 <input
                   type={showPassword ? "text" : "password"}
                   required
-                  minLength={6}
+                  minLength={8}
+                  maxLength={128}
                   value={password}
                   onChange={(event) => setPassword(event.target.value)}
                   className="w-full outline-none text-gray-800"
-                  placeholder={t("Ít nhất 6 ký tự")}
+                  placeholder={t("8-128 ký tự, có hoa, thường, số và ký tự đặc biệt")}
                 />
                 <button type="button" onClick={() => setShowPassword((value) => !value)} className="text-gray-400 hover:text-gray-700">
                   {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
@@ -163,7 +171,8 @@ export function Register() {
                 <input
                   type={showPassword ? "text" : "password"}
                   required
-                  minLength={6}
+                  minLength={8}
+                  maxLength={128}
                   value={confirmPassword}
                   onChange={(event) => setConfirmPassword(event.target.value)}
                   className="w-full outline-none text-gray-800"
