@@ -13,16 +13,17 @@ import {
 import { useLanguage } from "../language";
 
 type Gender = "male" | "female";
-type ActivityLevel = "sedentary" | "light" | "moderate" | "active" | "very_active";
-type Goal = "lose" | "maintain" | "gain";
+type ActivityLevel = "sedentary" | "light" | "moderate" | "active" | "very_active" | "athlete";
+type Goal = "lose" | "lose_slow" | "lose_fast" | "maintain" | "gain" | "gain_slow" | "gain_fast" | "recomp";
 type BodyShape = NonNullable<MemberPreferences["bodyShape"]>;
 
 const activityLevels: Array<{ value: ActivityLevel; label: string; desc: string; multiplier: number }> = [
   { value: "sedentary", label: "Ít vận động", desc: "Ngồi văn phòng, ít hoặc không tập", multiplier: 1.2 },
   { value: "light", label: "Nhẹ nhàng", desc: "Tập nhẹ 1-3 ngày/tuần", multiplier: 1.375 },
   { value: "moderate", label: "Vừa phải", desc: "Tập vừa 3-5 ngày/tuần", multiplier: 1.55 },
-  { value: "active", label: "Năng động", desc: "Tập nặng 6-7 ngày/tuần", multiplier: 1.725 },
-  { value: "very_active", label: "Rất năng động", desc: "Tập rất nặng hoặc chơi thể thao cường độ cao", multiplier: 1.9 },
+  { value: "active", label: "Năng động", desc: "Tập nặng 6-7 ngày/tuần", multiplier: 1.75 },
+  { value: "very_active", label: "Rất năng động", desc: "Tập rất nặng hoặc vận động viên", multiplier: 1.9 },
+  { value: "athlete", label: "Vận động viên", desc: "Tập 2 lần/ngày, chế độ athlete", multiplier: 2.2 },
 ];
 
 const exerciseTypes: Array<{ value: string; label: string }> = [
@@ -365,22 +366,47 @@ export function CalorieCalculator() {
               <h2 className="mb-4 text-gray-900" style={{ fontSize: "1.05rem", fontWeight: 700 }}>{t("Mục tiêu")}</h2>
               <div className="grid grid-cols-3 gap-3">
                 {([
-                  { value: "lose", label: "Giảm cân", icon: TrendingDown, active: "border-blue-500 bg-blue-50 text-blue-600" },
-                  { value: "maintain", label: "Duy trì", icon: Minus, active: "border-green-500 bg-green-50 text-green-600" },
-                  { value: "gain", label: "Tăng cân", icon: TrendingUp, active: "border-orange-500 bg-orange-50 text-orange-600" },
-                ] as const).map(({ value, label, icon: Icon, active }) => (
+                  {
+                    value: "lose",
+                    label: "Giảm cân",
+                    desc: "Giảm ~0.5%/tuần",
+                    icon: TrendingDown,
+                    active: "border-blue-500 bg-blue-50 text-blue-600"
+                  },
+                  {
+                    value: "maintain",
+                    label: "Duy trì",
+                    desc: "Giữ cân ổn định",
+                    icon: Minus,
+                    active: "border-green-500 bg-green-50 text-green-600"
+                  },
+                  {
+                    value: "gain",
+                    label: "Tăng cân",
+                    desc: "Tăng ~0.5%/tuần",
+                    icon: TrendingUp,
+                    active: "border-orange-500 bg-orange-50 text-orange-600"
+                  },
+                ] as const).map(({ value, label, desc, icon: Icon, active }) => (
                   <button
                     key={value}
                     onClick={() => setGoal(value)}
-                    className={`flex flex-col items-center gap-1.5 rounded-xl border-2 py-3 transition-all ${
+                    className={`flex flex-col items-center gap-1 rounded-xl border-2 py-3 transition-all ${
                       goal === value ? active : "border-gray-200 bg-white text-gray-600 hover:border-gray-300"
                     }`}
                   >
                     <Icon className="h-5 w-5" />
                     <span style={{ fontSize: "0.85rem", fontWeight: 600 }}>{t(label)}</span>
+                    <span style={{ fontSize: "0.7rem", opacity: 0.8 }}>{t(desc)}</span>
                   </button>
                 ))}
               </div>
+              {calculation?.results.goalInfo && (
+                <div className="mt-3 rounded-lg bg-gray-50 px-3 py-2 text-center" style={{ fontSize: "0.78rem" }}>
+                  <span className="font-semibold text-gray-700">{calculation.results.goalInfo.label}:</span>{" "}
+                  <span className="text-gray-600">{calculation.results.goalInfo.description}</span>
+                </div>
+              )}
             </div>
 
             <div className="rounded-2xl border border-gray-100 bg-white p-6 shadow-sm">
@@ -486,8 +512,23 @@ export function CalorieCalculator() {
                     {t("Độ tin cậy & giới hạn an toàn")}
                   </h3>
                   <p className="text-gray-600" style={{ fontSize: "0.86rem", lineHeight: 1.6 }}>
-                    {t("Công thức")}: {calculation.results.formula ?? "Mifflin-St Jeor"}. {t(calculation.results.accuracy?.note ?? "Kết quả là ước lượng và có thể thay đổi theo cơ địa, vận động và sức khỏe.")}
+                    {t("Công thức")}: {calculation.results.formula ?? "Mifflin-St Jeor"}
+                    {calculation.results.bmrMethod && calculation.results.bmrMethod !== calculation.results.formula && (
+                      <> ({calculation.results.bmrMethod})</>
+                    )}
+                    . {t(calculation.results.accuracy?.note ?? "Kết quả là ước lượng và có thể thay đổi theo cơ địa, vận động và sức khỏe.")}
                   </p>
+                  {calculation.results.tdeeMultiplier && (
+                    <p className="mt-1 text-gray-500" style={{ fontSize: "0.8rem" }}>
+                      {t("TDEE/BMR ratio")}: x{calculation.results.tdeeMultiplier.toFixed(2)}
+                      {calculation.results.leanMass && ` | Lean mass: ${calculation.results.leanMass}kg`}
+                    </p>
+                  )}
+                  {calculation.results.weeklyLossGrams !== undefined && calculation.results.weeklyLossGrams !== 0 && (
+                    <p className="mt-1 text-blue-600" style={{ fontSize: "0.82rem", fontWeight: 600 }}>
+                      {t("Ước tính")}: {calculation.results.weeklyLossGrams > 0 ? "Giảm" : "Tăng"} ~{Math.abs(calculation.results.weeklyLossGrams)}g/{t("tuần")}
+                    </p>
+                  )}
                   {!!calculation.results.warnings?.length && (
                     <div className="mt-4 space-y-2">
                       {calculation.results.warnings.map((warning) => (

@@ -20,6 +20,12 @@ import {
   estimateCustomCookedFood,
   normalizeVietnameseText,
 } from "./nutrition-estimator.js";
+import {
+  calculateCaloriesAdvanced,
+  getGoalDelta as calcGoalDelta,
+  getProteinPerKg as calcProteinPerKg,
+  getFatPct as calcFatPct,
+} from "./nutrition-calculations.js";
 
 function loadEnvFile(filePath = ".env") {
   if (!existsSync(filePath)) return;
@@ -2048,32 +2054,32 @@ function assertNumberInRange(value, field, { min, max }) {
   return number;
 }
 
+// Backward compatibility: functions exported from nutrition-calculations.js
+// Wrapper functions for internal usage
 function getSafeCalorieMinimum(gender) {
   return gender === "male" ? 1500 : 1200;
 }
 
 function getGoalDelta(goal, tdee, safeMinimum) {
-  if (goal === "maintain") return 0;
-  if (goal === "gain") return 300;
-
-  const preferredDeficit = Math.round(Math.min(500, Math.max(250, tdee * 0.2)));
-  return -Math.min(preferredDeficit, Math.max(0, tdee - safeMinimum));
+  return calcGoalDelta(goal, tdee, safeMinimum);
 }
 
 function getProteinPerKg(goal, activityId) {
-  if (goal === "lose") return 2;
-  if (goal === "gain") return 1.8;
-  if (activityId === "active" || activityId === "very_active") return 1.8;
-  return 1.6;
+  return calcProteinPerKg(goal, activityId);
 }
 
 function getFatPct(goal) {
-  if (goal === "gain") return 0.28;
-  if (goal === "lose") return 0.25;
-  return 0.27;
+  return calcFatPct(goal);
 }
 
 function buildCalculationWarnings(input, results) {
+  // Warnings are now built in the advanced calculation module
+  // This function kept for backward compatibility
+  if (results.warnings) {
+    return results.warnings;
+  }
+
+  // Fallback warnings for any edge cases
   const warnings = [
     "BMR/TDEE là ước lượng theo công thức Mifflin-St Jeor, không thay thế đo chuyển hóa trực tiếp.",
     "Nếu có bệnh nền, mang thai, tiểu đường, rối loạn ăn uống hoặc mục tiêu giảm cân mạnh, hãy hỏi bác sĩ/chuyên gia dinh dưỡng.",
@@ -2083,7 +2089,7 @@ function buildCalculationWarnings(input, results) {
     warnings.unshift("Mức giảm calo đã được giới hạn để không thấp hơn ngưỡng an toàn.");
   }
   if (results.carbsFloorApplied) {
-    warnings.unshift("Macro đã được cân chỉnh để carb không xuống quá thấp trong cấu trúc khẩu phần phổ thông.");
+    warnings.unshift("Macro đã được cân chỉnh để carbs không xuống dưới mức tối thiểu (đảm bảo chức năng não).");
   }
   return warnings;
 }
@@ -2091,38 +2097,48 @@ function buildCalculationWarnings(input, results) {
 function calculateCalories(db, body) {
   requireFields(body, ["age", "weightKg", "heightCm", "gender", "activityLevel", "goal"]);
 
+  // Validate inputs
   const age = assertNumberInRange(body.age, "age", CALORIE_INPUT_LIMITS.age);
   const weight = assertNumberInRange(body.weightKg, "weightKg", CALORIE_INPUT_LIMITS.weightKg);
   const height = assertNumberInRange(body.heightCm, "heightCm", CALORIE_INPUT_LIMITS.heightCm);
 
+  // Validate activity level
   const activity = db.activityLevels.find((item) => item.id === body.activityLevel);
   if (!activity) badRequest("Invalid activityLevel.", { allowed: db.activityLevels.map((item) => item.id) });
   if (!["male", "female"].includes(body.gender)) badRequest("Invalid gender.", { allowed: ["male", "female"] });
-  if (!["lose", "maintain", "gain"].includes(body.goal)) badRequest("Invalid goal.", { allowed: ["lose", "maintain", "gain"] });
-
-  const bmrRaw = body.gender === "male"
-    ? 10 * weight + 6.25 * height - 5 * age + 5
-    : 10 * weight + 6.25 * height - 5 * age - 161;
-  const bmr = Math.round(bmrRaw);
-  const tdee = Math.round(bmrRaw * activity.multiplier);
-  const safeMinimum = getSafeCalorieMinimum(body.gender);
-  const goalDelta = getGoalDelta(body.goal, tdee, safeMinimum);
-  const calorieGoal = Math.max(safeMinimum, tdee + goalDelta);
-  const protein = Math.round(weight * getProteinPerKg(body.goal, activity.id));
-  let fat = Math.round((calorieGoal * getFatPct(body.goal)) / 9);
-  let carbs = Math.round((calorieGoal - protein * 4 - fat * 9) / 4);
-  let carbsFloorApplied = false;
-  const minimumCarbs = body.goal === "lose" ? 90 : 130;
-  if (carbs < minimumCarbs) {
-    carbsFloorApplied = true;
-    carbs = minimumCarbs;
-    fat = Math.max(35, Math.round((calorieGoal - protein * 4 - carbs * 4) / 9));
+  const allowedGoals = ["lose", "maintain", "gain", "lose_slow", "lose_fast", "gain_slow", "gain_fast", "recomp"];
+  if (!allowedGoals.includes(body.goal)) {
+    badRequest("Invalid goal.", { allowed: allowedGoals });
+  }
+  const durationMinutes = assertNumberInRange(body.durationMinutes ?? 30, "durationMinutes", CALORIE_INPUT_LIMITS.durationMinutes);
+  const bodyShape = BODY_SHAPES.has(body.bodyShape) ? body.bodyShape : "average";
+  const bodyFatPct = body.bodyFatPct === undefined || body.bodyFatPct === null || body.bodyFatPct === ""
+    ? undefined
+    : assertNumberInRange(body.bodyFatPct, "bodyFatPct", { min: 3, max: 60 });
+  if (body.isAthlete !== undefined && typeof body.isAthlete !== "boolean") {
+    badRequest("Invalid isAthlete.", { allowed: [true, false] });
   }
 
-  const bmi = round(weight / ((height / 100) ** 2), 1);
+  // Use new advanced calculation
+  const advancedResults = calculateCaloriesAdvanced(db, {
+    age,
+    weightKg: weight,
+    heightCm: height,
+    gender: body.gender,
+    activityLevel: activity.id,
+    goal: body.goal,
+    bodyShape,
+    exerciseType: body.exerciseType,
+    durationMinutes,
+    bodyFatPct,
+    isAthlete: body.isAthlete === true,
+  });
+
+  // Find exercise info
   const exercise = db.exerciseTypes.find((item) => item.id === (body.exerciseType || "walking")) || db.exerciseTypes[0];
-  const durationMinutes = assertNumberInRange(body.durationMinutes ?? 30, "durationMinutes", CALORIE_INPUT_LIMITS.durationMinutes);
   const burnedCalories = Math.round(exercise.caloriesPerMinute * durationMinutes * (weight / 70));
+
+  // Build input for backward compatibility
   const input = {
     age,
     weightKg: weight,
@@ -2132,35 +2148,35 @@ function calculateCalories(db, body) {
     goal: body.goal,
     exerciseType: exercise.id,
     durationMinutes,
-    bodyShape: BODY_SHAPES.has(body.bodyShape) ? body.bodyShape : "average",
+    bodyShape,
+    bodyFatPct,
+    isAthlete: body.isAthlete === true,
   };
+
+  // Build results with backward compatibility
   const results = {
-    bmr,
-    tdee,
-    calorieGoal,
-    goalDelta,
-    formula: "Mifflin-St Jeor",
-    accuracy: {
-      label: "Ước lượng tốt cho người trưởng thành khỏe mạnh",
-      note: "Sai số thực tế có thể thay đổi theo cơ địa, % mỡ, giấc ngủ, bệnh nền và mức vận động thật.",
-    },
-    bmi: {
-      value: bmi,
-      label: bmi < 18.5 ? "Thiếu cân" : bmi < 25 ? "Bình thường" : bmi < 30 ? "Thừa cân" : "Béo phì",
-    },
-    macros: [
-      { name: "Protein", grams: protein, calories: protein * 4, pct: Math.round(((protein * 4) / calorieGoal) * 100) },
-      { name: "Carbs", grams: carbs, calories: carbs * 4, pct: Math.round(((carbs * 4) / calorieGoal) * 100) },
-      { name: "Chất béo", grams: fat, calories: fat * 9, pct: Math.round(((fat * 9) / calorieGoal) * 100) },
-    ],
+    bmr: advancedResults.bmr,
+    tdee: advancedResults.tdee,
+    calorieGoal: advancedResults.calorieGoal,
+    goalDelta: advancedResults.goalDelta,
+    weeklyLossGrams: advancedResults.weeklyLossGrams,
+    formula: advancedResults.formula,
+    accuracy: advancedResults.accuracy,
+    bmi: advancedResults.bmi,
+    macros: advancedResults.macros,
     exercise: {
       label: exercise.label,
       burnedCalories,
       fatEquivalentGrams: Math.round(burnedCalories / 9),
     },
-    carbsFloorApplied,
+    carbsFloorApplied: advancedResults.carbsFloorApplied,
+    athleteModeApplied: advancedResults.athleteModeApplied,
+    bmrMethod: advancedResults.bmrMethod,
+    tdeeMultiplier: advancedResults.tdeeMultiplier,
+    leanMass: advancedResults.leanMass,
+    goalInfo: advancedResults.goalInfo,
+    warnings: advancedResults.warnings,
   };
-  results.warnings = buildCalculationWarnings(input, results);
 
   return { input, results };
 }
@@ -3962,10 +3978,8 @@ registerControllers({
   getClientIp,
   getDrinkWaterEquivalentGlasses,
   getDrinkWaterEquivalentMl,
-  getFatPct,
   getFood,
   getGeminiRateState,
-  getGoalDelta,
   getLogWaterMl,
   getMealHistoryDayDelta,
   getMealItemCount,

@@ -43,7 +43,7 @@ export interface RegisterPayload {
   weightKg?: number;
   heightCm?: number;
   activityLevel?: string;
-  goal?: "lose" | "maintain" | "gain";
+  goal?: "lose" | "lose_slow" | "lose_fast" | "maintain" | "gain" | "gain_slow" | "gain_fast" | "recomp";
   preferences?: MemberPreferences;
   weightTracking?: {
     startWeightKg?: number;
@@ -159,7 +159,7 @@ export interface Member {
   weightKg?: number;
   heightCm?: number;
   activityLevel?: string;
-  goal?: "lose" | "maintain" | "gain";
+  goal?: "lose" | "lose_slow" | "lose_fast" | "maintain" | "gain" | "gain_slow" | "gain_fast" | "recomp";
   nutritionProfile?: NutritionProfile | null;
   access?: {
     tier: "free" | "vip" | "svip";
@@ -198,30 +198,46 @@ export interface NutritionProfile {
     heightCm: number;
     gender: "male" | "female";
     activityLevel: string;
-    goal: "lose" | "maintain" | "gain";
+    goal: "lose" | "lose_slow" | "lose_fast" | "maintain" | "gain" | "gain_slow" | "gain_fast" | "recomp";
     exerciseType: string;
     durationMinutes: number;
     bodyShape?: MemberPreferences["bodyShape"];
+    bodyFatPct?: number;
+    isAthlete?: boolean;
   };
   results: {
     bmr: number;
+    bmrMethod?: string;
     tdee: number;
+    tdeeMultiplier?: number;
     calorieGoal: number;
     goalDelta: number;
+    weeklyLossGrams?: number;
     formula?: string;
     accuracy?: {
       label: string;
       note: string;
+      sources?: string[];
     };
     bmi: {
       value: number;
       label: string;
+      category?: string;
+    };
+    leanMass?: number;
+    carbsFloorApplied?: boolean;
+    athleteModeApplied?: boolean;
+    goalInfo?: {
+      type: string;
+      label: string;
+      description: string;
     };
     macros: Array<{
       name: string;
       grams: number;
       calories: number;
       pct: number;
+      note?: string;
     }>;
     exercise: {
       label: string;
@@ -247,10 +263,12 @@ export interface CalorieCalculationInput {
   heightCm: number;
   gender: "male" | "female";
   activityLevel: string;
-  goal: "lose" | "maintain" | "gain";
+  goal: "lose" | "lose_slow" | "lose_fast" | "maintain" | "gain" | "gain_slow" | "gain_fast" | "recomp";
   exerciseType?: string;
   durationMinutes?: number;
   bodyShape?: MemberPreferences["bodyShape"];
+  bodyFatPct?: number;
+  isAthlete?: boolean;
 }
 
 export interface CalorieCalculation {
