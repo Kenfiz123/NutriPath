@@ -162,6 +162,19 @@ WHERE id = ${sqlLiteral(credential.id)};
 `);
 }
 
+export async function updateSqlServerAdminRole(member) {
+  const database = process.env.NUTRIPATH_SQL_DATABASE || "NutriPath";
+  await ensureSqlServerAuthSchema();
+  await execSql(database, `
+UPDATE dbo.Members
+SET role = N'admin',
+    status = N'active',
+    name = ${sqlLiteral(member.name)},
+    initials = ${sqlLiteral(member.initials)}
+WHERE id = ${sqlLiteral(member.id)};
+`);
+}
+
 export async function updateSqlServerMemberCalorieGoal(memberId, dailyCalorieGoal) {
   const database = process.env.NUTRIPATH_SQL_DATABASE || "NutriPath";
   await execSql(database, `

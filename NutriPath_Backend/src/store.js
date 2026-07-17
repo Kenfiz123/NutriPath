@@ -137,6 +137,7 @@ export async function createStore(options = {}) {
 
   return {
     filePath,
+    dataSource: "json",
     get db() {
       return cache;
     },

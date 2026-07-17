@@ -7,6 +7,7 @@ import { apiLinks, collectionResponse, currentLink, errorResponse, link } from "
 import {
   insertSqlServerAuthMember,
   insertSqlServerCredential,
+  updateSqlServerAdminRole,
   updateSqlServerCredentialPassword,
   saveSqlServerMemberNutritionProfile,
   saveSqlServerPaymentAndSubscription,
@@ -769,6 +770,75 @@ function memberFromRegistration(store, body, id = null) {
     subscription: { planId: tier, billing: "monthly", status: "active", startedAt: joinedAt, renewsAt: null },
     stats: { memberDays: 0, savedRecipes: 0, aiConversations: 0, trackedCalories: 0, streakDays: 0 },
   };
+}
+
+function envFlag(value) {
+  return ["1", "true", "yes", "on"].includes(String(value || "").trim().toLowerCase());
+}
+
+async function bootstrapAdminAccount(store) {
+  if (!envFlag(process.env.NUTRIPATH_BOOTSTRAP_ADMIN_ENABLED)) return;
+
+  const email = normalizeEmail(process.env.NUTRIPATH_BOOTSTRAP_ADMIN_EMAIL);
+  const password = String(process.env.NUTRIPATH_BOOTSTRAP_ADMIN_PASSWORD || "");
+  const name = String(process.env.NUTRIPATH_BOOTSTRAP_ADMIN_NAME || "NutriPath Admin").trim() || "NutriPath Admin";
+  const resetPassword = envFlag(process.env.NUTRIPATH_BOOTSTRAP_ADMIN_RESET_PASSWORD);
+
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+    throw new Error("NUTRIPATH_BOOTSTRAP_ADMIN_EMAIL must be a valid email address.");
+  }
+
+  const credentials = ensureAuthCredentials(store.db);
+  let credential = findCredentialByEmail(store.db, email);
+  let member = findMemberByEmail(store.db, email) || (credential ? getMember(store.db, credential.memberId) : null);
+  const isNewCredential = !credential;
+
+  if ((!credential || resetPassword) && password.length < 12) {
+    throw new Error("NUTRIPATH_BOOTSTRAP_ADMIN_PASSWORD must contain at least 12 characters.");
+  }
+
+  const isNewMember = !member;
+  if (!member) {
+    member = memberFromRegistration(store, { name, email, goal: "maintain" });
+    ensureMembers(store.db).push(member);
+  }
+
+  member.name = name;
+  member.initials = initialsFromName(name);
+  member.role = "admin";
+  member.status = "active";
+
+  const shouldWriteCredential = !credential || resetPassword;
+  if (shouldWriteCredential) {
+    const hashed = hashPassword(password);
+    const nextCredential = {
+      id: credential?.id || store.nextId("auth", credentials),
+      memberId: member.id,
+      email,
+      passwordHash: hashed.passwordHash,
+      passwordSalt: hashed.passwordSalt,
+      createdAt: credential?.createdAt || new Date().toISOString(),
+    };
+    if (credential) Object.assign(credential, nextCredential);
+    else {
+      credential = nextCredential;
+      credentials.push(credential);
+    }
+  }
+
+  if (store.dataSource === "sqlserver") {
+    if (isNewMember) await insertSqlServerAuthMember(member, credential);
+    else {
+      await updateSqlServerAdminRole(member);
+      if (isNewCredential) await insertSqlServerCredential(credential);
+      else if (shouldWriteCredential) await updateSqlServerCredentialPassword(credential);
+    }
+    await store.reload();
+  } else {
+    await store.save();
+  }
+
+  console.info(`Bootstrap admin ready: ${email} (${store.dataSource}).`);
 }
 
 function getMember(db, id) {
@@ -3816,6 +3886,7 @@ registerControllers({
 
 export async function createServer(options = {}) {
   const store = await createStore(options);
+  await bootstrapAdminAccount(store);
 
   return http.createServer(async (req, res) => {
     try {

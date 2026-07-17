@@ -17,6 +17,11 @@ process.env.PAYOS_RETURN_URL = "http://127.0.0.1:5173/payment-result";
 process.env.PAYOS_CANCEL_URL = "http://127.0.0.1:5173/payment-result";
 process.env.SUPABASE_URL = "https://supabase.test.local";
 process.env.SUPABASE_ANON_KEY = "test-anon-key";
+process.env.NUTRIPATH_BOOTSTRAP_ADMIN_ENABLED = "true";
+process.env.NUTRIPATH_BOOTSTRAP_ADMIN_EMAIL = "bootstrap-admin@example.com";
+process.env.NUTRIPATH_BOOTSTRAP_ADMIN_PASSWORD = "Bootstrap@123456";
+process.env.NUTRIPATH_BOOTSTRAP_ADMIN_NAME = "Bootstrap Admin";
+process.env.NUTRIPATH_BOOTSTRAP_ADMIN_RESET_PASSWORD = "true";
 
 const dbPath = path.resolve("data/controller-flow-test-db.json");
 seedData.members.push({
@@ -158,6 +163,15 @@ function localDateString(date = new Date()) {
 }
 
 try {
+  const { json: bootstrapAdmin } = await request("/api/auth/login", {
+    method: "POST",
+    body: JSON.stringify({
+      email: process.env.NUTRIPATH_BOOTSTRAP_ADMIN_EMAIL,
+      password: process.env.NUTRIPATH_BOOTSTRAP_ADMIN_PASSWORD,
+    }),
+  });
+  assert.equal(bootstrapAdmin.member.role, "admin");
+
   const payosSample = signedPayosWebhook({
     orderCode: 123,
     amount: 2000,
