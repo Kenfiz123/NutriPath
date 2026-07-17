@@ -15,6 +15,8 @@ process.env.PAYOS_CHECKSUM_KEY = "test-checksum-key-for-controller-flow";
 process.env.PAYOS_BASE_URL = "https://payos.test.local";
 process.env.PAYOS_RETURN_URL = "http://127.0.0.1:5173/payment-result";
 process.env.PAYOS_CANCEL_URL = "http://127.0.0.1:5173/payment-result";
+process.env.SUPABASE_URL = "https://supabase.test.local";
+process.env.SUPABASE_ANON_KEY = "test-anon-key";
 
 const dbPath = path.resolve("data/controller-flow-test-db.json");
 seedData.members.push({
@@ -35,6 +37,35 @@ const nativeFetch = globalThis.fetch;
 let capturedPayosRequest = null;
 globalThis.fetch = async (input, init) => {
   const requestUrl = typeof input === "string" || input instanceof URL ? String(input) : input.url;
+  if (requestUrl === "https://supabase.test.local/auth/v1/otp" && init?.method === "POST") {
+    return new Response(JSON.stringify({}), { status: 200, headers: { "Content-Type": "application/json" } });
+  }
+  if (requestUrl === "https://supabase.test.local/auth/v1/verify" && init?.method === "POST") {
+    const body = JSON.parse(String(init.body));
+    if (body.token !== "123456") {
+      return new Response(JSON.stringify({ message: "Token has expired or is invalid" }), {
+        status: 400,
+        headers: { "Content-Type": "application/json" },
+      });
+    }
+    return new Response(JSON.stringify({
+      user: {
+        id: `otp-${body.email}`,
+        email: body.email,
+        email_confirmed_at: new Date().toISOString(),
+      },
+    }), { status: 200, headers: { "Content-Type": "application/json" } });
+  }
+  if (requestUrl === "https://supabase.test.local/auth/v1/user" && (!init?.method || init.method === "GET")) {
+    const headers = new Headers(init.headers);
+    assert.equal(headers.get("authorization"), "Bearer social-access-token-for-controller-test");
+    return new Response(JSON.stringify({
+      id: "social-google-user",
+      email: "social-google@example.com",
+      user_metadata: { full_name: "Social Google User", provider: "google" },
+      app_metadata: { provider: "google" },
+    }), { status: 200, headers: { "Content-Type": "application/json" } });
+  }
   if (requestUrl === "https://payos.test.local/v2/payment-requests" && init?.method === "POST") {
     const headers = new Headers(init.headers);
     assert.equal(headers.get("x-client-id"), process.env.PAYOS_CLIENT_ID);
@@ -74,6 +105,22 @@ async function request(pathname, options = {}) {
     assert.ok(response.ok, `${options.method || "GET"} ${pathname} failed: ${JSON.stringify(json)}`);
   }
   return { response, json };
+}
+
+async function verifiedOtpTicket(email, purpose) {
+  const { json: requested } = await request("/api/auth/otp/request", {
+    method: "POST",
+    body: JSON.stringify({ email, purpose }),
+  });
+  assert.equal(requested.sent, true);
+
+  const { json: verified } = await request("/api/auth/otp/verify", {
+    method: "POST",
+    body: JSON.stringify({ email, purpose, otp: "123456" }),
+  });
+  assert.equal(verified.verified, true);
+  assert.ok(verified.verificationTicket);
+  return verified.verificationTicket;
 }
 
 function cookieHeaders(setCookie) {
@@ -137,16 +184,42 @@ try {
     expectStatus: 400,
   });
 
+  const { json: socialLogin } = await request("/api/auth/supabase", {
+    method: "POST",
+    body: JSON.stringify({ accessToken: "social-access-token-for-controller-test" }),
+  });
+  assert.equal(socialLogin.member.email, "social-google@example.com");
+
   const email = `flow-${Date.now()}@example.com`;
-  const password = "Flow@123456";
+  const initialPassword = "Flow@123456";
+  const password = "Flow@654321";
+  await request("/api/auth/register", {
+    method: "POST",
+    body: JSON.stringify({ name: "Flow Test", email, password: initialPassword }),
+    expectStatus: 400,
+  });
+  const registerVerificationTicket = await verifiedOtpTicket(email, "register");
 
   const { response: registerResponse, json: registered } = await request("//api/auth/register", {
     method: "POST",
-    body: JSON.stringify({ name: "Flow Test", email, password }),
+    body: JSON.stringify({ name: "Flow Test", email, password: initialPassword, verificationTicket: registerVerificationTicket }),
   });
   assert.equal(registered.token, undefined);
   assert.equal(registered.member.email, email);
   assert.match(registerResponse.headers.get("set-cookie") || "", /nutripath_session=.*HttpOnly/i);
+
+  const resetVerificationTicket = await verifiedOtpTicket(email, "password-reset");
+  const { json: passwordReset } = await request("/api/auth/password/reset", {
+    method: "POST",
+    body: JSON.stringify({ email, newPassword: password, verificationTicket: resetVerificationTicket }),
+  });
+  assert.equal(passwordReset.reset, true);
+
+  await request("/api/auth/login", {
+    method: "POST",
+    body: JSON.stringify({ email, password: initialPassword }),
+    expectStatus: 401,
+  });
 
   await request("/api/auth/login", {
     method: "POST",
@@ -342,9 +415,10 @@ try {
   });
 
   const adminPassword = "FlowAdmin@123456";
+  const adminVerificationTicket = await verifiedOtpTicket("flow-admin@example.com", "register");
   const { response: adminRegisterResponse, json: adminRegistration } = await request("/api/auth/register", {
     method: "POST",
-    body: JSON.stringify({ name: "Flow Admin", email: "flow-admin@example.com", password: adminPassword }),
+    body: JSON.stringify({ name: "Flow Admin", email: "flow-admin@example.com", password: adminPassword, verificationTicket: adminVerificationTicket }),
   });
   assert.equal(adminRegistration.member.role, "admin");
 

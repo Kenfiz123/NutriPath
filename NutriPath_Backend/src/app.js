@@ -7,6 +7,7 @@ import { apiLinks, collectionResponse, currentLink, errorResponse, link } from "
 import {
   insertSqlServerAuthMember,
   insertSqlServerCredential,
+  updateSqlServerCredentialPassword,
   saveSqlServerMemberNutritionProfile,
   saveSqlServerPaymentAndSubscription,
   saveSqlServerMealLog,
@@ -3731,6 +3732,7 @@ registerControllers({
   initialsFromName,
   insertSqlServerAuthMember,
   insertSqlServerCredential,
+  updateSqlServerCredentialPassword,
   isChatAdminKey,
   isSameLocalDate,
   isTruthyQuery,

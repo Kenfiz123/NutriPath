@@ -151,6 +151,17 @@ VALUES (${sqlLiteral(credential.id)}, ${sqlLiteral(credential.memberId)}, ${sqlL
 `);
 }
 
+export async function updateSqlServerCredentialPassword(credential) {
+  const database = process.env.NUTRIPATH_SQL_DATABASE || "NutriPath";
+  await ensureSqlServerAuthSchema();
+  await execSql(database, `
+UPDATE dbo.AuthCredentials
+SET password_hash = ${sqlLiteral(credential.passwordHash)},
+    password_salt = ${sqlLiteral(credential.passwordSalt)}
+WHERE id = ${sqlLiteral(credential.id)};
+`);
+}
+
 export async function updateSqlServerMemberCalorieGoal(memberId, dailyCalorieGoal) {
   const database = process.env.NUTRIPATH_SQL_DATABASE || "NutriPath";
   await execSql(database, `

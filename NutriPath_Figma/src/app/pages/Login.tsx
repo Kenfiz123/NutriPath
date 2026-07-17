@@ -103,7 +103,12 @@ export function Login() {
             </label>
 
             <label className="block">
-              <span className="text-gray-700" style={{ fontSize: "0.84rem", fontWeight: 700 }}>{t("Mật khẩu")}</span>
+              <span className="flex items-center justify-between gap-3 text-gray-700" style={{ fontSize: "0.84rem", fontWeight: 700 }}>
+                <span>{t("Mật khẩu")}</span>
+                <Link to="/forgot-password" className="text-green-700 hover:text-green-800">
+                  {t("Quên mật khẩu?")}
+                </Link>
+              </span>
               <div className="mt-2 flex items-center gap-2 rounded-xl border border-gray-200 bg-white px-3 py-3 focus-within:border-green-500 focus-within:ring-4 focus-within:ring-green-100">
                 <Lock className="w-4 h-4 text-gray-400" />
                 <input

@@ -2,7 +2,8 @@ import { FormEvent, useState } from "react";
 import { Link, useNavigate } from "react-router";
 import { ArrowRight, Eye, EyeOff, Leaf, Loader2, Lock, Mail, Target, UserRound } from "lucide-react";
 import { useAuth } from "../auth";
-import type { RegisterPayload } from "../api";
+import { requestAuthOtp, type RegisterPayload } from "../api";
+import { OtpVerificationForm } from "../components/OtpVerificationForm";
 import { isSupabaseAuthConfigured, type SocialAuthProvider } from "../supabaseAuth";
 import { useLanguage } from "../language";
 
@@ -21,6 +22,7 @@ export function Register() {
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [socialSubmitting, setSocialSubmitting] = useState<SocialAuthProvider | null>(null);
+  const [otpRequested, setOtpRequested] = useState(false);
   const socialAuthReady = isSupabaseAuthConfigured();
 
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
@@ -34,13 +36,18 @@ export function Register() {
 
     setSubmitting(true);
     try {
-      await register({ name, email, password, goal });
-      navigate("/dashboard", { replace: true });
+      await requestAuthOtp(email, "register");
+      setOtpRequested(true);
     } catch (err) {
-      setError(t(err instanceof Error ? err.message : "Không tạo được tài khoản."));
+      setError(t(err instanceof Error ? err.message : "Không gửi được mã OTP."));
     } finally {
       setSubmitting(false);
     }
+  };
+
+  const completeRegistration = async (verificationTicket: string) => {
+    await register({ name, email, password, goal, verificationTicket });
+    navigate("/dashboard", { replace: true });
   };
 
   const handleSocialLogin = async (provider: SocialAuthProvider) => {
@@ -71,6 +78,19 @@ export function Register() {
             </p>
           </div>
 
+          {otpRequested ? (
+            <OtpVerificationForm
+              email={email}
+              purpose="register"
+              actionLabel="Xác minh và tạo tài khoản"
+              onBack={() => {
+                setOtpRequested(false);
+                setError(null);
+              }}
+              onVerified={completeRegistration}
+            />
+          ) : (
+            <>
           <form onSubmit={handleSubmit} className="space-y-4">
             <label className="block">
               <span className="text-gray-700" style={{ fontSize: "0.84rem", fontWeight: 700 }}>{t("Họ tên")}</span>
@@ -164,7 +184,7 @@ export function Register() {
               className="w-full flex items-center justify-center gap-2 rounded-xl bg-green-600 px-4 py-3.5 text-white hover:bg-green-700 transition-colors disabled:opacity-60"
               style={{ fontWeight: 800 }}
             >
-              {submitting ? t("Đang tạo tài khoản...") : t("Tạo tài khoản")}
+              {submitting ? t("Đang gửi mã OTP...") : t("Gửi mã OTP")}
               <ArrowRight className="w-4 h-4" />
             </button>
           </form>
@@ -220,6 +240,8 @@ export function Register() {
               {t("Đăng nhập")}
             </Link>
           </p>
+            </>
+          )}
         </section>
 
         <section className="hidden lg:block">

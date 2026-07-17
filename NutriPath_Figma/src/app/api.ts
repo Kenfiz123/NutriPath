@@ -37,6 +37,7 @@ export interface RegisterPayload {
   name: string;
   email: string;
   password: string;
+  verificationTicket?: string;
   gender?: "male" | "female";
   age?: number;
   weightKg?: number;
@@ -50,6 +51,21 @@ export interface RegisterPayload {
     latestWeightKg?: number;
     updatedAt?: string;
   };
+}
+
+export type AuthOtpPurpose = "register" | "password-reset";
+
+export interface AuthOtpRequestResponse {
+  sent: boolean;
+  expiresInSeconds: number;
+  retryAfterSeconds: number;
+  message: string;
+}
+
+export interface AuthOtpVerifyResponse {
+  verified: boolean;
+  verificationTicket: string;
+  expiresAt: string;
 }
 
 export function getStoredSession(): AuthSession | null {
@@ -964,6 +980,30 @@ export function loginWithSupabase(accessToken: string, options: { signal?: Abort
     body: { accessToken },
     auth: false,
     signal: options.signal,
+  });
+}
+
+export function requestAuthOtp(email: string, purpose: AuthOtpPurpose) {
+  return apiFetch<AuthOtpRequestResponse>("/api/auth/otp/request", {
+    method: "POST",
+    body: { email, purpose },
+    auth: false,
+  });
+}
+
+export function verifyAuthOtp(email: string, purpose: AuthOtpPurpose, otp: string) {
+  return apiFetch<AuthOtpVerifyResponse>("/api/auth/otp/verify", {
+    method: "POST",
+    body: { email, purpose, otp },
+    auth: false,
+  });
+}
+
+export function resetPassword(email: string, newPassword: string, verificationTicket: string) {
+  return apiFetch<{ reset: boolean; message: string }>("/api/auth/password/reset", {
+    method: "POST",
+    body: { email, newPassword, verificationTicket },
+    auth: false,
   });
 }
 
