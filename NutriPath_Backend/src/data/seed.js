@@ -1,3 +1,5 @@
+import { healthyVietnameseRecipes } from "./vietnamese-recipes.js";
+
 export const PLAN_MONTHLY_PRICES = Object.freeze({
   free: 0,
   vip: 25000,
@@ -630,3 +632,7 @@ export const seedData = {
     },
   },
 };
+
+// The curated catalog is authoritative for fresh installs. Existing member-created
+// and AI-generated recipes are merged separately by the store.
+seedData.recipes = [...healthyVietnameseRecipes, ...healthyDrinkRecipes];

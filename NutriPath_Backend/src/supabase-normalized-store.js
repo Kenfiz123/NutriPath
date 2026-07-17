@@ -275,6 +275,30 @@ async function bulkInsert(client, tableName, columns, recordSchema, records) {
   );
 }
 
+async function upsertCuratedRecipes(pool) {
+  const legacyRecipeIds = Array.from({ length: 8 }, (_, index) => `recipe-${String(index + 1).padStart(3, "0")}`);
+  const records = uniqueBy((seedData.recipes || []).map((recipe, index) => {
+    const id = requiredText(recipe.id, `recipe-${index + 1}`);
+    const name = requiredText(recipe.name, "Công thức healthy");
+    const calories = Math.round(numericOrZero(recipe.calories));
+    return { id, name, calories, data: withColumnValues(recipe, { id, name, calories }) };
+  }), (recipe) => recipe.id);
+  if (!records.length) return;
+
+  await pool.query(`DELETE FROM ${table("nutripath_recipes")} WHERE id = ANY($1::text[]);`, [legacyRecipeIds]);
+  await pool.query(
+    `INSERT INTO ${table("nutripath_recipes")} (id, name, calories, data)
+     SELECT x.id, x.name, x.calories, x.data
+     FROM jsonb_to_recordset($1::jsonb) AS x(id text, name text, calories integer, data jsonb)
+     ON CONFLICT (id) DO UPDATE SET
+       name = EXCLUDED.name,
+       calories = EXCLUDED.calories,
+       data = EXCLUDED.data,
+       updated_at = now();`,
+    [JSON.stringify(records)],
+  );
+}
+
 async function loadRows(pool, tableName, orderBy = "id") {
   const result = await pool.query(`SELECT data FROM ${table(tableName)} ORDER BY ${orderBy};`);
   return result.rows.map((row) => row.data);
@@ -345,6 +369,7 @@ function normalizeInitialState(data) {
 export async function loadSupabaseNormalizedData() {
   const pool = await getPgPool();
   await ensureNormalizedSchema(pool);
+  await upsertCuratedRecipes(pool);
 
   const [members, foods, plans] = await Promise.all([
     loadRows(pool, "nutripath_members", "name"),

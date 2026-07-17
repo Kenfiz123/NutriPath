@@ -1217,6 +1217,7 @@ export function getRecipes(search = "", tag = "Tất cả") {
   const params = new URLSearchParams();
   if (search) params.set("search", search);
   if (tag && tag !== "Tất cả") params.set("tag", tag);
+  params.set("limit", "120");
   const query = params.toString();
   return apiFetch<{ _embedded: { recipes: Recipe[] }; tags: string[]; access?: RecipeCollectionMeta["access"] }>(`/api/recipes${query ? `?${query}` : ""}`);
 }

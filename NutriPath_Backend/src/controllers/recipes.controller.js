@@ -216,7 +216,7 @@ export function registerRecipesRoutes(ctx) {
       return matchSearch && matchTag && matchCalories && matchDifficulty;
     });
     const accessibleRecipes = access.recipeLimit ? filteredRecipes.slice(0, access.recipeLimit) : filteredRecipes;
-    const page = paginateItems(url, accessibleRecipes, { defaultLimit: 24, maxLimit: 100 });
+    const page = paginateItems(url, accessibleRecipes, { defaultLimit: 120, maxLimit: 200 });
     const tags = [...new Set(store.db.recipes.flatMap((recipe) => recipe.tags))].sort();
     return collectionResponse(req, "recipes", page.items, {
       itemMapper: (recipe) => recipeResource(req, recipe),

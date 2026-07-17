@@ -2,7 +2,7 @@ import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { existsSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { PLAN_MONTHLY_PRICES, healthyBeverageFoods, healthyDrinkRecipes, healthyVietnameseFoods, seedData } from "./data/seed.js";
+import { PLAN_MONTHLY_PRICES, healthyBeverageFoods, healthyVietnameseFoods, seedData } from "./data/seed.js";
 import { loadSqlServerData } from "./sqlserver-import.js";
 import { loadSupabaseData, persistSupabaseData, resetSupabaseData } from "./supabase-postgres-store.js";
 import { loadSupabaseNormalizedData, persistSupabaseNormalizedData, resetSupabaseNormalizedData } from "./supabase-normalized-store.js";
@@ -42,11 +42,13 @@ function normalizeCatalogData(db) {
   const retainedFoods = db.foods.filter((food) => !syncedFoodIds.has(food.id));
   db.foods = [...retainedFoods, ...clone(syncedFoods)];
 
-  if (Array.isArray(db.recipes)) {
-    const healthyRecipeIds = new Set(healthyDrinkRecipes.map((recipe) => recipe.id));
-    const retainedRecipes = db.recipes.filter((recipe) => !healthyRecipeIds.has(recipe.id));
-    db.recipes = [...retainedRecipes, ...clone(healthyDrinkRecipes)];
-  }
+  if (!Array.isArray(db.recipes)) db.recipes = [];
+  const managedRecipeIds = new Set([
+    ...seedData.recipes.map((recipe) => recipe.id),
+    ...Array.from({ length: 8 }, (_, index) => `recipe-${String(index + 1).padStart(3, "0")}`),
+  ]);
+  const retainedRecipes = db.recipes.filter((recipe) => !managedRecipeIds.has(recipe.id));
+  db.recipes = [...retainedRecipes, ...clone(seedData.recipes)];
 
   if (Array.isArray(db.mealLogs)) {
     for (const log of db.mealLogs) {
