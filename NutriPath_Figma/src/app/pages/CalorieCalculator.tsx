@@ -293,14 +293,14 @@ export function CalorieCalculator() {
 
               <div className="mb-5 rounded-2xl border border-emerald-100 bg-emerald-50 p-4">
                 <div className="flex items-center gap-4">
-                  <div className="flex h-[240px] w-32 flex-shrink-0 items-center justify-center rounded-2xl bg-white">
-                    <div className="relative flex justify-center" style={{ height: bodyModel.figureHeight, width: 112 }}>
-                      <div className="absolute left-1/2 top-0 h-10 w-10 -translate-x-1/2 rounded-full bg-emerald-200" />
-                      <div className="absolute left-1/2 top-12 -translate-x-1/2 rounded-t-[42px] rounded-b-[30px] bg-emerald-500" style={{ width: bodyModel.shoulderWidth, height: bodyModel.figureHeight * 0.42 }} />
-                      <div className="absolute left-1/2 -translate-x-1/2 rounded-b-[34px] bg-emerald-400" style={{ top: 52 + bodyModel.figureHeight * 0.28, width: bodyModel.hipWidth, height: bodyModel.figureHeight * 0.24 }} />
-                      <div className="absolute bottom-0 left-[42%] h-[38%] w-5 rounded-full bg-emerald-500" />
-                      <div className="absolute bottom-0 right-[42%] h-[38%] w-5 rounded-full bg-emerald-500" />
-                    </div>
+                  <div className="flex h-[260px] w-36 flex-shrink-0 items-center justify-center overflow-hidden rounded-2xl bg-white p-2">
+                    <img
+                      src="/images/body-avatar.png"
+                      alt=""
+                      aria-hidden="true"
+                      className="h-full w-full object-contain drop-shadow-[0_12px_18px_rgba(16,185,129,0.18)] transition-transform duration-300"
+                      style={{ transform: `scaleX(${Math.min(1.12, Math.max(0.74, bodyModel.torsoWidth / 62))})` }}
+                    />
                   </div>
                   <div>
                     <p className="text-gray-900" style={{ fontSize: "0.95rem", fontWeight: 800 }}>{t("Mô phỏng theo dữ liệu nhập")}</p>
