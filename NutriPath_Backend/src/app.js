@@ -3547,15 +3547,85 @@ function savePersonalizedRecipe(store, member, recipe) {
   return savedRecipe;
 }
 
+export function collectRecipeAvoidanceTerms(member, answers = {}, options = {}) {
+  const preferences = normalizeMemberPreferences(member?.preferences || {});
+  const values = [
+    ...(preferences.allergies || []),
+    ...(preferences.dislikedFoods || []),
+    answers?.allergies,
+    answers?.avoidIngredients,
+    options?.allergies,
+    options?.avoidIngredients,
+    options?.dislikedFoods,
+  ].flatMap((value) => Array.isArray(value) ? value : String(value || "").split(/[,\n;]/));
+
+  const emptyMarkers = new Set([
+    "khong",
+    "khong co",
+    "khong co di ung",
+    "khong di ung",
+    "none",
+    "no allergy",
+    "no allergies",
+  ]);
+
+  return normalizeShortTextList(values, 32, 60)
+    .filter((item) => {
+      const normalized = normalizeVietnameseText(item).replace(/[^a-z0-9]+/g, " ").trim();
+      return normalized.length >= 2 && !emptyMarkers.has(normalized);
+    });
+}
+
+export function findRecipeAvoidanceMatches(recipe, avoidanceTerms = []) {
+  const ingredientValues = (recipe?.ingredients || [])
+    .flatMap((ingredient) => [ingredient?.name, ingredient?.note])
+    .filter(Boolean);
+  const normalizeWithAccents = (value) => String(value || "")
+    .normalize("NFC")
+    .toLowerCase()
+    .replace(/[^\p{L}\p{N}]+/gu, " ")
+    .trim();
+  const accentAwareIngredients = ingredientValues.map(normalizeWithAccents).filter(Boolean);
+  const accentlessIngredients = ingredientValues
+    .map((value) => normalizeVietnameseText(value).replace(/[^a-z0-9]+/g, " ").trim())
+    .filter(Boolean);
+
+  return avoidanceTerms.filter((term) => {
+    const accentAwareNeedle = normalizeWithAccents(term);
+    const hasDiacritics = /[\u0300-\u036f]/.test(String(term || "").normalize("NFD")) || /[đĐ]/.test(String(term || ""));
+    const needle = hasDiacritics
+      ? accentAwareNeedle
+      : normalizeVietnameseText(term).replace(/[^a-z0-9]+/g, " ").trim();
+    if (!needle) return false;
+    const ingredients = hasDiacritics ? accentAwareIngredients : accentlessIngredients;
+    return ingredients.some((ingredient) => ` ${ingredient} `.includes(` ${needle} `));
+  });
+}
+
+function buildRecipeAvoidanceCorrectionPrompt(prompt, matches) {
+  return [
+    prompt,
+    "",
+    `CẢNH BÁO AN TOÀN: JSON vừa tạo vẫn chứa nguyên liệu cần tránh: ${matches.join(", ")}.`,
+    "Hãy tạo lại toàn bộ JSON theo đúng schema, loại bỏ hoàn toàn các nguyên liệu trên và thay bằng nguyên liệu an toàn tương đương.",
+    "Không được chỉ ghi chú cảnh báo; nguyên liệu dị ứng không được xuất hiện trong ingredients.",
+  ].join("\n");
+}
+
 function buildPersonalizedRecipePrompt(store, member, prompt, answers, options = {}) {
   const preferences = normalizeMemberPreferences(member.preferences || {});
+  const mandatoryAvoidanceTerms = collectRecipeAvoidanceTerms(member, answers, options);
   const mergedOptions = {
     dietStyle: preferences.dietStyle,
     cuisinePreferences: preferences.cuisinePreferences,
-    allergies: preferences.allergies,
-    dislikedFoods: preferences.dislikedFoods,
     mealPreferences: preferences.mealPreferences,
     ...options,
+    allergies: mandatoryAvoidanceTerms,
+    avoidIngredients: mandatoryAvoidanceTerms,
+    dislikedFoods: [...new Set([
+      ...(preferences.dislikedFoods || []),
+      ...normalizeShortTextList(options?.dislikedFoods, 16, 50),
+    ])],
   };
   return [
     "Bạn là NutriPath AI Coach SVIP, tạo công thức healthy cá nhân hóa bằng tiếng Việt.",
@@ -3570,7 +3640,7 @@ function buildPersonalizedRecipePrompt(store, member, prompt, answers, options =
     "Khong dua che do an nguy hiem, ep can nhanh, nhin an cuc doan hoac khuyen khich roi loan an uong.",
     "Neu option dietStyle la family, bulking hoac comfort, duoc tao mon an gia dinh/mon tang can/mon ngon khong qua healthy, nhung van phai an toan, co uoc tinh calo va khong khuyen khich an qua muc nguy hiem.",
     "Bat buoc loai bo hoac thay the cac mon di ung/can tranh trong allergies, avoidIngredients va dislikedFoods.",
-    "Ton trong option cuisineStyle, cookingMethod, spiceLevel, saltLevel, timeMinutes, mainIngredient, secondaryIngredients va mealType neu co.",
+    "Ton trong option cuisineStyle, cookingMethod, spiceLevel, saltLevel, timeMinutes, servings, mainIngredient, secondaryIngredients va mealType neu co.",
     "Schema JSON bat buoc:",
     "{\"recipe\":{\"name\":\"\",\"imagePrompt\":\"\",\"mealTime\":\"\",\"recommendedEatingTime\":\"\",\"timeMinutes\":25,\"servings\":1,\"calories\":550,\"difficulty\":2,\"tags\":[\"SVIP\"],\"ingredients\":[{\"name\":\"\",\"amount\":\"\",\"grams\":100,\"note\":\"\"}],\"steps\":[\"\"],\"nutrition\":{\"protein\":35,\"carbs\":55,\"fat\":18,\"fiber\":8},\"notes\":[\"\"],\"personalizationSummary\":\"\"}}",
     "",
@@ -3596,7 +3666,9 @@ async function generatePersonalizedRecipe(store, member, prompt, answers, option
   }
 
   const aiPrompt = buildPersonalizedRecipePrompt(store, member, prompt, answers, options);
+  const avoidanceTerms = collectRecipeAvoidanceTerms(member, answers, options);
   let lastQuota = null;
+  let lastAvoidanceMatches = [];
   for (const provider of providers) {
     const quota = reserveGeminiQuota(provider);
     if (!quota.allowed) {
@@ -3613,9 +3685,42 @@ async function generatePersonalizedRecipe(store, member, prompt, answers, option
     }
 
     const json = extractJsonObject(providerText);
-    if (json) return normalizePersonalizedRecipe(json, member);
+    if (!json) continue;
+
+    const recipe = normalizePersonalizedRecipe(json, member);
+    const matches = findRecipeAvoidanceMatches(recipe, avoidanceTerms);
+    if (!matches.length) return recipe;
+
+    lastAvoidanceMatches = matches;
+    console.warn(`${provider.type} ${provider.name} recipe contained avoided ingredients:`, matches.join(", "));
+
+    const retryQuota = reserveGeminiQuota(provider);
+    if (!retryQuota.allowed) {
+      lastQuota = retryQuota;
+      continue;
+    }
+
+    const retryPrompt = buildRecipeAvoidanceCorrectionPrompt(aiPrompt, matches);
+    const retryResult = await callAiProviderForText(provider, retryPrompt);
+    if (!retryResult.response.ok) {
+      if (retryResult.response.status !== 429) releaseGeminiQuota(provider);
+      if (retryResult.response.status === 429) {
+        lastQuota = { scope: "minute", provider: provider.name, retryAfterSeconds: 60 };
+      }
+      continue;
+    }
+
+    const retryJson = extractJsonObject(retryResult.text);
+    if (!retryJson) continue;
+    const correctedRecipe = normalizePersonalizedRecipe(retryJson, member);
+    const retryMatches = findRecipeAvoidanceMatches(correctedRecipe, avoidanceTerms);
+    if (!retryMatches.length) return correctedRecipe;
+    lastAvoidanceMatches = retryMatches;
   }
 
+  if (lastAvoidanceMatches.length) {
+    serviceUnavailable(`AI chưa loại bỏ hoàn toàn nguyên liệu cần tránh (${lastAvoidanceMatches.join(", ")}). Công thức chưa được lưu; vui lòng thử lại.`);
+  }
   if (lastQuota) {
     tooManyRequests(geminiQuotaMessage(lastQuota), lastQuota);
   }

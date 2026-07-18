@@ -3,6 +3,12 @@ import { Link } from "react-router";
 import { Search, X, Clock, Flame, Star, Filter, BookOpen, Users, Crown, Sparkles } from "lucide-react";
 import { generatePersonalizedRecipe, getPersonalizedRecipes, getRecipes, type PersonalizedRecipe, type PersonalizedRecipeQuestion, type Recipe } from "../api";
 import { useAuth } from "../auth";
+import {
+  AiRecipeOptionsForm,
+  buildAiRecipeRequestOptions,
+  DEFAULT_AI_RECIPE_OPTIONS,
+  type AiRecipeFormOptions,
+} from "../components/recipes/AiRecipeOptionsForm";
 import { useLanguage } from "../language";
 
 type DisplayRecipe = Recipe | PersonalizedRecipe;
@@ -47,9 +53,11 @@ export function Recipes() {
   const [aiPrompt, setAiPrompt] = useState("");
   const [aiQuestions, setAiQuestions] = useState<PersonalizedRecipeQuestion[]>([]);
   const [aiAnswers, setAiAnswers] = useState<Record<string, string>>({});
+  const [aiOptions, setAiOptions] = useState<AiRecipeFormOptions>(DEFAULT_AI_RECIPE_OPTIONS);
   const [aiLoading, setAiLoading] = useState(false);
   const [aiError, setAiError] = useState<string | null>(null);
   const aiRecipeUnlocked = Boolean(session?.member?.access?.aiCoach || session?.member?.tier === "svip");
+  const profileAllergies = session?.member?.preferences?.allergies ?? [];
 
   useEffect(() => {
     setLoading(true);
@@ -74,12 +82,15 @@ export function Recipes() {
       .catch(() => setSavedAiRecipes([]));
   }, [session?.member?.id]);
 
-
   const handleGeneratePersonalizedRecipe = async () => {
     setAiLoading(true);
     setAiError(null);
     try {
-      const data = await generatePersonalizedRecipe({ prompt: aiPrompt, answers: aiAnswers });
+      const data = await generatePersonalizedRecipe({
+        prompt: aiPrompt,
+        answers: aiAnswers,
+        options: buildAiRecipeRequestOptions(aiOptions, profileAllergies),
+      });
       if (data.status === "needs_questions") {
         setAiQuestions(data.questions ?? []);
         return;
@@ -180,6 +191,12 @@ export function Recipes() {
                 style={{ fontSize: "0.92rem", lineHeight: 1.6 }}
               />
 
+              <AiRecipeOptionsForm
+                value={aiOptions}
+                profileAllergies={profileAllergies}
+                onChange={setAiOptions}
+              />
+
               {aiQuestions.length > 0 && (
                 <div className="mt-4 grid gap-3 md:grid-cols-2">
                   {aiQuestions.map((question) => (
@@ -210,7 +227,7 @@ export function Recipes() {
                 <button
                   type="button"
                   onClick={handleGeneratePersonalizedRecipe}
-                  disabled={aiLoading || (!aiPrompt.trim() && Object.keys(aiAnswers).length === 0)}
+                  disabled={aiLoading}
                   className="inline-flex items-center justify-center gap-2 rounded-xl bg-green-600 px-5 py-3 text-white transition hover:bg-green-700 disabled:cursor-not-allowed disabled:bg-gray-300"
                   style={{ fontSize: "0.9rem", fontWeight: 800 }}
                 >
